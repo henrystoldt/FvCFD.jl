@@ -193,10 +193,14 @@ function Solve_Diag!(matrix)
         # Because the rows are offset by 1 for each row, elimRow is also the horizontal offset required
         for offset in 1:elimRows
             pivotMultiple = matrix[pivotRow + offset, center - offset] / pivotElement
-            for col in 1:nCols - elimRows
+            for col in 1:nCols - (1 + offset)
                 matrix[pivotRow + offset, col] -= matrix[pivotRow, col + offset] * pivotMultiple
             end
+            matrix[pivotRow + offset, nCols] -= matrix[pivotRow, nCols] * pivotMultiple
         end
+
+        # printMatrix(matrix)
+        # println("")
     end
 
     #Back substitute
