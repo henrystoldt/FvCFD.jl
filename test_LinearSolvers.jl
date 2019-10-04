@@ -53,7 +53,7 @@ end
 
 end;
 
-@testset "Iterative Solvers" begin
+    @testset "Iterative Solvers" begin
     matrix2 = Array{Float64, 2}([ 
         4 -1 0 1 0 100;
         -1 4 -1 0 1 100;
@@ -67,7 +67,7 @@ end;
 
 end;
 
-@testset "Diagonal Solver" begin
+    @testset "Diagonal Solver" begin
     matrix3 = Array{Float64, 2}([
         0 -2.25 1 0;
         1 -2.25 1 0;
