@@ -37,8 +37,7 @@ function getFunctions()
 end
 
 function getInitEstimates()
-    println("Enter the initial guess for x1...xn
-    Example: 3.1, -4.5, 5")
+    println("Enter space-separated initial guesses for x1...xn")
     xInit = chomp(readline())
     xInit = split(xInit)
     xI = Array{Float64, 1}(undef, length(xInit))
