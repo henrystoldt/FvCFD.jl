@@ -18,14 +18,21 @@ function getFunction()
     nEquations = chomp(readline())
     nEquations = parse(Int64, nRows)
 
-    eqns = Array{String, 1}(undef, nEquations)
+    Fns = Array{undef, 1}(undef, nEquations)
     for i in 1:nEquations
-        eqns[i] = readline()
+        eqn = readline()
+        highestX = 1
+        fnString = "("
+        while occursin(eqn, "x$highestX")
+            highestX += 1
+            fnString += "x$highestX, "
+        len = length(fnString)
+        fnString = fnString[:len-2]
+        fnString += ") -> eqn"
+        Fns[i] = eval(Meta.parse(fnString))
     end
 
-    #TODO turn strings into equations with Meta.parse
-
-    return eqns
+    return Fns
 end
 
 # Rows of the nonlinear function
