@@ -1,20 +1,7 @@
 using Test
 include("LinearSolvers.jl")
+include("test.jl")
 
-# For numbers of a magnitude less than ~1000
-function almostEqual(iterable1, iterable2, allowedError=0.0000000000001)
-    if size(iterable1, 1) != size(iterable2, 1)
-        return false
-    end
-
-    for i in 1:size(iterable1, 1)
-        if abs(iterable1[i] - iterable2[i]) > allowedError
-            return false
-        end
-    end
-
-    return true
-end
 
 @testset "Gauss Elimination" begin
     matrix1 = Array{Float64, 2}([ 
