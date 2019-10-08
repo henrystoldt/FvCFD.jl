@@ -48,3 +48,24 @@ end
     ddxs = ddx([f1, f2, f3], x)
     @test almostEqual(ddxs, allResults, 0.0000001)
 end
+
+@testset "Calc residuals" begin
+    result = calcResiduals([f1, f2, f3], [1.0, 1.0, 1.0])
+    res1 = exp(2) - 1 + 4
+    res2 = 1 - 1 - 1
+    res3 = 1 - sin(1)
+    solution = [ res1, res2, res3 ]
+    @test almostEqual(result, solution)
+end 
+
+@testset "Nonlinear Solvers" begin
+    function fTest1(x2, x3)
+        return 6*cos(x2) + 8*cos(x3) + 4*cos(3.8397) - 10
+    end
+    function gTest1(x2, x3)
+        return 6*sin(x2) + 8*sin(x3) + 4*sin(3.8397)
+    end    
+    result = solve_NonLinear!([fTest1, gTest1], [0.523598776, 0.0 ])
+    solution = [ 0.558770302, -0.076288115 ]
+    @test almostEqual(result, solution, 0.0001)
+end

@@ -1,3 +1,5 @@
+include("LinearSolvers.jl")
+
 function getFunction()
     println("Enter the following:
     n
@@ -39,7 +41,7 @@ function f3(x1, x2, x3)
     x3 - sin(x1)
 end
 
-#Function to calculate partial derivatives numerically
+#Function to calculate partial derivatives numerically using 2nd order central method
 #Pass in arrays of functiosn and x-values
 function ddx(fns, x::Array{Float64}, epsilon=0.00000001)
     nEqns = size(fns, 1)
@@ -48,25 +50,22 @@ function ddx(fns, x::Array{Float64}, epsilon=0.00000001)
     ddxs = Array{Float64, 2}(undef, nEqns, nXs)
     for i in 1:nEqns
         for a in 1:nXs
-            xCall = copy(x)
-            xCall[a] = x[a] + epsilon
-            ddxs[i,a] = (fns[i](xCall...) - fns[i](x...)) / epsilon
+            xCall1 = copy(x)
+            xCall2 = copy(x)
+            xCall1[a] = x[a] + epsilon
+            xCall2[a] = x[a] - epsilon
+            ddxs[i,a] = (fns[i](xCall1...) - fns[i](xCall2...)) / (2*epsilon)
         end
     end
     return ddxs
 end
 
 # Pass in array of functions and array of x's
-# Fn to calculate residual vector
 function calcResiduals(fns, x)
     nFns = size(fns, 1)
-    nXs = size(x, 1)
-    if nFns != nXs
-        throw(ArgumentError("Number of functions should equal number of Xs"))
-    end
 
-    res = Array{Float64, 1}(undef, )
-    for i in 1:nEqns
+    res = Array{Float64, 1}(undef, nFns)
+    for i in 1:nFns
         res[i] = fns[i](x...)
     end
 
@@ -74,5 +73,48 @@ function calcResiduals(fns, x)
 end
 
 #Function to solve matrix, calculate new x-vector
+function solve_NonLinear!(fns, xInit, iterLimit=100)
+    nFns = size(fns, 1)
+    nXs = size(xInit, 1)
+    AugmentedMatrix = Array{Float64, 2}(undef, nFns, nXs + 1)
+    
+    maxResidual = 1000
+    iterationCounter = 1
+    while maxResidual > 0.00001 && iterationCounter <= iterLimit
+        partialDerivatives = ddx(fns, xInit)
+        
+        # println("Residuals")
+        residuals = calcResiduals(fns, xInit)
+        # println(residuals)
 
-#Function to evaluate arbitrary functions which are inputted?
+        maxResidual = maximum(abs.(residuals))
+        # println("Iteration $iterationCounter, maxRes = $maxResidual")
+
+        #Combine partial derivatives and residuals to make augmented matrix
+        for i in 1:nFns
+            for a in 1:nXs + 1
+                if a <= nXs
+                    AugmentedMatrix[i,a] = partialDerivatives[i,a]
+                else
+                    AugmentedMatrix[i,a] = -1 * residuals[i]
+                end
+            end
+        end
+
+        # println("Augmented Matrix:")
+        # printMatrix(AugmentedMatrix)
+        
+        dx = Solve_GaussElim!(AugmentedMatrix)
+        # println("Dx:")
+        # println(dx)
+
+        xInit += dx
+        iterationCounter += 1
+    end
+
+    if iterationCounter == iterLimit
+        println("Error: Convergence not achieved in 1000 iterations")
+    end
+
+    return xInit
+end
