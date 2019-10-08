@@ -1,38 +1,51 @@
 include("LinearSolvers.jl")
 
-function getFunction()
+function getFunctions()
     println("Enter the following:
-    n
-    Eqn i (x1, x2, ..., xn)
-    Eqn n
+    # Eqns
+    Fi(x1, x2, ..., xn)
     
-    Example:
+    Ex:
     2
-    x1 + x2
+    x1 + x2 + 3
     2*x1 - x2
     
     Notes:
     Each equation is implicitly = 0
-    Each eqaution must be written as valid Julia code, variables must be called x1, x2, ... xn")
+    Each equation must be valid Julia code, variables = x1, x2, ... xn")
 
     nEquations = chomp(readline())
-    nEquations = parse(Int64, nRows)
+    nEquations = parse(Int64, nEquations)
 
-    Fns = Array{undef, 1}(undef, nEquations)
+    Fns = Array{Function, 1}(undef, nEquations)
     for i in 1:nEquations
         eqn = readline()
         highestX = 1
         fnString = "("
-        while occursin(eqn, "x$highestX")
+        while occursin("x$highestX", eqn)
+            fnString = string(fnString, "x$highestX, ")
             highestX += 1
-            fnString += "x$highestX, "
+        end
         len = length(fnString)
-        fnString = fnString[:len-2]
-        fnString += ") -> eqn"
+        fnString = fnString[1:len-2]
+        fnString = string(fnString, ") -> $eqn")
+        println("Function $i: $fnString")
         Fns[i] = eval(Meta.parse(fnString))
     end
 
     return Fns
+end
+
+function getInitEstimates()
+    println("Enter the initial guess for x1...xn
+    Example: 3.1, -4.5, 5")
+    xInit = chomp(readline())
+    xInit = split(xInit)
+    xI = Array{Float64, 1}(undef, length(xInit))
+    for i in 1:length(xInit)
+        xI[i] = parse(Float64, xInit[i])
+    end
+    return xI
 end
 
 # Rows of the nonlinear function
@@ -80,7 +93,10 @@ function calcResiduals(fns, x)
 end
 
 #Function to solve matrix, calculate new x-vector
-function solve_NonLinear!(fns, xInit, iterLimit=100)
+function solve_NonLinear!(fns, xInit, iterLimit=100; printResiduals=false)
+    if printResiduals
+        println("Nonlinear Newton-Raphson Solver:")
+    end
     nFns = size(fns, 1)
     nXs = size(xInit, 1)
     AugmentedMatrix = Array{Float64, 2}(undef, nFns, nXs + 1)
@@ -95,7 +111,9 @@ function solve_NonLinear!(fns, xInit, iterLimit=100)
         # println(residuals)
 
         maxResidual = maximum(abs.(residuals))
-        # println("Iteration $iterationCounter, maxRes = $maxResidual")
+        if printResiduals
+            println("Iteration $iterationCounter, maxRes = $maxResidual")
+        end
 
         #Combine partial derivatives and residuals to make augmented matrix
         for i in 1:nFns
