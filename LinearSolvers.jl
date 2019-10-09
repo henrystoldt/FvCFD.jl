@@ -1,3 +1,5 @@
+############# Interactivity ###############
+
 #Function to get matrix from standard input
 function getMatrix()
     println("Note: Enter the augmented matrix")
@@ -22,6 +24,24 @@ function getMatrix()
     return matrix
 end
 
+function printMatrix(matrix, eqnRow=nothing)
+    nRows = size(matrix, 1)
+    
+    if eqnRow == nothing
+        # No effect on row ordering if one isn't passed in
+        eqnRow = Array(1:nRows)
+    end
+
+    for i in 1:nRows
+        #Print reo-ordered matrix
+        row = eqnRow[i]
+        println(matrix[row,:])
+    end
+    println("")
+end
+
+############ Gauss Elimination ###############
+#Get max coefficient magnitude for each row
 function getMaxMagnitudes(matrix)
     nRows = size(matrix, 1)
     maxElements = [ maximum(matrix[i, :]) for i in 1:nRows ]
@@ -30,6 +50,7 @@ function getMaxMagnitudes(matrix)
     return maxMagnitudes
 end
 
+#Choose pivot rows - scaled partial pivoting
 function scaleRowsForColumn(matrix, col, maxMagnitudes, eqnRow, currRow)
     nRows = size(matrix, 1)
     maxScaledMag = 0
@@ -50,23 +71,8 @@ function scaleRowsForColumn(matrix, col, maxMagnitudes, eqnRow, currRow)
     return maxRow
 end
 
-function printMatrix(matrix, eqnRow=nothing)
-    nRows = size(matrix, 1)
-    
-    if eqnRow == nothing
-        # No effect on row ordering if one isn't passed in
-        eqnRow = Array(1:nRows)
-    end
-
-    for i in 1:nRows
-        #Print reo-ordered matrix
-        row = eqnRow[i]
-        println(matrix[row,:])
-    end
-    println("")
-end
-
-function GaussElim_Eliminate!(matrix, eqnRow, )
+#eqnRow isa list used to map row indices (which are pivoted) to their actual location in the matrix
+function GaussElim_Eliminate!(matrix, eqnRow)
     nRows = size(matrix, 1)
     nCols = size(matrix, 2)
 
@@ -114,7 +120,7 @@ function GaussElim_BackSubsitute!(matrix, eqnRow)
         row = eqnRow[origRow]
         
         #Starting at last row, find the value of each x
-            #Can ignore all values except the forcing vector, which we update below to accumulate all known (numerical) values from x's that have already been solved for
+        #Can ignore all values except the forcing vector, which we update below to accumulate all known (numerical) values from x's that have already been solved for
         x[origRow] = matrix[row, nCols] / matrix[row, col]
 
         # Adjust the forcing vector of rows above current
@@ -125,6 +131,7 @@ function GaussElim_BackSubsitute!(matrix, eqnRow)
     return x
 end
 
+# Pass in augmented matrix
 function Solve_GaussElim!(matrix)
     nRows = size(matrix, 1)
     nCols = size(matrix, 2)
@@ -139,6 +146,7 @@ function Solve_GaussElim!(matrix)
     return GaussElim_BackSubsitute!(matrix, eqnRow)
 end
 
+############# Iterative Methods ############
 function Solve_GaussSeidel!(matrix, omega=1, minRes = 0.0000001, iterLimit=1000)
     nRows = size(matrix, 1)
     nCols = size(matrix, 2)
@@ -162,16 +170,21 @@ function Solve_GaussSeidel!(matrix, omega=1, minRes = 0.0000001, iterLimit=1000)
             x[row] += omega * residual / matrix[row, row]
         end
     end
-    # println("Iterations: $iterationCounter, Min Residual <= $minRes")
+
     return x
 end
 
-function Solve_SOR!(matrix, omega=1.5)
+function Solve_SOR!(matrix, omega=1.5, minRes=0.0000001, iterLimit=1000)
     # print("Omega: $omega ")
-    return Solve_GaussSeidel!(matrix, omega)
+    return Solve_GaussSeidel!(matrix, omega, minRes, iterLimit)
 end
 
-#Pass in a matrix which contains only the x-diagonal elements
+############# n-Diagonal Matrix Solver ############
+# Pass in an augmented matrix which contains only the x-diagonal elements
+# Ex:  [0 2 1 5; (tridiagonal)
+      # 1 2 1 9;
+      # 1 2 0 12 ]
+# Solves using Thomas algorithm for an n-bandwidth matrix, auto-detects bandwidth
 function Solve_Diag!(matrix)
     nRows = size(matrix, 1)
     nCols = size(matrix, 2)
@@ -182,7 +195,7 @@ function Solve_Diag!(matrix)
         ArgumentError("Bandwidth should always be an odd number, with the center elements being those which would be on the main diagonal of the full matrix")
     end
 
-    #Eliminate
+    # Eliminate
     elimRows = convert(Int32, (bandwidth - 1) / 2)
     for pivotRow in 1:nRows-1
         pivotElement = matrix[pivotRow, center]
@@ -198,12 +211,9 @@ function Solve_Diag!(matrix)
             end
             matrix[pivotRow + offset, nCols] -= matrix[pivotRow, nCols] * pivotMultiple
         end
-
-        # printMatrix(matrix)
-        # println("")
     end
 
-    #Back substitute
+    # Back substitute
     elimRows = convert(Int32, (bandwidth - 1) / 2)
     x = zeros(nRows)
     for row in nRows:-1:1

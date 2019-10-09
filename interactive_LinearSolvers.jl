@@ -17,11 +17,6 @@ println("Gauss Elimination: ")
 println(x)
 println("")
 
-# println("Gauss Elimination: ")
-# @time x = Solve_GaussElim!(matrix2)
-# println(x)
-# println("")
-
 print("Gauss-Seidel: ")
 @time x = Solve_GaussSeidel!(matrix2)
 println("Result: $x")
