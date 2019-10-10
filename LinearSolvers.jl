@@ -1,5 +1,6 @@
-############# Interactivity ###############
+__precompile__()
 
+############# Interactivity ###############
 #Function to get matrix from standard input
 function getMatrix()
     println("Note: Enter the augmented matrix")
@@ -147,14 +148,20 @@ function Solve_GaussElim!(matrix)
 end
 
 ############# Iterative Methods ############
-function Solve_GaussSeidel!(matrix, omega=1, minRes = 0.0000001, iterLimit=1000)
+function Solve_GaussSeidel!(matrix, minRes = 0.0000001, iterLimit=1000)
+    return Solve_SOR!(matrix, 1, minRes, iterLimit)
+end
+
+function Solve_SOR!(matrix, omega=1.5, minRes=0.0000001, iterLimit=1000)
     nRows = size(matrix, 1)
     nCols = size(matrix, 2)
+
+    # Initial guess is all zeros
     x = zeros(nRows)
 
     maxResidual = 1
     iterationCounter = 0
-    while maxResidual > minRes && iterationCounter < iterLimit
+    while maxResidual > minRes && iterationCounter < iterLimit 
         iterationCounter += 1
         maxResidual = 0
 
@@ -171,12 +178,18 @@ function Solve_GaussSeidel!(matrix, omega=1, minRes = 0.0000001, iterLimit=1000)
         end
     end
 
-    return x
-end
+    if iterationCounter == iterLimit
+        println("ERROR: Convergence not achieved in $iterLimit iterations.")
+    else
+        for i in 1:length(x)
+            if isnan(x[i])
+                println("ERROR: Calculation diverged")
+                break
+            end
+        end
+    end
 
-function Solve_SOR!(matrix, omega=1.5, minRes=0.0000001, iterLimit=1000)
-    # print("Omega: $omega ")
-    return Solve_GaussSeidel!(matrix, omega, minRes, iterLimit)
+    return x
 end
 
 ############# n-Diagonal Matrix Solver ############

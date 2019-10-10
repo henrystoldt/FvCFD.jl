@@ -1,4 +1,5 @@
 include("LinearSolvers.jl")
+__precompile__()
 
 ################# Interactivity ####################
 function getFunctions()
@@ -124,8 +125,8 @@ function calcResiduals(fns, x)
     return res
 end
 
-# Function to solve matrix, calculate new x-vector
-# Solves [Adx = -residuals] matrix using Gauss Elimination, iterates until convergence or iterLimit is reached
+# Function to solve set of nonlinear equations using Newton-Raphson method, calculate x-vector
+    # Solves [Adx = -residuals] matrix using Gauss Elimination, iterates until convergence or iterLimit is reached
 function solve_NonLinear!(fns, xInit, iterLimit=100; printResiduals=true, residualTolerance=0.00001)
     if printResiduals
         println("Nonlinear Newton-Raphson Solver:")
@@ -162,8 +163,8 @@ function solve_NonLinear!(fns, xInit, iterLimit=100; printResiduals=true, residu
         iterationCounter += 1
     end
 
-    if iterationCounter == iterLimit
-        println("Error: Convergence not achieved in $iterLimit iterations")
+    if iterationCounter > iterLimit
+        println("ERROR: Convergence not achieved in $iterLimit iterations")
     end
 
     return xInit
