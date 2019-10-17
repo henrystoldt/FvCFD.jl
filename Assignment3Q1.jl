@@ -180,8 +180,8 @@ function showQ1Plots()
     # Modified set, with b = 8/3 + 0.001
     ddts2 = [ dxdt, dydt, dzdt2 ]
 
-    eulerResults = solve_ExplicitEuler(initConditions, ddts1, 0.0025, 10000)
-    eulerResults2 = solve_ExplicitEuler(initConditions, ddts2, 0.0025, 10000)
+    eulerResults = solve_ExplicitEuler(initConditions, ddts1, 0.00025, 100000)
+    eulerResults2 = solve_ExplicitEuler(initConditions, ddts2, 0.00025, 100000)
     plotResults(eulerResults, eulerResults2, "Explicit Euler")
 
     backwardEulerResults = solve_ImplicitEuler(initConditions, ddts1, 0.0025, 10000)
@@ -192,5 +192,3 @@ function showQ1Plots()
     RK4Results2 = solve_RK4(initConditions, ddts2, 0.0025, 10000)
     plotResults(RK4Results, RK4Results2, "RK4")
 end
-
-showQ1Plots()
