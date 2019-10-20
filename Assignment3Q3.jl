@@ -31,9 +31,10 @@ function solve_Q3(nNodes, epsilon=0.0001)
     x = Array{Float64, 1}(undef, nVars)
     for i in 1:nNodes
         eta = dx*i
-        x[2*i - 1] == initZ(eta)
-        x[2*i] == initT(eta)
+        x[2*i - 1] = initZ(eta)
+        x[2*i] = initT(eta)
     end
+    println("Initial X-vector: $x")
 
     # Second order central stencils for each derivative
     cdn3 = (1/(2* dx*dx*dx)) .* [ -1 2 0 -2 1 ]
@@ -85,16 +86,40 @@ function solve_Q3(nNodes, epsilon=0.0001)
             elseif column > nVars
                 break
             end
-            println("Row: $r, Column: $column")
             matrix[2*r - 1, column] = thomasZRow[colIndex]
             matrix[2*r, column] = thomasTRow[colIndex]
         end
     end
 
     # Add linear boundary conditions!, matbe set the other augmented terms to zero
-
     println("Linear terms matrix:")
     printMatrix(matrix)
+
+    # Is stored with z and T values interleaved. Z at odd indices, T at even
+    function getXVal(i)
+        # Boundary conditions for T
+        # Given
+        if i == nVars + 1
+            return 1
+        elseif i == 0
+            return 0
+        # Boundary conditions for z
+        # From second order central difference and derivative boundary condition
+        elseif i == nVars + 3
+            return x[nVars-1]
+        elseif i == -3
+            return x[1]
+        # From second order backward/forward differences and derivative boundary condition
+        elseif i == nVars + 1
+            return (4*x[nVars-1] - x[nVars-3]) / 3
+        elseif i == -1
+            return (-4 * x[1] + x[3]) / 3
+
+
+        else
+            return x[i]
+        end
+    end
         
     maxDx = 1
     while maxDx > epsilon
@@ -104,9 +129,9 @@ function solve_Q3(nNodes, epsilon=0.0001)
         # Calculate values of nonlinear terms for this iteration, lagging the lowest order terms in each nonlinear term
         for r in 1:nNodes
             # Adding second derivative of zeta
-            cdn2_Z2 = cdn2 .* 3 * x[2*r - 1]
+            cdn2_Z2 = cdn2 .* 3 * getXVal(2*r - 1)
             # Adding squared first derivative of zeta
-            cdn1_Z1 = cdn .* 2 * (x[2*r + 1] - x[2*r - 3]) / (2*dx)
+            cdn1_Z1 = cdn .* 2 * (getXVal(2*r + 1) - getXVal(2*r - 3)) / (2*dx)
             semiSpan = floor(Int32, size(cdn2, 2) -1 /2)
             for a in 1:size(cdn2, 2)
                 offCenter = a - (semiSpan + 1)
@@ -116,8 +141,9 @@ function solve_Q3(nNodes, epsilon=0.0001)
                 elseif col > nVars
                     break
                 end
-                matrix[2*i-1, col] += cdn2_Z2[a]
-                matrix[2*i-1, col] += cdn1_Z1[a]
+                println("Row: $r, Column: $col")
+                matrix[2*r-1, col] += cdn2_Z2[a]
+                matrix[2*r-1, col] += cdn1_Z1[a]
             end
 
             printMatrix(matrixI)
