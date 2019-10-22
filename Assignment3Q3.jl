@@ -1,4 +1,7 @@
 include("LinearSolvers.jl")
+using Plots
+using Plots.PlotMeasures
+plotly()
 
 # zeta will be referred to as z or Z
 
@@ -20,10 +23,12 @@ function initT(eta)
 end
 
 #nNodes = number of interior nodes
-function solve_Q3(nNodes, epsilon=0.0001)
+function solve_Q3(nNodes, epsilon=0.0001)    
     eta1 = 0
     eta2 = 20
     dx = (eta2 - eta1) / (nNodes + 1)
+    
+    println("Nodes = $nNodes, dx=$dx")
 
     nVars = nNodes * 2
 
@@ -59,7 +64,7 @@ function solve_Q3(nNodes, epsilon=0.0001)
     # Add Ti
     Zcenter = floor(Int32, bandwidth / 2)
     Tcenter = Zcenter + 1
-    thomasZRow[Zcenter] += 1
+    thomasZRow[Tcenter] += 1
 
     println("Bandwidth: $bandwidth")
     println("Center: $Zcenter")
@@ -78,35 +83,11 @@ function solve_Q3(nNodes, epsilon=0.0001)
     println("Template T Eqn Stencil:")
     println(thomasTRow)
 
-    # Create matrix, alternating T and zeta equations
-    matrix = Array{Float64, 2}(undef, nVars, nVars+1)
-    semiSpan = floor(Int32, (bandwidth - 2) / 2)
-    for r in 1:nNodes
-        # Copy numbers in to matrix
-        for colIndex in 1:bandwidth
-            column = 2*r - 1 + colIndex - Zcenter
-            if column < 1
-                continue
-            elseif column > nVars
-                break
-            end
-            matrix[2*r - 1, column] = thomasZRow[colIndex]
-            matrix[2*r, column] = thomasTRow[colIndex]
-        end
-    end
-
-    # Set the augmented column all to zero
-    matrix[(nVars*nVars)+1:nVars*(nVars+1)] = 0.0
-
-    # Add linear boundary conditions!, matbe set the other augmented terms to zero
-    println("Linear terms matrix:")
-    printMatrix(matrix)
-
     # Is stored with z and T values interleaved. Z at odd indices, T at even
     function getXVal(i)
         # Boundary conditions for T
         # Given
-        if i == nVars + 1
+        if i == nVars + 2
             return 1
         elseif i == 0
             return 0
@@ -120,57 +101,102 @@ function solve_Q3(nNodes, epsilon=0.0001)
         elseif i == nVars + 1
             return (4*x[nVars-1] - x[nVars-3]) / 3
         elseif i == -1
-            return (-4 * x[1] + x[3]) / 3
+            return (4*x[1] - x[3]) / 3
+        elseif i == -2 || i == nVars + 2 || i == 0 || i == nVars + 4
+            return 0
         else
             return x[i]
         end
     end
-        
+    
+    println("")
+
     maxDx = 1
+    iterationCounter = 1
     while maxDx > epsilon
-        # Create matrix by substituting in nonlinear values from last iteration
-        matrixI = copy(matrix)
+        # Create matrix, alternating T and zeta equations
+        matrix = zeros(Float64, nVars, nVars+1)
+        semiSpan = floor(Int32, (bandwidth - 2) / 2)
 
         # Calculate values of nonlinear terms for this iteration, lagging the lowest order terms in each nonlinear term
         for r in 1:nNodes
+            # Initialize result column to zero
+            matrix[2*r - 1, nVars+1] = 0
+            matrix[2*r, nVars+1] = 0
+
+            # Copy numbers in to matrix
+            for colIndex in 1:bandwidth
+                column = 2*r - 1 + colIndex - Zcenter
+                # println("Col $column")
+
+                #Evaluate and move elements to RHS
+                if column < 1 || column > nVars
+                    matrix[2*r - 1, nVars+1] += -1 * thomasZRow[colIndex] * getXVal(column)
+                    matrix[2*r, nVars+1] += -1 * thomasTRow[colIndex] * getXVal(column)
+                    # line = matrix[3,:]
+                    # println("Added to RHS: $line")
+                    continue
+                end
+
+                # Populate LHS
+                matrix[2*r - 1, column] = thomasZRow[colIndex]
+                matrix[2*r, column] = thomasTRow[colIndex]
+                # line = matrix[3,:]
+                # println("Added to LHS: $line")
+            end
+
+
+            # line = matrix[3,:]
+            # println(line)
+
             # Add all the 3-element derivative discretizations
             # Adding second derivative of zeta
             cdn2_Z2 = cdn2 .* 3 * getXVal(2*r - 1)
-            println("2nd Derivative of z term: $cdn2_Z2")
             # Adding squared first derivative of zeta
-            cdn1_Z1 = cdn .* 2 * (getXVal(2*r + 1) - getXVal(2*r - 3)) / (2*dx)
-            println("1st Derivative of z term: $cdn1_Z1")
+            cdn1_Z1 = cdn .* -2 * (getXVal(2*r + 1) - getXVal(2*r - 3)) / (2*dx)
             #Adding first derivative of T1
-            cdn_T1 = cdn .* 3 * 0.71 * getXVal(2*r)
-            println("1st Derivative of T term: $cdn_T1")
+            cdn_T1 = cdn .* 3 * 0.71 * getXVal(2*r - 1)
             semiSpan = floor(Int32, (size(cdn2, 2) -1) /2)
             for a in 1:size(cdn2, 2)
-                offCenter = a - semiSpan
-                col = r + offCenter
-                if col < 1
+                offCenter = a - (semiSpan + 1)
+                col = 2*r + 2*offCenter - 1
+                # println("Col $col")
+                if col < 1 || col > nVars
+                    matrix[2*r - 1, nVars+1] += -1 * cdn2_Z2[a] * getXVal(col)
+                    matrix[2*r - 1, nVars+1] += -1 * cdn1_Z1[a] * getXVal(col)
+                    matrix[2*r, nVars+1] += -1 * cdn_T1[a] * getXVal(col+1)
+                    # line = matrix[3,:]
+                    # println("Added to RHS: $line")
                     continue
-                elseif col > nVars
-                    break
                 end
-                println("Row: $r, Column: $col")
                 matrix[2*r-1, col] += cdn2_Z2[a]
                 matrix[2*r-1, col] += cdn1_Z1[a]
                 matrix[2*r, col] += cdn_T1[a]
+                # line = matrix[3,:]
+                # println("Added to LHS: $line")
             end
-
-            printMatrix(matrix)
         end
 
-        # Adjust first and last rows with boundary conditions
-
+        # printMatrix(matrix)
 
         # Solve matrix
-
+        newX = Solve_GaussElim!(matrix)
 
         # Calculate residuals/dxs
+        maxDx = 0
+        for i in 1:size(newX, 1)
+            dx = abs(newX[i] - x[i])
+            if dx > maxDx
+                maxDx = dx
+            end
+        end
 
-        break
+        x = newX
+
+        println("Iteration $iterationCounter, Max dx = $maxDx, x = $x")
+        println("")
+        iterationCounter += 1
     end
 end
 
-solve_Q3(3)
+solve_Q3(200)
