@@ -15,7 +15,7 @@ end
 
 # Initial value functions for T and eta(Z)
 function initZ(eta)
-    return 0
+    return eta*eta
 end
 
 function initT(eta)
@@ -23,7 +23,7 @@ function initT(eta)
 end
 
 #nNodes = number of interior nodes
-function solve_Q3(nNodes, epsilon=0.0001)    
+function solve_Q3_SecondOrder(nNodes, epsilon=0.0001)    
     eta1 = 0
     eta2 = 20
     dx = (eta2 - eta1) / (nNodes + 1)
@@ -184,19 +184,68 @@ function solve_Q3(nNodes, epsilon=0.0001)
 
         # Calculate residuals/dxs
         maxDx = 0
+        totalDx = 0
         for i in 1:size(newX, 1)
             dx = abs(newX[i] - x[i])
             if dx > maxDx
                 maxDx = dx
             end
+            totalDx += dx
         end
+        meanDx = totalDx/nVars
 
         x = newX
+        avgX = sum(x)/nVars
 
-        println("Iteration $iterationCounter, Max dx = $maxDx, x = $x")
+        println("Iteration $iterationCounter, Max dx = $maxDx, Mean dx = $meanDx, Avg x = $avgX")
         println("")
         iterationCounter += 1
     end
+
+    return x
 end
 
-solve_Q3(200)
+# Plot Results
+nNodes = 100
+x = solve_Q3_SecondOrder(nNodes, 0.002)
+z = Array{Float64, 1}(undef, nNodes)
+T = Array{Float64, 1}(undef, nNodes)
+eta = Array{Float64, 1}(undef, nNodes)
+for i in 1:nNodes
+    z[i] = x[2*i-1]
+    T[i] = x[2*i]
+    eta[i] = (i/nNodes) * 20
+end
+
+plot(eta, z, label="zeta")
+plot!(eta, T, label="T")
+gui()
+
+function solve_Q3_Shooting(nNodes, epsilon=0.001)
+    # Need to assume two boundary conditions
+    # dz/dn = y
+    # dy/dn = x
+    # dx/dn = -3zx +2Y^2 - T
+
+    # dT/dn = u
+    # du/dn = -3Pr*z*u
+
+    # T init = 1
+    # zeta init = ?
+    # y init = 0
+    # x init = ?
+    # u init = ?
+
+end
+
+function verlet(x1, y1, vx1, vy1, timeStep, endTime)
+    currTime = 0
+    x = x1
+    y = y1
+    vx = vx1
+    vy = vy1
+    while currTime < endTime
+        
+
+        currTime += timeStep
+end
