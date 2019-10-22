@@ -15,7 +15,7 @@ end
 
 # Initial value functions for T and eta(Z)
 function initZ(eta)
-    return eta*eta
+    return eta
 end
 
 function initT(eta)
@@ -99,7 +99,7 @@ function solve_Q3_SecondOrder(nNodes, epsilon=0.0001)
             return x[1]
         # From second order backward/forward differences and derivative boundary condition
         elseif i == nVars + 1
-            return (4*x[nVars-1] - x[nVars-3]) / 3
+            return 0 #(4*x[nVars-1] - x[nVars-3]) / 3
         elseif i == -1
             return (4*x[1] - x[3]) / 3
         elseif i == -2 || i == nVars + 2 || i == 0 || i == nVars + 4
@@ -220,32 +220,3 @@ end
 plot(eta, z, label="zeta")
 plot!(eta, T, label="T")
 gui()
-
-function solve_Q3_Shooting(nNodes, epsilon=0.001)
-    # Need to assume two boundary conditions
-    # dz/dn = y
-    # dy/dn = x
-    # dx/dn = -3zx +2Y^2 - T
-
-    # dT/dn = u
-    # du/dn = -3Pr*z*u
-
-    # T init = 1
-    # zeta init = ?
-    # y init = 0
-    # x init = ?
-    # u init = ?
-
-end
-
-function verlet(x1, y1, vx1, vy1, timeStep, endTime)
-    currTime = 0
-    x = x1
-    y = y1
-    vx = vx1
-    vy = vy1
-    while currTime < endTime
-        
-
-        currTime += timeStep
-end
