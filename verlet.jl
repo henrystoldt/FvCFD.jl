@@ -3,11 +3,7 @@ using Plots.PlotMeasures
 plotly()
 
 ############## Specific to Extra HW Assignment 1 ###############
-# a = 0.1
-# m = 1
-# w = 2
-# g = 9.81
-# b = 1
+# a = 0.1; m = 1; w = 2; g = 9.81; b = 1
 
 function dx2dt(initXs, initVs)
     # -a/m * sqrt(vx^2 + vy^2)*vx - w*b*vy/m
@@ -25,7 +21,7 @@ end
 
 ########### Verlet Motion Solver #############
 # Pass in arrays of initial positions, velocities, and acceleration functions
-    # Acceleration functions must accept the positions and velocities as arguments
+    # Acceleration functions must accept arrays of the current positions and velocities as arguments
 # Returns results matrix, with rows containing the folowing, with N coordinate directions
     # Time values
     # X1 Position
@@ -50,8 +46,8 @@ function solve_Verlet(initXs, initVs, accelFns, timeStep, endTime)
     # Initialize results matrix with initial values
     for var in 1:nPos
         results[var+1, 1] = initXs[var]
-        results[var+1+nPos, 1] = initVs[var]
-        results[var+1+2*nPos, 1] = accelFns[var](initXs, initVs)
+        results[var+1+nPos, 1] = initVs[var]75
+        results[var+1+2*nPos, 1] = accelFns[var](initXs, initVs)75
     end
 
     ############ Utility Functions #############
@@ -143,12 +139,10 @@ y = results[3, 1:nDataPts]
 Vx = results[4, 1:nDataPts]
 Vy = results[5, 1:nDataPts]
 
-print(time)
-
 # Plot results
 xPlot = plot(time, x, label="X Position", title="Position vs Time", xlabel="t")
 xPlot = plot!(time, y, label="Y Position")
 vPlot = plot(time, Vx, label="X-Velocity", title="Velocity vs Time", xlabel="t")
 vPlot = plot!(time, Vy, label="Y-Velocity")
-plot(xPlot, vPlot, size=(1720, 880), window_title="Verlet")
+plot(xPlot, vPlot, size=(1147, 587), window_title="Verlet")
 gui()
