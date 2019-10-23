@@ -152,30 +152,3 @@ vPlot = plot(time, Vx, label="X-Velocity", title="Velocity vs Time", xlabel="t")
 vPlot = plot!(time, Vy, label="Y-Velocity")
 plot(xPlot, vPlot, size=(1720, 880), window_title="Verlet")
 gui()
-
-
-# Solve with explicit Euler to check velocity result
-include("ODESolvers.jl")
-
-function Euler_dx2dt(vx, vy)
-    # -a/m * sqrt(vx^2 + vy^2)*vx - w*b*vy/m
-    return -0.1*sqrt(vx*vx + vy*vy)*vx - 2*vy
-end
-
-function Euler_dy2dt(vx, vy)
-    # -g -a/m*sqrt(vx^2 + vy^2)vy + w*b*vx/m
-    return -9.81 - 0.1*sqrt(vx*vx + vy*vy)*vy + 2*vx
-end
-
-init = [5,10]
-dt = 0.01
-timeSteps = 1000
-ddts = [ Euler_dx2dt, Euler_dy2dt ]
-results = solve_ExplicitEuler(init, ddts, dt, timeSteps)
-
-Vx = results[1, :]
-Vy = results[2, :]
-time = results[3, :]
-vPlot = plot(time, Vx, label="X-Velocity", title="Velocity vs Time", xlabel="t", size=(860, 880), window_title="Verlet R")
-vPlot = plot!(time, Vy, label="Y-Velocity")
-gui()
