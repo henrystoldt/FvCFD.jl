@@ -15,7 +15,7 @@ end
 
 # Initial value functions for T and eta(Z)
 function initZ(eta)
-    return 10*eta
+    return eta
 end
 
 function initT(eta)
@@ -30,16 +30,12 @@ function solve_Q3_SecondOrder(nNodes, epsilon=0.0001)
     
     println("Nodes = $nNodes, dx=$dx")
 
-    # Adding two nodes to deal with derivative boundary condition
-        # Node 1 is really node 0 (or -1 in a 0-indexed system)
-        # Node n is really node n+1
-    nNodes += 1
     nVars = nNodes * 2
 
     #Create initial value vectors
     x = Array{Float64, 1}(undef, nVars)
     for i in 1:nNodes
-        eta = dx*(i-1)
+        eta = dx*i
         x[2*i - 1] = initZ(eta)
         x[2*i] = initT(eta)
     end
@@ -89,23 +85,25 @@ function solve_Q3_SecondOrder(nNodes, epsilon=0.0001)
 
     # Is stored with z and T values interleaved. Z at odd indices, T at even
     function getXVal(i)
-        # Boundary conditions for T (Given)
+        # Boundary conditions for T
+        # Given
         if i == nVars + 2
             return 1
-        elseif i == 0 || i == 2 || i == -2
+        elseif i == 0
             return 0
-
         # Boundary conditions for z
-        # From fourth/second order central difference and derivative boundary condition
-        elseif i == -1
-            return getXVal(3)
+        # From second order central difference and derivative boundary condition
+        elseif i == nVars + 3
+            return x[nVars-1]
         elseif i == -3
-            return getXVal(5)
+            return x[1]
         # From second order backward/forward differences and derivative boundary condition
         elseif i == nVars + 1
+            return 0 #(4*x[nVars-1] - x[nVars-3]) / 3
+        elseif i == -1
+            return (4*x[1] - x[3]) / 3
+        elseif i == -2 || i == nVars + 2 || i == 0 || i == nVars + 4
             return 0
-        elseif i == nVars + 3
-            return return 0
         else
             return x[i]
         end
@@ -132,13 +130,9 @@ function solve_Q3_SecondOrder(nNodes, epsilon=0.0001)
                 # println("Col $column")
 
                 #Evaluate and move elements to RHS
-                if column < 1 || column > nVars || column == 2
-                    if thomasZRow[colIndex] != 0
-                        matrix[2*r - 1, nVars+1] += -1 * thomasZRow[colIndex] * getXVal(column)
-                    end
-                    if thomasTRow[colIndex] != 0
-                        matrix[2*r, nVars+1] += -1 * thomasTRow[colIndex] * getXVal(column)
-                    end
+                if column < 1 || column > nVars
+                    matrix[2*r - 1, nVars+1] += -1 * thomasZRow[colIndex] * getXVal(column)
+                    matrix[2*r, nVars+1] += -1 * thomasTRow[colIndex] * getXVal(column)
                     # line = matrix[3,:]
                     # println("Added to RHS: $line")
                     continue
@@ -159,7 +153,7 @@ function solve_Q3_SecondOrder(nNodes, epsilon=0.0001)
             # Adding second derivative of zeta
             cdn2_Z2 = cdn2 .* 3 * getXVal(2*r - 1)
             # Adding squared first derivative of zeta
-            cdn1_Z1 = cdn .* -2 * (getXVal(2*(r+1) - 1) - getXVal(2*(r-1) - 1)) / (2*dx)
+            cdn1_Z1 = cdn .* -2 * (getXVal(2*r + 1) - getXVal(2*r - 3)) / (2*dx)
             #Adding first derivative of T1
             cdn_T1 = cdn .* 3 * 0.71 * getXVal(2*r - 1)
             semiSpan = floor(Int32, (size(cdn2, 2) -1) /2)
@@ -167,7 +161,7 @@ function solve_Q3_SecondOrder(nNodes, epsilon=0.0001)
                 offCenter = a - (semiSpan + 1)
                 col = 2*r + 2*offCenter - 1
                 # println("Col $col")
-                if col < 1 || col > nVars || col == 2
+                if col < 1 || col > nVars
                     matrix[2*r - 1, nVars+1] += -1 * cdn2_Z2[a] * getXVal(col)
                     matrix[2*r - 1, nVars+1] += -1 * cdn1_Z1[a] * getXVal(col)
                     matrix[2*r, nVars+1] += -1 * cdn_T1[a] * getXVal(col+1)
@@ -182,21 +176,11 @@ function solve_Q3_SecondOrder(nNodes, epsilon=0.0001)
                 # println("Added to LHS: $line")
             end
         end
-        top = transpose(matrix[1, :])
-        bottom = matrix[3:nVars, :]
-        matrix = vcat(top, bottom)
 
-        left = matrix[:,1]
-        right = matrix[:,3:nVars+1]
-        matrix = hcat(left, right)
+        # printMatrix(matrix)
 
         # Solve matrix
         newX = Solve_GaussElim!(matrix)
-        val1 = newX[1]
-        val2 = getXVal(2)
-        rest = newX[2:size(newX, 1)]
-        top = [ val1, val2 ]
-        newX = vcat(top , rest)
 
         # Calculate residuals/dxs
         maxDx = 0
@@ -221,9 +205,113 @@ function solve_Q3_SecondOrder(nNodes, epsilon=0.0001)
     return x
 end
 
+function addCentralDerivative(stencil, multiple, position, matrix)
+    stencil2 = stencil * multiple
+    # Assuming stencil is symmetricl
+    stencilLength = size(stencil, 1)
+    stencilBandwidth = floor(Int32, (stencilLength - 1) / 2)
+    for i in 1:stencilLength
+        matrix[position, position+i-stencilBandwidth-1] += stencil2[i]
+    end
+
+    return matrix
+end
+
+function addStencil(stencil, multiple, row, col, matrix)
+    stencil2 = stencil * multiple
+    for i in 1:size(stencil,1)
+        matrix[row, col + i - 1] += stencil2[i]
+    end
+    return matrix
+end
+
+function solve_Q3_SecondOrder2(nNodes, epsilon=0.0001, z1, t1, t2)
+    eta1 = 0
+    eta2 = 20
+    dx = (eta2 - eta1) / (nNodes + 1)
+    
+    println("Nodes = $nNodes, dx=$dx")
+
+    #Create initial value vectors
+    z = Array{Float64, 1}(undef, nNodes+1)
+    t = Array{Float64, 1}(undef, nNodes)
+    for i in 1:(nNodes+1)
+        eta = dx*i
+        
+        z[i] = initZ(eta)
+        
+        if i > 1 && i < nNodes + 2
+            t[i] = initT(eta)
+        end
+    end
+    println("Initial z-vector: $z")
+    println("Initial t-vector: $t")
+
+    # Second order central stencils for each derivative
+    cdn3 = (1/(2* dx*dx*dx)) .* [ -1 2 0 -2 1 ]
+    cdn2 = (1/(dx*dx)) .* [ 1 -2 1 ]
+    cdn = (1/(2*dx)) .* [ -1 0 1 ]
+
+    println("3rd Derivative Stencil: $cdn3")
+    println("2nd Derivative Stencil: $cdn2")
+    println("1st Derivative Stencil: $cdn")
+
+    # Solve in a block-iterative method, where we solve a matrix representing equation 1, then another matrix representing equation 2, then iterate again
+    maxDx = 1
+    iterationCounter = 1
+    while maxDx > epsilon
+        zMatrix = zeros(Float64, nNodes+2, nNodes+3)
+
+        # Will simply apply the stencils for interior nodes
+        for i in 2:(nNodes-2)
+            zMatrix = addCentralDerivative(cdn3, 1, i, zMatrix)
+            secondDerMultiple = 3*z[i]
+            zMatrix = addCentralDerivative(cdn2, secondDerMultiple, i, zMatrix)
+            thirdDerMultiple = -2*( (z[i+1] - z[i-1]) / (2*dx) )
+            zMatrix = addCentralDerivative(cdn, thirdDerMultiple, i, zMatrix)
+            zMatrix[i, nNodes+1] = -t[i]
+        end
+
+        # Now need to apply boundary conditions, make the first and the last two rows
+        # First row is equation for first interior nodes
+        RHS = -2*z1 / (2*dx*dx*dx)
+        cdn3L = [ -1 -2 1 ] / (2*dx*dx*dx)
+        zMatrix = addStencil(cdn3L, 1, 1, 1, zMatrix)
+        zMatrix[1, nNodes+1] = RHS
+        
+        i = 1
+        secondDerMultiple = 3*z[i]
+        zMatrix = addCentralDerivative(cdn2, secondDerMultiple, i, zMatrix)
+        thirdDerMultiple = -2*( (z[i+1] - z[i-1]) / (2*dx) )
+        zMatrix = addCentralDerivative(cdn, thirdDerMultiple, i, zMatrix)
+        zMatrix[i, nNodes+1] += -t[i]
+
+        # On the right hand boundary, from the boundary conditions, z[n+1] = z[n-1] and z[n-2] = z[n+2]
+        row = nNodes
+        col = nNodes - 2
+        cdn3RR = [ -1 4 -3 ] / (2 * dx*dx*dx)
+        zMatrix = addStencil(cnd3RR, 1, row, col, zMatrix)
+
+        col = nNodes - 1
+        cdn2RR = [ 2 -2 ] / ( dx*dx )
+        cdn2RRMul = 3*z[nNodes]
+        zMatrix = addStencil(cdn2RR, cdn2RRMul, row, col, zMatrix)
+        
+        RHS = -t2
+        zMatrix[row, nNodes+1] = RHS
+
+        # One node inside the right hand boundary, only need to adjust the third derivative term
+        row = nNodes - 1
+        col = nNodes - 3
+        cdn3R = [ -1 2 1 -2 ] / (2 * dx*dx*dx )
+        zMatrix = addStencil(cdn3R, 1, row, col, zMatrix)
+                
+    end
+end
+
 # Plot Results
-nNodes = 10
-x = solve_Q3_SecondOrder(nNodes, 0.00001)
+nNodes = 100
+x = solve_Q3_SecondOrder(nNodes, 0.002)
 z = Array{Float64, 1}(undef, nNodes)
 T = Array{Float64, 1}(undef, nNodes)
 eta = Array{Float64, 1}(undef, nNodes)
