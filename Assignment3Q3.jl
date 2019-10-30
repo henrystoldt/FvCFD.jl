@@ -15,7 +15,7 @@ end
 
 # Initial value functions for T and eta(Z)
 function initZ(eta)
-    return eta*eta
+    return 10*eta
 end
 
 function initT(eta)
@@ -30,12 +30,16 @@ function solve_Q3_SecondOrder(nNodes, epsilon=0.0001)
     
     println("Nodes = $nNodes, dx=$dx")
 
+    # Adding two nodes to deal with derivative boundary condition
+        # Node 1 is really node 0 (or -1 in a 0-indexed system)
+        # Node n is really node n+1
+    nNodes += 1
     nVars = nNodes * 2
 
     #Create initial value vectors
     x = Array{Float64, 1}(undef, nVars)
     for i in 1:nNodes
-        eta = dx*i
+        eta = dx*(i-1)
         x[2*i - 1] = initZ(eta)
         x[2*i] = initT(eta)
     end
@@ -85,25 +89,23 @@ function solve_Q3_SecondOrder(nNodes, epsilon=0.0001)
 
     # Is stored with z and T values interleaved. Z at odd indices, T at even
     function getXVal(i)
-        # Boundary conditions for T
-        # Given
+        # Boundary conditions for T (Given)
         if i == nVars + 2
             return 1
-        elseif i == 0
+        elseif i == 0 || i == 2 || i == -2
             return 0
+
         # Boundary conditions for z
-        # From second order central difference and derivative boundary condition
-        elseif i == nVars + 3
-            return x[nVars-1]
+        # From fourth/second order central difference and derivative boundary condition
+        elseif i == -1
+            return getXVal(3)
         elseif i == -3
-            return x[1]
+            return getXVal(5)
         # From second order backward/forward differences and derivative boundary condition
         elseif i == nVars + 1
-            return (4*x[nVars-1] - x[nVars-3]) / 3
-        elseif i == -1
-            return (4*x[1] - x[3]) / 3
-        elseif i == -2 || i == nVars + 2 || i == 0 || i == nVars + 4
             return 0
+        elseif i == nVars + 3
+            return return 0
         else
             return x[i]
         end
@@ -130,9 +132,13 @@ function solve_Q3_SecondOrder(nNodes, epsilon=0.0001)
                 # println("Col $column")
 
                 #Evaluate and move elements to RHS
-                if column < 1 || column > nVars
-                    matrix[2*r - 1, nVars+1] += -1 * thomasZRow[colIndex] * getXVal(column)
-                    matrix[2*r, nVars+1] += -1 * thomasTRow[colIndex] * getXVal(column)
+                if column < 1 || column > nVars || column == 2
+                    if thomasZRow[colIndex] != 0
+                        matrix[2*r - 1, nVars+1] += -1 * thomasZRow[colIndex] * getXVal(column)
+                    end
+                    if thomasTRow[colIndex] != 0
+                        matrix[2*r, nVars+1] += -1 * thomasTRow[colIndex] * getXVal(column)
+                    end
                     # line = matrix[3,:]
                     # println("Added to RHS: $line")
                     continue
@@ -153,7 +159,7 @@ function solve_Q3_SecondOrder(nNodes, epsilon=0.0001)
             # Adding second derivative of zeta
             cdn2_Z2 = cdn2 .* 3 * getXVal(2*r - 1)
             # Adding squared first derivative of zeta
-            cdn1_Z1 = cdn .* -2 * (getXVal(2*r + 1) - getXVal(2*r - 3)) / (2*dx)
+            cdn1_Z1 = cdn .* -2 * (getXVal(2*(r+1) - 1) - getXVal(2*(r-1) - 1)) / (2*dx)
             #Adding first derivative of T1
             cdn_T1 = cdn .* 3 * 0.71 * getXVal(2*r - 1)
             semiSpan = floor(Int32, (size(cdn2, 2) -1) /2)
@@ -161,7 +167,7 @@ function solve_Q3_SecondOrder(nNodes, epsilon=0.0001)
                 offCenter = a - (semiSpan + 1)
                 col = 2*r + 2*offCenter - 1
                 # println("Col $col")
-                if col < 1 || col > nVars
+                if col < 1 || col > nVars || col == 2
                     matrix[2*r - 1, nVars+1] += -1 * cdn2_Z2[a] * getXVal(col)
                     matrix[2*r - 1, nVars+1] += -1 * cdn1_Z1[a] * getXVal(col)
                     matrix[2*r, nVars+1] += -1 * cdn_T1[a] * getXVal(col+1)
@@ -176,11 +182,21 @@ function solve_Q3_SecondOrder(nNodes, epsilon=0.0001)
                 # println("Added to LHS: $line")
             end
         end
+        top = transpose(matrix[1, :])
+        bottom = matrix[3:nVars, :]
+        matrix = vcat(top, bottom)
 
-        # printMatrix(matrix)
+        left = matrix[:,1]
+        right = matrix[:,3:nVars+1]
+        matrix = hcat(left, right)
 
         # Solve matrix
         newX = Solve_GaussElim!(matrix)
+        val1 = newX[1]
+        val2 = getXVal(2)
+        rest = newX[2:size(newX, 1)]
+        top = [ val1, val2 ]
+        newX = vcat(top , rest)
 
         # Calculate residuals/dxs
         maxDx = 0
@@ -206,8 +222,8 @@ function solve_Q3_SecondOrder(nNodes, epsilon=0.0001)
 end
 
 # Plot Results
-nNodes = 100
-x = solve_Q3_SecondOrder(nNodes, 0.002)
+nNodes = 10
+x = solve_Q3_SecondOrder(nNodes, 0.00001)
 z = Array{Float64, 1}(undef, nNodes)
 T = Array{Float64, 1}(undef, nNodes)
 eta = Array{Float64, 1}(undef, nNodes)
@@ -220,32 +236,3 @@ end
 plot(eta, z, label="zeta")
 plot!(eta, T, label="T")
 gui()
-
-function solve_Q3_Shooting(nNodes, epsilon=0.001)
-    # Need to assume two boundary conditions
-    # dz/dn = y
-    # dy/dn = x
-    # dx/dn = -3zx +2Y^2 - T
-
-    # dT/dn = u
-    # du/dn = -3Pr*z*u
-
-    # T init = 1
-    # zeta init = ?
-    # y init = 0
-    # x init = ?
-    # u init = ?
-
-end
-
-function verlet(x1, y1, vx1, vy1, timeStep, endTime)
-    currTime = 0
-    x = x1
-    y = y1
-    vx = vx1
-    vy = vy1
-    while currTime < endTime
-        
-
-        currTime += timeStep
-end
