@@ -77,6 +77,7 @@ function solve_ImplicitEuler(vars, ddts, dt, nTimeSteps)
                 end
                 augmentedMatrix[i, nVars+1] = residual
             end
+            
             initGuesses += Solve_GaussElim!(augmentedMatrix)
             iterCount += 1
         end

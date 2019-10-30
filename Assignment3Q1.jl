@@ -65,3 +65,5 @@ function showQ1Plots()
     RK4Results2 = solve_RK4(initConditions, ddts2, 0.0025, 10000)
     plotResults(RK4Results, RK4Results2, "RK4")
 end
+
+showQ1Plots()
