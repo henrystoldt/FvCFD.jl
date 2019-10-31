@@ -15,7 +15,7 @@ end
 
 # Initial value functions for T and eta(Z)
 function initZ(eta)
-    return eta
+    return eta/20
 end
 
 function initT(eta)
@@ -235,15 +235,18 @@ function solve_Q3_SecondOrder2(nNodes, z1, t1, t2, epsilon=0.0001, debug=false)
     end
 
     #Create initial value vectors
-    z = Array{Float64, 1}(undef, nNodes+1)
+    additionalZEqns = 2
+    z = Array{Float64, 1}(undef, nNodes+additionalZEqns)
     t = Array{Float64, 1}(undef, nNodes)
-    for i in 1:(nNodes+1)
-        eta = dx*i
+    zNodes = size(z,1)
+
+    for i in 1:(nNodes+additionalZEqns)
+        eta = dx*(i-1)
         
         z[i] = initZ(eta)
         
-        if i < nNodes + 1
-            t[i] = initT(eta)
+        if i > 1 && i < nNodes + additionalZEqns
+            t[i-1] = initT(eta)
         end
     end
 
@@ -272,7 +275,7 @@ function solve_Q3_SecondOrder2(nNodes, z1, t1, t2, epsilon=0.0001, debug=false)
     while maxDx > epsilon
         ################### Build and solve z Matrix ###################
         # One additional equation required on the RHB, where we only have a derivative boundary condition
-        zMatrix = zeros(Float64, nNodes+1, nNodes+2)
+        zMatrix = zeros(Float64, zNodes, zNodes+1)
 
         if debug
             println("Init:")
@@ -280,13 +283,13 @@ function solve_Q3_SecondOrder2(nNodes, z1, t1, t2, epsilon=0.0001, debug=false)
         end
 
         # Will simply apply the stencils for interior nodes
-        for i in 3:(nNodes-1)
+        for i in 3:(zNodes-2)
             zMatrix = addCentralDerivative(cdn3, 1, i, zMatrix)
             secondDerMultiple = 3*z[i]
             zMatrix = addCentralDerivative(cdn2, secondDerMultiple, i, zMatrix)
             thirdDerMultiple = -2*( (z[i+1] - z[i-1]) / (2*dx) )
             zMatrix = addCentralDerivative(cdn, thirdDerMultiple, i, zMatrix)
-            zMatrix[i, nNodes+2] = -t[i]
+            zMatrix[i, zNodes+1] = -t[i-1]
         end
 
         if debug
@@ -294,41 +297,32 @@ function solve_Q3_SecondOrder2(nNodes, z1, t1, t2, epsilon=0.0001, debug=false)
             printMatrix(zMatrix)
         end
 
-        # Now need to apply boundary conditions, make the first and the last two rows
-        # First row is equation for first interior nodes
-        RHS = -2*z1 / (2 * dx*dx*dx)
-        cdn3L = [ -1 -2 1 ] / (2 * dx*dx*dx)
-        zMatrix = addStencil(cdn3L, 1, 1, 1, zMatrix)
-        zMatrix[1, nNodes+2] += RHS
+        # Now need to apply boundary conditions, make the first two and the last two rows
+        # First row is equation for first boundary node
+        row = 1
+        col = 1
+        cdn3LL = [ 0 -4 1 ] / (2 * dx*dx*dx)
+        zMatrix = addStencil(cdn3LL, 1, row, col, zMatrix)
+        RHS = -3 * z1 / (2* dx*dx*dx)
+        zMatrix[1, zNodes+1] += RHS
 
         if debug
             println("Top Row 1:")
             printMatrix(zMatrix)
         end
         
-        cdn2L = [ -2 1 ] / (dx*dx)
-        secondDerMultiple = 3*z[1]
-        zMatrix = addStencil(cdn2L, secondDerMultiple, 1, 1, zMatrix)
-        RHS = -secondDerMultiple * z1 / (dx*dx)
-        zMatrix[1, nNodes+2] += RHS
+        cdn2L = [ 0 2 ] / (dx*dx)
+        secondDerMultiple = 3*z1
+        zMatrix = addStencil(cdn2L, secondDerMultiple, row, col, zMatrix)
+        RHS = secondDerMultiple * 2 * z1 / (dx*dx)
+        zMatrix[1, zNodes+1] += RHS
 
         if debug
             println("Top Row 2:")
             printMatrix(zMatrix)
         end
-        
-        thirdDerMultiple = -2*( (z[2] - z1 )/ (2*dx) )
-        cdnL = [ 0 1 ] / (2*dx)
-        zMatrix = addStencil(cdnL, thirdDerMultiple, 1, 1, zMatrix)
-        RHS = thirdDerMultiple * z1 / (2*dx)
-        zMatrix[1, nNodes+2] += RHS
 
-        if debug
-            println("Top Row 3:")
-            printMatrix(zMatrix)
-        end
-
-        zMatrix[1, nNodes+2] += -t[1]
+        zMatrix[1, zNodes+1] += -t1
 
         if debug
             println("Top Row Final Boundary Conditions Applied:")
@@ -338,10 +332,8 @@ function solve_Q3_SecondOrder2(nNodes, z1, t1, t2, epsilon=0.0001, debug=false)
         # Now need to do the second row, only modifying the first term
         row = 2
         col = 1
-        cdn3R = [ 2 0 -2 1 ] / (2 * dx*dx*dx )
+        cdn3R = [ 2 -1 -2 1 ] / (2 * dx*dx*dx )
         zMatrix = addStencil(cdn3R, 1, row, col, zMatrix)
-        RHS = z1 / (2 * dx*dx*dx)
-        zMatrix[2, nNodes+2] += RHS
 
         if debug
             println("Second Row 1:")
@@ -353,7 +345,7 @@ function solve_Q3_SecondOrder2(nNodes, z1, t1, t2, epsilon=0.0001, debug=false)
         zMatrix = addCentralDerivative(cdn2, secondDerMultiple, i, zMatrix)
         thirdDerMultiple = -2*( (z[i+1] - z[i-1]) / (2*dx) )
         zMatrix = addCentralDerivative(cdn, thirdDerMultiple, i, zMatrix)
-        zMatrix[i, nNodes+2] += -t[i]
+        zMatrix[i, zNodes+1] += -t[i]
         
         if debug   
             println("Second Row Final:")
@@ -361,8 +353,8 @@ function solve_Q3_SecondOrder2(nNodes, z1, t1, t2, epsilon=0.0001, debug=false)
         end
 
         # On the right hand boundary, from the boundary conditions, z[n+1] = z[n-1] and z[n-2] = z[n+2]
-        row = nNodes + 1
-        col = nNodes - 1
+        row = zNodes
+        col = zNodes - 2
         cdn3RR = [ -1 4 -3 ] / (2 * dx*dx*dx)
         zMatrix = addStencil(cdn3RR, 1, row, col, zMatrix)
 
@@ -371,9 +363,9 @@ function solve_Q3_SecondOrder2(nNodes, z1, t1, t2, epsilon=0.0001, debug=false)
             printMatrix(zMatrix)
         end
 
-        col = nNodes
+        col = zNodes - 1
         cdn2RR = [ 2 -2 ] / ( dx*dx )
-        cdn2RRMul = 3*z[nNodes+1]
+        cdn2RRMul = 3*z[row]
         zMatrix = addStencil(cdn2RR, cdn2RRMul, row, col, zMatrix)
 
         if debug
@@ -382,7 +374,7 @@ function solve_Q3_SecondOrder2(nNodes, z1, t1, t2, epsilon=0.0001, debug=false)
         end
         
         RHS = -t2
-        zMatrix[row, nNodes+2] += RHS
+        zMatrix[row, zNodes+1] += RHS
 
         if debug
             println("Last Row Final:")
@@ -390,8 +382,8 @@ function solve_Q3_SecondOrder2(nNodes, z1, t1, t2, epsilon=0.0001, debug=false)
         end
 
         # One node inside the right hand boundary, only need to adjust the third derivative term
-        row = nNodes
-        col = nNodes - 2
+        row = zNodes - 1
+        col = zNodes - 3
         cdn3R = [ -1 2 1 -2 ] / (2 * dx*dx*dx )
         zMatrix = addStencil(cdn3R, 1, row, col, zMatrix)
 
@@ -405,7 +397,7 @@ function solve_Q3_SecondOrder2(nNodes, z1, t1, t2, epsilon=0.0001, debug=false)
         zMatrix = addCentralDerivative(cdn2, secondDerMultiple, i, zMatrix)
         thirdDerMultiple = -2*( (z[i+1] - z[i-1]) / (2*dx) )
         zMatrix = addCentralDerivative(cdn, thirdDerMultiple, i, zMatrix)
-        zMatrix[i, nNodes+2] += -t[i]
+        zMatrix[i, zNodes+1] += -t[i-1]
 
         if debug
             println("Second Last Row Final:")
@@ -504,7 +496,178 @@ function solve_Q3_SecondOrder2(nNodes, z1, t1, t2, epsilon=0.0001, debug=false)
 
         println("")
 
-        if iterationCounter == 2
+        if iterationCounter == 200
+            break
+        end
+    end
+
+    return z, t
+end
+
+function solve_Q3_SecondOrder3(nNodes, z1, t1, t2, epsilon=0.0001, debug=false)
+    eta1 = 0
+    eta2 = 20
+    dx = (eta2 - eta1) / (nNodes + 1)
+    
+    if debug
+        println("Nodes = $nNodes, dx = $dx")
+    end
+
+    #Create initial value vectors
+    additionalZEqns = 3
+    additionalTEqns = 2
+    z = Array{Float64, 1}(undef, nNodes + additionalZEqns)
+    t = Array{Float64, 1}(undef, nNodes + additionalTEqns)
+    zNodes = size(z,1)
+    tNodes = size(t,1)
+
+    for i in 1:(nNodes+additionalZEqns)
+        eta = dx*(i-2)
+        
+        z[i] = initZ(eta)
+        
+        if i > 1 && i <= nNodes + 1
+            t[i-1] = initT(eta)
+        end
+    end
+
+    if debug
+        println("")
+        println("Initial z-vector: $z")
+        println("Initial t-vector: $t")
+    end
+
+    # Second order central stencils for each derivative
+    cdn3 = (1/(2* dx*dx*dx)) .* [ -1 2 0 -2 1 ]
+    cdn2 = (1/(dx*dx)) .* [ 1 -2 1 ]
+    cdn = (1/(2*dx)) .* [ -1 0 1 ]
+
+    if debug
+        println("")
+        println("3rd Derivative Stencil: $cdn3")
+        println("2nd Derivative Stencil: $cdn2")
+        println("1st Derivative Stencil: $cdn")
+        println("")
+    end
+
+    # Solve in a block-iterative method, where we solve a matrix representing equation 1, then another matrix representing equation 2, then iterate again
+    maxDx = 1
+    iterationCounter = 1
+    while maxDx > epsilon
+        ################### Build and solve z Matrix ###################
+        # One additional equation required on the RHB, where we only have a derivative boundary condition
+        zMatrix = zeros(Float64, zNodes, zNodes+1)
+
+        if debug
+            println("Init:")
+            printMatrix(zMatrix)
+        end
+
+        # Will simply apply the stencils for interior nodes
+        for i in 3:(zNodes-2)
+            zMatrix = addCentralDerivative(cdn3, 1, i, zMatrix)
+            secondDerMultiple = 3*z[i]
+            zMatrix = addCentralDerivative(cdn2, secondDerMultiple, i, zMatrix)
+            thirdDerMultiple = -2*( (z[i+1] - z[i-1]) / (2*dx) )
+            zMatrix = addCentralDerivative(cdn, thirdDerMultiple, i, zMatrix)
+            zMatrix[i, zNodes+1] = -t[i-2]
+        end
+
+        if debug
+            println("Interior Stencils Applied:")
+            printMatrix(zMatrix)
+        end
+
+        # Now need to apply boundary conditions, make the first two and the last two rows
+        # Second row: derivative condition
+        cdn = [ -1 0 1 ]
+        zMatrix = addStencil(cdn, 1, 1, 1, zMatrix)
+
+        # Second row is equation for first boundary node
+        zMatrix[2, 2] = 1
+        zMatrix[2, zNodes+1] = z1
+
+        # Second last row: Modified third derivative term in equation
+         cdn3Offset = [ 1 -6 12 -10 3 ] # f-3 to f+1
+         zMatrix = addStencil(cdn3Offset, 1, zNodes-1, zNodes-4, zMatrix)
+         
+         i = zNodes-1
+         secondDerMultiple = 3*z[i]
+         zMatrix = addCentralDerivative(cdn2, secondDerMultiple, i, zMatrix)
+         thirdDerMultiple = -2*( (z[i+1] - z[i-1]) / (2*dx) )
+         zMatrix = addCentralDerivative(cdn, thirdDerMultiple, i, zMatrix)
+         zMatrix[i, zNodes+1] = -t[i-2]
+
+        # Last row: derivative condition
+        cdnR = [ -1 0 1 ]
+        zMatrix = addStencil(cdnR, 1, zNodes, zNodes-2, zMatrix)
+        
+        if debug
+            println("Complete Z matrix:")
+            printMatrix(zMatrix)
+        end
+
+        # Now zMatrix should be complete, solve it
+        newZ = Solve_GaussElim!(zMatrix)
+
+        if debug
+            println("New Zeta: $newZ")
+        end
+
+        #################### Build and solve t Matrix #####################
+        # No additional equations required for t, dirichlet on both sides
+        tMatrix = zeros(Float64, tNodes, tNodes+1)
+
+        # Apply appropriate stencils for interior nodes
+        for i in 2:(tNodes-1)
+            tMatrix = addCentralDerivative(cdn2, 1, i, tMatrix)
+            firstDerMultiple = 3 * 0.71 * newZ[i+1]
+            tMatrix = addCentralDerivative(cdn, firstDerMultiple, i, tMatrix)
+        end
+
+        if debug
+            println("Interior Stencils Applied:")
+            printMatrix(tMatrix)
+        end
+
+        # Now apply boundary conditions
+        # For the first row, value of T0 is known to be t1
+        tMatrix[1,1] = 1
+        tMatrix[1, tNodes+1] = t1
+
+        # For the last row, value of T1 is known to be t2
+        tMatrix[tNodes, tNodes] = 1
+        tMatrix[tNodes, tNodes+1] = t2
+
+        if debug
+            println("Last Row Final:")
+            printMatrix(tMatrix)
+        end
+
+        # Solve
+        newT = Solve_GaussElim!(tMatrix)
+
+        if debug
+            println("New T: $newT")
+        end
+
+        ############## Evaluate dt, dz ##############
+        maxDx = 0
+        for i in 3:nNodes
+            dz = abs(newZ[i] - z[i])
+            dt = abs(newT[i-1] - t[i-1])
+            maxDx = max(max(dz, dt), maxDx)
+        end
+       
+        println("Iteration $iterationCounter, Max dx = $maxDx")
+        
+        iterationCounter += 1
+        t = newT
+        z = newZ
+
+        println("")
+
+        if iterationCounter == 20
             break
         end
     end
@@ -513,10 +676,9 @@ function solve_Q3_SecondOrder2(nNodes, z1, t1, t2, epsilon=0.0001, debug=false)
 end
 
 # Plot Results
-nNodes = 10
-z, T = solve_Q3_SecondOrder2(nNodes, 0, 1, 0, 0.000001, true)
-z = vcat([0], z)
-T = vcat([1], T, [0])
+nNodes = 19
+z, T = solve_Q3_SecondOrder3(nNodes, 0, 1, 0, 0.000001, true)
+z = z[2:nNodes+3]
 eta = Array{Float64, 1}(undef, nNodes+2)
 for i in 1:nNodes+2
     eta[i] = ((i-1)/(nNodes+1)) * 20
