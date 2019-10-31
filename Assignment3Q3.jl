@@ -504,7 +504,7 @@ function solve_Q3_SecondOrder2(nNodes, z1, t1, t2, epsilon=0.0001, debug=false)
 
         println("")
 
-        if iterationCounter == 10
+        if iterationCounter == 2
             break
         end
     end
