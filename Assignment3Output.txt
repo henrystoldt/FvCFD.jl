@@ -1,0 +1,36 @@
+julia> include("Assignment3.jl")
+Iteration 1, Max dx = 19.892541841578456
+
+Iteration 2, Max dx = 10.490036470490127
+
+Iteration 3, Max dx = 4.815854971494205
+
+Iteration 4, Max dx = 1.6918759265838152
+
+Iteration 5, Max dx = 0.35462287342183707
+
+Iteration 6, Max dx = 0.1737890536999065
+
+Iteration 7, Max dx = 0.04753467420148638
+
+Iteration 8, Max dx = 0.024779719130928246
+
+Iteration 9, Max dx = 0.0069843670052800455
+
+Iteration 10, Max dx = 0.003823005065778151
+
+Iteration 11, Max dx = 0.0011235308520896048
+
+Iteration 12, Max dx = 0.000635859756133339
+
+Iteration 13, Max dx = 0.00020116737688491426
+
+Iteration 14, Max dx = 0.00011508038794572073
+
+Iteration 15, Max dx = 4.059933847483377e-5
+
+Iteration 16, Max dx = 2.265285459568389e-5
+
+Iteration 17, Max dx = 1.0082588056681274e-5
+
+Iteration 18, Max dx = 4.976154153013557e-6

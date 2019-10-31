@@ -1,17 +1,6 @@
 include("LinearSolvers.jl")
-using Plots
-using Plots.PlotMeasures
-plotly()
 
 # zeta will be referred to as z or Z
-
-function residual1(d3Zdn, d2Zdn, dZdn, T, Z)
-    return d3Zdn + 3*Z*d2Zdn - 2 *(dZdn*dZdn) + T
-end
-
-function residual2(d2Tdn, dTdn, Z)
-    return d2Tdn + 3*0.71*Z*dTdn
-end
 
 # Initial value functions for T and eta(Z)
 function initZ(eta)
@@ -24,7 +13,6 @@ end
 
 function addCentralDerivative(stencil, multiple, position, matrix)
     stencil2 = stencil * multiple
-    # Assuming stencil is symmetricl
     stencilLength = size(stencil, 2)
     stencilBandwidth = floor(Int32, (stencilLength - 1) / 2)
     for i in 1:stencilLength
@@ -74,13 +62,7 @@ function solve_Q3(nNodes, z1, t1, t2, epsilon=0.0001, iterLimit=200)
     iterationCounter = 1
     while maxDx > epsilon
         ####################### Build z Matrix ########################
-        # One additional equation required on the RHB, where we only have a derivative boundary condition
         zMatrix = zeros(Float64, zNodes+tNodes, zNodes+tNodes+1)
-
-        if debug
-            println("Init:")
-            printMatrix(zMatrix)
-        end
 
         # Apply the appropriate stencils for interior nodes
         for i in 3:(zNodes-2)
@@ -92,8 +74,7 @@ function solve_Q3(nNodes, z1, t1, t2, epsilon=0.0001, iterLimit=200)
             zMatrix[i, zNodes+i-1] = 1
         end
 
-        # Zeta Boundary Conditions
-        # First row: derivative condition
+        # Zeta Boundary Conditions: First row: derivative condition
         cdn = [ -1 0 1 ]
         zMatrix = addStencil(cdn, 1, 1, 1, zMatrix)
 
@@ -126,8 +107,7 @@ function solve_Q3(nNodes, z1, t1, t2, epsilon=0.0001, iterLimit=200)
             zMatrix = addCentralDerivative(cdn, firstDerMultiple, i, zMatrix)
         end
 
-        # Now apply boundary conditions
-        # For the first row, value of T0 is known to be t1
+        #Boundary Conditions: For the first row, value of T0 is known to be t1
         zMatrix[1+zNodes,1+zNodes] = 1
         zMatrix[1+zNodes, zNodes+tNodes+1] = t1
 
@@ -168,15 +148,3 @@ function solve_Q3(nNodes, z1, t1, t2, epsilon=0.0001, iterLimit=200)
     # Cuts out-of-domain values off of z before returning
     return z[2:nNodes+3], t
 end
-
-# Plot Results
-nNodes = 500
-z, T = solve_Q3(nNodes, 0, 1, 0, 0.00001, false)
-eta = Array{Float64, 1}(undef, nNodes+2)
-for i in 1:nNodes+2
-    eta[i] = ((i-1)/(nNodes+1)) * 20
-end
-
-plot(eta, z, label="zeta", size=(860, 440))
-plot!(eta, T, label="T")
-gui()
