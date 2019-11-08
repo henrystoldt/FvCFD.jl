@@ -1,0 +1,122 @@
+Question 1: 
+Gauss Elimination: 
+x = [-1.7618170439978604, 0.8962280338740124, 4.051931404116157, -1.6171308025395412, 2.041913538501912, 0.15183248715593559]
+Gauss-Seidel: 
+ERROR: Calculation diverged
+x = [NaN, NaN, NaN, NaN, NaN, NaN]
+SOR: 
+ERROR: Calculation diverged
+x = [NaN, NaN, NaN, NaN, NaN, NaN]
+
+Question 2: 
+N-Diagonal Solver:
+x = [9.07692307692308, -9.769230769230772, 3.3846153846153846, 1.6153846153846163, -8.230769230769235, 7.923076923076926]
+Gauss Elimination:
+x = [9.07692307692308, -9.769230769230772, 3.3846153846153846, 1.6153846153846163, -8.230769230769235, 7.923076923076926]
+
+Question 3: 
+Nonlinear Newton-Raphson Solver:
+Iteration 1: maxRes = 5.0
+Iteration 2: maxRes = 4.000000059195642
+Iteration 3: maxRes = 1.8504377648706638
+Iteration 4: maxRes = 1.9359348645088037
+Iteration 5: maxRes = 2.0269534201072856
+Iteration 6: maxRes = 0.7680875595665401
+Iteration 7: maxRes = 2.3398532172335154
+Iteration 8: maxRes = 1.2363926811831167
+Iteration 9: maxRes = 0.600315571513261
+Iteration 10: maxRes = 148.14845640372002
+Iteration 11: maxRes = 61.10190562539992
+Iteration 12: maxRes = 19.884669456318957
+Iteration 13: maxRes = 8.098602863430449
+Iteration 14: maxRes = 4.5693488720260875
+Iteration 15: maxRes = 5.706395999291344
+Iteration 16: maxRes = 1.450923859312808
+Iteration 17: maxRes = 0.8135865052125073
+Iteration 18: maxRes = 12.210802918997318
+Iteration 19: maxRes = 0.7995603023035193
+Iteration 20: maxRes = 2.2677554894691543
+Iteration 21: maxRes = 0.8791854778260586
+Iteration 22: maxRes = 1.30945791847634
+Iteration 23: maxRes = 0.7798133626423344
+Iteration 24: maxRes = 2.3551114466423546
+Iteration 25: maxRes = 1.0124262758292952
+Iteration 26: maxRes = 0.961140951131618
+Iteration 27: maxRes = 1.0487032741051845
+Iteration 28: maxRes = 0.9169753082955888
+Iteration 29: maxRes = 1.1624815566187836
+Iteration 30: maxRes = 0.8313832324910038
+Iteration 31: maxRes = 1.625349922223612
+Iteration 32: maxRes = 0.746599800810548
+Iteration 33: maxRes = 2.2030096579993237
+Iteration 34: maxRes = 0.8256568118151296
+Iteration 35: maxRes = 1.6796743250222133
+Iteration 36: maxRes = 0.7454011524400638
+Iteration 37: maxRes = 2.0265721146254485
+Iteration 38: maxRes = 0.7633565734907694
+Iteration 39: maxRes = 2.682035388212676
+Iteration 40: maxRes = 0.8637736729659541
+Iteration 41: maxRes = 1.390397955973969
+Iteration 42: maxRes = 0.7649696722107824
+Iteration 43: maxRes = 2.6559136380951145
+Iteration 44: maxRes = 2.230439429646623
+Iteration 45: maxRes = 0.8451456311465553
+Iteration 46: maxRes = 1.5123765410756849
+Iteration 47: maxRes = 0.752168802425541
+Iteration 48: maxRes = 2.642561294454569
+Iteration 49: maxRes = 2.5928175733722925
+Iteration 50: maxRes = 2.524965321811894
+Iteration 51: maxRes = 1.8185882649576444
+Iteration 52: maxRes = 0.7461284121237886
+Iteration 53: maxRes = 2.1379747329769594
+Iteration 54: maxRes = 0.7928810711219978
+Iteration 55: maxRes = 2.109616234770234
+Iteration 56: maxRes = 0.7829039719779919
+Iteration 57: maxRes = 2.293091241444977
+Iteration 58: maxRes = 0.9088106437279183
+Iteration 59: maxRes = 1.189378472839099
+Iteration 60: maxRes = 0.8184887911727629
+Iteration 61: maxRes = 1.754927691834049
+Iteration 62: maxRes = 0.7450974819725055
+Iteration 63: maxRes = 1.975925225255751
+Iteration 64: maxRes = 0.7562156455676244
+Iteration 65: maxRes = 2.7271608119236155
+Iteration 66: maxRes = 0.8874605242408691
+Iteration 67: maxRes = 1.2718090681240022
+Iteration 68: maxRes = 0.7893036019042753
+Iteration 69: maxRes = 2.1722784409077356
+Iteration 70: maxRes = 0.808163178234575
+Iteration 71: maxRes = 1.879973085081369
+Iteration 72: maxRes = 0.7484988834346729
+Iteration 73: maxRes = 2.4137513480561177
+Iteration 74: maxRes = 1.1735819184340706
+Iteration 75: maxRes = 0.825816621699735
+Iteration 76: maxRes = 1.67809470815472
+Iteration 77: maxRes = 0.7454246148450575
+Iteration 78: maxRes = 2.0303762434633152
+Iteration 79: maxRes = 0.764012528768511
+Iteration 80: maxRes = 2.671824654763342
+Iteration 81: maxRes = 1.42523404329434
+Iteration 82: maxRes = 0.7603596970740242
+Iteration 83: maxRes = 2.719003621820975
+Iteration 84: maxRes = 1.5042321353252224
+Iteration 85: maxRes = 0.7527660530143162
+Iteration 86: maxRes = 2.663618041547453
+Iteration 87: maxRes = 1.886999732399288
+Iteration 88: maxRes = 0.7488758424638692
+Iteration 89: maxRes = 2.4468880382835647
+Iteration 90: maxRes = 1.307122416057968
+Iteration 91: maxRes = 0.780347486102841
+Iteration 92: maxRes = 2.344247256530927
+Iteration 93: maxRes = 0.9903027141837043
+Iteration 94: maxRes = 0.9945579898338331
+Iteration 95: maxRes = 0.9876770426913152
+Iteration 96: maxRes = 0.9989211645909969
+Iteration 97: maxRes = 0.9808564390688881
+Iteration 98: maxRes = 1.0106946598015312
+Iteration 99: maxRes = 0.9635582537376896
+Iteration 100: maxRes = 1.0436966630319076
+ERROR: Convergence not achieved in 100 iterations
+x1 = -79.4834
+x2 = 4.0000
+x3 = 1.7321
