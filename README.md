@@ -41,6 +41,8 @@
 
 9. Calculate residuals (on primitives or conserved??)
 
+9a. Print values to console
+
 10. Check convergence criteria
 
 11. Repeat if required
