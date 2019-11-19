@@ -5,9 +5,6 @@ plotly()
 
 ######################### Constitutive Relations #######################
 function idealGasRho(T, P, R=287.05)
-    # PV = nRT
-    # PV = mRT
-    # m/V = P/RT = rho
     return P/(R*T)
 end
 
@@ -85,6 +82,36 @@ function centralGradient(dx, values...)
     return result
 end
 
+function central2GradNum(dx, values...)
+    result = []
+    for vals in values
+        n = size(vals,1)
+        grad = Array{Float64, 1}(undef, n)
+        grad[1] = 0
+        grad[n] = 0
+        for i in 2:n-1
+            grad[i] = vals[i+1] - 2*vals[i] + vals[i-1]
+        end
+        push!(result, grad)
+    end
+    return result
+end
+
+function central2GradDenom(dx, values...)
+    result = []
+    for vals in values
+        n = size(vals,1)
+        grad = Array{Float64, 1}(undef, n)
+        grad[1] = 0
+        grad[n] = 0
+        for i in 2:n-1
+            grad[i] = vals[i+1] + 2*vals[i] + vals[i-1]
+        end
+        push!(result, grad)
+    end
+    return result
+end
+
 function upwindGradient(dx, U, values...)
     result = []
     for vals in values
@@ -130,22 +157,15 @@ function initializeShockTube(nCells=100, domainLength=1)
     T = Array{Float64, 1}(undef, nCells)
 
     # Apply initial conditions (Fig. 1 in Henry's paper)
-    LHSRho = idealGasRho(0.00348432, 1)
-    LHSe = calPerfectEnergy(0.00348432)
-    RHSRho = idealGasRho(0.00278746, 0.9)
-    RHSe = calPerfectEnergy(0.00278746)
     for i in 1:nCells
-
         if i <= (nCells/2)
-            rho = LHSRho
-            e = LHSe
+            T[i] = 0.00348432
+            P[i] = 1
         else
-            rho = RHSRho
-            e = RHSe
+            T[i] = 0.00278746
+            P[i] = 0.1
         end
         U[i] = 0
-        T[i] = calPerfectT(e)
-        P[i] = idealGasP(rho, T[i])
 
         # dx = Distance between cell centers i and i+1
         dx[i] = domainLength / nCells
@@ -270,7 +290,7 @@ function macCormack1D(dx, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.5,
     return P, U, T, rho
 end
 
-function macCormack1DConservative(dx, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.5, gamma=1.4, R=287.05, Cp=1005)
+function macCormack1DConservative(dx, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, Cx=0.3)
     nCells = size(dx, 1)
 
     rho = Array{Float64, 1}(undef, nCells)
@@ -292,6 +312,7 @@ function macCormack1DConservative(dx, P, T, U; initDt=0.001, endTime=0.14267, ta
     xMomP = Array{Float64, 1}(undef, nCells)
     eV2P = Array{Float64, 1}(undef, nCells)
     rhoP = Array{Float64, 1}(undef, nCells)
+    PP = Array{Float64, 1}(undef, nCells)
     rhoU2pP = Array{Float64, 1}(undef, nCells)
     rhoUeV2PUP = Array{Float64, 1}(undef, nCells)
 
@@ -306,6 +327,8 @@ function macCormack1DConservative(dx, P, T, U; initDt=0.001, endTime=0.14267, ta
         
         ############## Predictor #############
         dxMomdx, drhoU2pdx, drhoUeV2PU = forwardGradient(dx, xMom, rhoU2p, rhoUeV2PU)
+        pCentralGrad, rhoCG, xMomCG, eV2CG = central2GradNum(dx, P, rho, xMom, eV2)
+        pDenom = central2GradDenom(dx, P)[1]
 
         for i in 2:(nCells-1)
             # Eq. 2.99, 2.105, 2.106
@@ -314,19 +337,22 @@ function macCormack1DConservative(dx, P, T, U; initDt=0.001, endTime=0.14267, ta
             deV2P[i] = -drhoUeV2PU[i]
 
             # Predict
-            rhoP[i] = rho[i] + drhoP[i]*dt
-            xMomP[i] = xMom[i] + dxMP[i]*dt
-            eV2P[i] = eV2[i] + deV2P[i]*dt
+            S = Cx * abs(pCentralGrad[i]) / pDenom[i]
+            rhoP[i] = rho[i] + drhoP[i]*dt + S*rhoCG[i]
+            xMomP[i] = xMom[i] + dxMP[i]*dt + S*xMomCG[i]
+            eV2P[i] = eV2[i] + deV2P[i]*dt + S*eV2CG[i]
 
             # Decode
-            PP, TP, UP = decodePrimitives(rhoP[i], xMomP[i], eV2P[i])
-            rhoU2pP[i] = xMomP[i]*UP + PP
-            rhoUeV2PUP[i] = UP*eV2P[i] + PP*UP
+            PP[i], TP, UP = decodePrimitives(rhoP[i], xMomP[i], eV2P[i])
+            rhoU2pP[i] = xMomP[i]*UP + PP[i]
+            rhoUeV2PUP[i] = UP*eV2P[i] + PP[i]*UP
         end
 
         ############### Corrector ################
         # Rearward differences to compute gradients
         dxMomdxP, drhoU2pdxP, drhoUeV2PUP = backwardGradient(dx, xMomP, rhoU2pP, rhoUeV2PUP)
+        pCentralGradP, rhoCGP, xMomCGP, eV2CGP = central2GradNum(dx, PP, rhoP, xMomP, eV2P)
+        pDenomP = central2GradDenom(dx, PP)[1]
 
         for i in 2:(nCells-1)
             drhoP2 = -dxMomdxP[i]
@@ -334,9 +360,10 @@ function macCormack1DConservative(dx, P, T, U; initDt=0.001, endTime=0.14267, ta
             deV2P2 = -drhoUeV2PUP[i]
 
             # Perform timestep using average gradients
-            rho[i] += (drhoP2 + drhoP[i])*dt/2
-            xMom[i] += (dxMP2 + dxMP[i])*dt/2
-            eV2[i] += (deV2P2 + deV2P[i])*dt/2
+            S = Cx * abs(pCentralGradP[i]) / pDenomP[i]
+            rho[i] += (drhoP2 + drhoP[i])*dt/2 + S*rhoCGP[i]
+            xMom[i] += (dxMP2 + dxMP[i])*dt/2 + S*xMomCGP[i]
+            eV2[i] += (deV2P2 + deV2P[i])*dt/2 + S*eV2CGP[i]
 
             # Decode
             P[i], T[i], U[i] = decodePrimitives(rho[i], xMom[i], eV2[i])
@@ -369,6 +396,6 @@ end
 
 ################## Output ##################
 nCells = 500
-P, U, T, rho = macCormack1DConservative(initializeShockTube(nCells)..., initDt=0.00000001, endTime=0.1)
+P, U, T, rho = macCormack1DConservative(initializeShockTube(nCells)..., initDt=0.00000001, endTime=0.1427)
 # P, U, T, rho = macCormack1D(initializeShockTube(nCells)..., initDt=0.00000001, endTime=0.1)
 plotShockTubeResults(P, U, T, rho)
