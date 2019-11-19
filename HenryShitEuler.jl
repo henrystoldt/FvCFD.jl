@@ -82,35 +82,6 @@ function centralGradient(dx, values...)
     return result
 end
 
-function central2GradNum(dx, values...)
-    result = []
-    for vals in values
-        n = size(vals,1)
-        grad = Array{Float64, 1}(undef, n)
-        grad[1] = 0
-        grad[n] = 0
-        for i in 2:n-1
-            grad[i] = vals[i+1] - 2*vals[i] + vals[i-1]
-        end
-        push!(result, grad)
-    end
-    return result
-end
-
-function central2GradDenom(dx, values...)
-    result = []
-    for vals in values
-        n = size(vals,1)
-        grad = Array{Float64, 1}(undef, n)
-        grad[1] = 0
-        grad[n] = 0
-        for i in 2:n-1
-            grad[i] = vals[i+1] + 2*vals[i] + vals[i-1]
-        end
-        push!(result, grad)
-    end
-    return result
-end
 
 function upwindGradient(dx, U, values...)
     result = []
@@ -133,6 +104,38 @@ function upwindGradient(dx, U, values...)
             elseif i < n
                 grad[i] = (vals[i+1] - vals[i])/dx[i]
             end
+        end
+        push!(result, grad)
+    end
+    return result
+end
+
+# Just the numerator of the central second gradient, used for artificial diffusion term
+function central2GradNum(dx, values...)
+    result = []
+    for vals in values
+        n = size(vals,1)
+        grad = Array{Float64, 1}(undef, n)
+        grad[1] = 0
+        grad[n] = 0
+        for i in 2:n-1
+            grad[i] = vals[i+1] - 2*vals[i] + vals[i-1]
+        end
+        push!(result, grad)
+    end
+    return result
+end
+
+# Denominator of artificial diffusion term
+function central2GradDenom(dx, values...)
+    result = []
+    for vals in values
+        n = size(vals,1)
+        grad = Array{Float64, 1}(undef, n)
+        grad[1] = 0
+        grad[n] = 0
+        for i in 2:n-1
+            grad[i] = vals[i+1] + 2*vals[i] + vals[i-1]
         end
         push!(result, grad)
     end
@@ -191,7 +194,7 @@ function plotShockTubeResults(P, U, T, rho)
     gui()
 end
 
-######################### Solution #######################
+######################### Solvers #######################
 # Pass in initial values for each variable
 # Shock Tube (undisturbed zero gradient) boundary conditions assumed
 function macCormack1D(dx, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.5, gamma=1.4, R=287.05, Cp=1005)
