@@ -305,10 +305,7 @@ function macCormack1DConservative(dx, P, T, U; initDt=0.001, endTime=0.14267, ta
         end
         
         ############## Predictor #############
-        # Forward Differences to compute gradients
         dxMomdx, drhoU2pdx, drhoUeV2PU = forwardGradient(dx, xMom, rhoU2p, rhoUeV2PU)
-        # drhodx, dudx, dpdx, deVdx = upwindGradient(dx, U, rho, U, P, eV2)
-        # drhodx, dudx, dpdx, deVdx = centralGradient(dx, rho, U, P, eV2)
 
         for i in 2:(nCells-1)
             # Eq. 2.99, 2.105, 2.106
@@ -330,8 +327,6 @@ function macCormack1DConservative(dx, P, T, U; initDt=0.001, endTime=0.14267, ta
         ############### Corrector ################
         # Rearward differences to compute gradients
         dxMomdxP, drhoU2pdxP, drhoUeV2PUP = backwardGradient(dx, xMomP, rhoU2pP, rhoUeV2PUP)
-        # drhodxP, dudxP, dpdxP, deVdxP = upwindGradient(dx, UP, rhoP, UP, PP, eV2P)
-        # drhodxP, dudxP, dpdxP, deVdxP = centralGradient(dx, rhoP, UP, PP, eV2P)
 
         for i in 2:(nCells-1)
             drhoP2 = -dxMomdxP[i]
