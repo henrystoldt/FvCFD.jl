@@ -17,8 +17,8 @@ function idealGasP(rho, T, R=287.05)
     return rho*R*T
 end
 
-function calPerfectEnergy(T, Cp=1005)
-    return T*Cp
+function calPerfectEnergy(T, Cp=1005, R=287.05)
+    return T*(Cp-R)
 end
 
 function calPerfectT(e, Cp=1005)
@@ -241,7 +241,8 @@ function macCormack1D(dx, P, T, U; dt=0.001, endTime=0.14267)
     return P, U, T, rho
 end
 
-function macCormack1DConservative(dx, P, T, U; dt=0.001, endTime=0.14267)
+#TODO: CFL calculation
+function macCormack1DConservative(dx, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.5, gamma=1.4, R=287.05, Cp=1005)
     nCells = size(dx, 1)
 
     rho = Array{Float64, 1}(undef, nCells)
@@ -263,6 +264,9 @@ function macCormack1DConservative(dx, P, T, U; dt=0.001, endTime=0.14267)
     PP = Array{Float64, 1}(undef, nCells)
     TP = Array{Float64, 1}(undef, nCells)
 
+    CFL = Array{Float64, 1}(undef, nCells)
+
+    dt = initDt
     currTime = 0
     while currTime < endTime
         if (endTime - currTime) < dt
@@ -320,6 +324,15 @@ function macCormack1DConservative(dx, P, T, U; dt=0.001, endTime=0.14267)
         copyValues(nCells-2, nCells-1, allVars)
         copyValues(nCells, nCells, allVars)
         
+        ############## CFL Calculation, timestep adjustment #############
+        for i in 1:nCells
+            CFL[i] = (abs(U[i]) + sqrt(gamma * R * T[i])) * dt / dx[i]
+        end
+        maxCFL = maximum(CFL)
+
+        # Adjust time step to slowly approach target CFL
+        dt *= ((targetCFL/maxCFL - 1)/5+1)
+
         currTime += dt
     end
 
@@ -328,7 +341,7 @@ end
 
 ################## Output ##################
 nCells = 500
-P, U, T, rho = macCormack1DConservative(initializeShockTube(nCells)..., dt=0.0001, endTime=0.2)
+P, U, T, rho = macCormack1DConservative(initializeShockTube(nCells)..., initDt=0.0001, endTime=0.2)
 
 plots = []
 xAxis = Array{Float64, 1}(undef, nCells)
