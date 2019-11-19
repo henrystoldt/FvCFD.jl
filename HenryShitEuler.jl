@@ -21,8 +21,8 @@ function calPerfectEnergy(T, Cp=1005, R=287.05)
     return T*(Cp-R)
 end
 
-function calPerfectT(e, Cp=1005)
-    return e/Cp
+function calPerfectT(e, Cp=1005, R=287.05)
+    return e/(Cp-R)
 end
 
 function decodePrimitives(rho, xMom, eV2, R=287.05, Cp=1005)
@@ -35,9 +35,9 @@ end
 
 function encodePrimitives(P, T, U, R=287.05, Cp=1005)
     rho = idealGasRho(T, P)
-    xMom = U * rho
+    xMom = U*rho
     e = calPerfectEnergy(T)
-    eV2 = rho * (e + U*U/2)
+    eV2 = rho*(e + U*U/2)
     return rho, xMom, eV2
 end
 
@@ -132,7 +132,7 @@ function initializeShockTube(nCells=100, domainLength=1)
     # Apply initial conditions (Fig. 1 in Henry's paper)
     LHSRho = idealGasRho(0.00348432, 1)
     LHSe = calPerfectEnergy(0.00348432)
-    RHSRho = idealGasRho(0.00278746, 0.95)
+    RHSRho = idealGasRho(0.00278746, 0.9)
     RHSe = calPerfectEnergy(0.00278746)
     for i in 1:nCells
 
@@ -154,10 +154,27 @@ function initializeShockTube(nCells=100, domainLength=1)
     return dx, P, T, U
 end
 
+############################ Plotting ############################
+function plotShockTubeResults(P, U, T, rho)
+    plots = []
+    xAxis = Array{Float64, 1}(undef, nCells)
+    for i in 1:nCells
+        xAxis[i] = i/nCells - 1/(2*nCells)
+    end
+
+    pPlot = plot(xAxis, P, label="P (Pa)", title="Pressure", xlabel="x (m)", bottom_margin=15mm, left_margin=10mm)
+    rhoPlot = plot(xAxis, rho, label="rho (kg/m3)", title="Density", xlabel="x (m)", bottom_margin=15mm, left_margin=10mm)
+    uPlot = plot(xAxis, U, label="Velocity (m/s)", title="Velocity", xlabel="x (m)", bottom_margin=15mm, left_margin=10mm)
+    TPlot = plot(xAxis, T, label="T (K)", title="Temperature", xlabel="x (m)", bottom_margin=15mm, left_margin=10mm)
+    plots = [pPlot, rhoPlot, uPlot, TPlot]
+    plot(plots..., layout=(2, 2), size=(1720, 880), window_title="Euler1D_Draft_Henry", legend=false)
+    gui()
+end
+
 ######################### Solution #######################
 # Pass in initial values for each variable
 # Shock Tube (undisturbed zero gradient) boundary conditions assumed
-function macCormack1D(dx, P, T, U; dt=0.001, endTime=0.14267)
+function macCormack1D(dx, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.5, gamma=1.4, R=287.05, Cp=1005)
     nCells = size(dx, 1)
 
     rho = Array{Float64, 1}(undef, nCells)
@@ -178,6 +195,9 @@ function macCormack1D(dx, P, T, U; dt=0.001, endTime=0.14267)
     PPred = Array{Float64, 1}(undef, nCells)
     ePred = Array{Float64, 1}(undef, nCells)
 
+    CFL = Array{Float64, 1}(undef, nCells)
+
+    dt = initDt
     currTime = 0
     while currTime < endTime
         if (endTime - currTime) < dt
@@ -235,22 +255,34 @@ function macCormack1D(dx, P, T, U; dt=0.001, endTime=0.14267)
         copyValues(nCells-2, nCells-1, allVars)
         copyValues(nCells, nCells, allVars)
         
+        ############## CFL Calculation, timestep adjustment #############
+        for i in 1:nCells
+            CFL[i] = (abs(U[i]) + sqrt(gamma * R * T[i])) * dt / dx[i]
+        end
+        maxCFL = maximum(CFL)
+
+        # Adjust time step to slowly approach target CFL
+        dt *= ((targetCFL/maxCFL - 1)/5+1)
+        
         currTime += dt
     end
 
     return P, U, T, rho
 end
 
-#TODO: CFL calculation
 function macCormack1DConservative(dx, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.5, gamma=1.4, R=287.05, Cp=1005)
     nCells = size(dx, 1)
 
     rho = Array{Float64, 1}(undef, nCells)
     xMom = Array{Float64, 1}(undef, nCells)
     eV2 = Array{Float64, 1}(undef, nCells)
+    rhoU2p = Array{Float64, 1}(undef, nCells)
+    rhoUeV2PU = Array{Float64, 1}(undef, nCells)
 
     for i in 1:nCells
         rho[i], xMom[i], eV2[i] = encodePrimitives(P[i], T[i], U[i])
+        rhoU2p[i] = xMom[i]*U[i] + P[i]
+        rhoUeV2PU[i] = U[i]*eV2[i] + P[i]*U[i]
     end
     
     drhoP = Array{Float64, 1}(undef, nCells)
@@ -260,9 +292,8 @@ function macCormack1DConservative(dx, P, T, U; initDt=0.001, endTime=0.14267, ta
     xMomP = Array{Float64, 1}(undef, nCells)
     eV2P = Array{Float64, 1}(undef, nCells)
     rhoP = Array{Float64, 1}(undef, nCells)
-    UP = Array{Float64, 1}(undef, nCells)
-    PP = Array{Float64, 1}(undef, nCells)
-    TP = Array{Float64, 1}(undef, nCells)
+    rhoU2pP = Array{Float64, 1}(undef, nCells)
+    rhoUeV2PUP = Array{Float64, 1}(undef, nCells)
 
     CFL = Array{Float64, 1}(undef, nCells)
 
@@ -275,17 +306,15 @@ function macCormack1DConservative(dx, P, T, U; initDt=0.001, endTime=0.14267, ta
         
         ############## Predictor #############
         # Forward Differences to compute gradients
-        drhodx, dudx, dpdx, deVdx = forwardGradient(dx, rho, U, P, eV2)
+        dxMomdx, drhoU2pdx, drhoUeV2PU = forwardGradient(dx, xMom, rhoU2p, rhoUeV2PU)
         # drhodx, dudx, dpdx, deVdx = upwindGradient(dx, U, rho, U, P, eV2)
         # drhodx, dudx, dpdx, deVdx = centralGradient(dx, rho, U, P, eV2)
 
         for i in 2:(nCells-1)
-            # Eq. 2.82b
-            drhoP[i] = -(rho[i]*dudx[i] + U[i]*drhodx[i])
-            # Eq. 2.84a
-            dxMP[i] = -(dpdx[i] +  2*rho[i]*U[i]*dudx[i] + U[i]*U[i]*drhodx[i])
-            # Eq. 2.86
-            deV2P[i] = -(U[i]*dpdx[i] + P[i]*dudx[i] + eV2[i]*drhodx[i]*U[i] + rho[i]*deVdx[i]*U[i] + rho[i]*eV2[i]*dudx[i])
+            # Eq. 2.99, 2.105, 2.106
+            drhoP[i] = -dxMomdx[i]
+            dxMP[i] = -drhoU2pdx[i]
+            deV2P[i] = -drhoUeV2PU[i]
 
             # Predict
             rhoP[i] = rho[i] + drhoP[i]*dt
@@ -293,19 +322,21 @@ function macCormack1DConservative(dx, P, T, U; initDt=0.001, endTime=0.14267, ta
             eV2P[i] = eV2[i] + deV2P[i]*dt
 
             # Decode
-            PP[i], TP[i], UP[i] = decodePrimitives(rhoP[i], xMomP[i], eV2P[i])
+            PP, TP, UP = decodePrimitives(rhoP[i], xMomP[i], eV2P[i])
+            rhoU2pP[i] = xMomP[i]*UP + PP
+            rhoUeV2PUP[i] = UP*eV2P[i] + PP*UP
         end
 
         ############### Corrector ################
         # Rearward differences to compute gradients
-        drhodxP, dudxP, dpdxP, deVdxP = backwardGradient(dx, rhoP, UP, PP, eV2P)
+        dxMomdxP, drhoU2pdxP, drhoUeV2PUP = backwardGradient(dx, xMomP, rhoU2pP, rhoUeV2PUP)
         # drhodxP, dudxP, dpdxP, deVdxP = upwindGradient(dx, UP, rhoP, UP, PP, eV2P)
         # drhodxP, dudxP, dpdxP, deVdxP = centralGradient(dx, rhoP, UP, PP, eV2P)
 
         for i in 2:(nCells-1)
-            drhoP2 = -(rhoP[i]*dudxP[i] + UP[i]*drhodxP[i])
-            dxMP2 = -(dpdxP[i] +  2*rhoP[i]*UP[i]*dudxP[i] + UP[i]*UP[i]*drhodxP[i])
-            deV2P2 = -(UP[i]*dpdxP[i] + PP[i]*dudxP[i] + eV2P[i]*drhodxP[i]*UP[i] + rhoP[i]*deVdxP[i]*UP[i] + rhoP[i]*eV2P[i]*dudxP[i])
+            drhoP2 = -dxMomdxP[i]
+            dxMP2 = -drhoU2pdxP[i]
+            deV2P2 = -drhoUeV2PUP[i]
 
             # Perform timestep using average gradients
             rho[i] += (drhoP2 + drhoP[i])*dt/2
@@ -314,11 +345,13 @@ function macCormack1DConservative(dx, P, T, U; initDt=0.001, endTime=0.14267, ta
 
             # Decode
             P[i], T[i], U[i] = decodePrimitives(rho[i], xMom[i], eV2[i])
+            rhoU2p[i] = xMom[i]*U[i] + P[i]
+            rhoUeV2PU[i] = U[i]*eV2[i] + P[i]*U[i]
         end
 
         ############### Boundaries ################
         # Waves never reach the boundaries, so boundary treatment doesn't need to be good
-        allVars = [ rho, xMom, eV2, U, T, P ]
+        allVars = [ rho, rhoU2p, rhoUeV2PU, xMom, eV2, U, P, T ]
         copyValues(3, 2, allVars)
         copyValues(2, 1, allVars)
         copyValues(nCells-2, nCells-1, allVars)
@@ -341,17 +374,6 @@ end
 
 ################## Output ##################
 nCells = 500
-P, U, T, rho = macCormack1DConservative(initializeShockTube(nCells)..., initDt=0.0001, endTime=0.2)
-
-plots = []
-xAxis = Array{Float64, 1}(undef, nCells)
-for i in 1:nCells
-    xAxis[i] = i/nCells - 1/(2*nCells)
-end
-
-pPlot = plot(xAxis, P, label="P (Pa)", title="Pressure", xlabel="x (m)", bottom_margin=15mm, left_margin=10mm)
-rhoPlot = plot(xAxis, rho, label="rho (kg/m3)", title="Density", xlabel="x (m)", bottom_margin=15mm, left_margin=10mm)
-uPlot = plot(xAxis, U, label="Velocity (m/s)", title="Velocity", xlabel="x (m)", bottom_margin=15mm, left_margin=10mm)
-TPlot = plot(xAxis, T, label="T (K)", title="Temperature", xlabel="x (m)", bottom_margin=15mm, left_margin=10mm)
-plots = [pPlot, rhoPlot, uPlot, TPlot]
-plot(plots..., layout=(2, 2), size=(1720, 880), window_title="Euler1D_Draft_Henry", legend=false)
+P, U, T, rho = macCormack1DConservative(initializeShockTube(nCells)..., initDt=0.00000001, endTime=0.1)
+# P, U, T, rho = macCormack1D(initializeShockTube(nCells)..., initDt=0.00000001, endTime=0.1)
+plotShockTubeResults(P, U, T, rho)
