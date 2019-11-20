@@ -246,14 +246,11 @@ function initializeShockTubeFVM(nCells=100, domainLength=1)
     h = 0.1
     w = 0.1
 
-    # Indices of faces that form each cell
     cells = []
-    # Indices of owner and neighbour cells for each face
     faces = []
-    # face areas vectors
     fAVecs = []
-    # cell volumes
     cVols = []
+    boundaryFaces = [ [1,], [nCells+1,] ]
 
     fAVec = (h*w, 0, 0)
     cV = h*w*domainLength/nCells
@@ -270,7 +267,7 @@ function initializeShockTubeFVM(nCells=100, domainLength=1)
     push!(fAVecs, fAVec)
 
     # Returns in mesh format
-    mesh = [ cells, faces, fAVecs, cVols ]
+    mesh = [ cells, faces, fAVecs, cVols, boundaryFaces ]
     return mesh, P, T, U
 end
 
