@@ -82,7 +82,6 @@ function centralGradient(dx, values...)
     return result
 end
 
-
 function upwindGradient(dx, U, values...)
     result = []
     for vals in values
@@ -152,7 +151,7 @@ function copyValues(fromIndex, toIndex, varArrays)
 end
 
 ######################### Initialization #######################
-function initializeShockTube(nCells=100, domainLength=1)
+function initializeShockTubeFDM(nCells=100, domainLength=1)
     # Create arrays to store data (cell # = position in array)
     dx = Array{Float64, 1}(undef, nCells)
     U = Array{Float64, 1}(undef, nCells)
@@ -177,6 +176,14 @@ function initializeShockTube(nCells=100, domainLength=1)
     return dx, P, T, U
 end
 
+function initializeShockTubeFVM(nCells=100, domainLength=1)
+    dx, P, T, U = initializeShockTubeFDM(nCells, domainLength)
+    neighbours = []
+    faces = []
+    faceAreas = []
+    volumes = []
+end
+
 ############################ Plotting ############################
 function plotShockTubeResults(P, U, T, rho)
     plots = []
@@ -197,7 +204,8 @@ end
 ######################### Solvers #######################
 # Pass in initial values for each variable
 # Shock Tube (undisturbed zero gradient) boundary conditions assumed
-function macCormack1D(dx, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.5, gamma=1.4, R=287.05, Cp=1005)
+#TODO: Issue with shock position, check equations
+function macCormack1D(dx, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.5, gamma=1.4, R=287.05, Cp=1005, Cx=0.3)
     nCells = size(dx, 1)
 
     rho = Array{Float64, 1}(undef, nCells)
@@ -228,44 +236,39 @@ function macCormack1D(dx, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.5,
         end
 
         ############## Predictor #############
-        # Forward Differences to compute gradients
         drhodx, dudx, dpdx, dedx = backwardGradient(dx, rho, U, P, e)
-        # drhodx, dudx, dpdx, dedx = upwindGradient(dx, U, rho, U, P, e)
-        # drhodx, dudx, dpdx, dedx = centralGradient(dx, rho, U, P, e)
-        for i in 2:(nCells-1)
+        pCentralGrad, rhoCG, uCG, eCG = central2GradNum(dx, P, rho, U, e)
+        pDenom = central2GradDenom(dx, P)[1]
 
-            # Eq. 6.1
+        for i in 2:(nCells-1)
+            # Eq. 6.1, 6.2, 6.4
             drhoPred[i] = -(rho[i]*dudx[i] + U[i]*drhodx[i])
-            # Eq. 6.2
             duPred[i] = -(U[i]*dudx[i] + dpdx[i]/rho[i])
-            # Eq. 6.4
             dePred[i] = -(U[i]*dedx[i] + P[i]*dudx[i]/rho[i])
 
-            rhoPred[i] = rho[i] + drhoPred[i]*dt
-            UPred[i] = U[i] + duPred[i]*dt
-            ePred[i] = e[i] + dePred[i]*dt
+            S = Cx * abs(pCentralGrad[i])/pDenom[i]
+            rhoPred[i] = rho[i] + drhoPred[i]*dt + S*rhoCG[i]
+            UPred[i] = U[i] + duPred[i]*dt + S*uCG[i]
+            ePred[i] = e[i] + dePred[i]*dt + S*eCG[i]
             TPred[i] = calPerfectT(ePred[i])
             PPred[i] = idealGasP(rhoPred[i], TPred[i])
         end
 
         ############### Corrector ################
-        # Rearward differences to compute gradients
         drhodx, dudx, dpdx, dedx = forwardGradient(dx, rhoPred, UPred, PPred, ePred)
-        # drhodx, dudx, dpdx, dedx = upwindGradient(dx, UPred, rhoPred, UPred, PPred, ePred)
-        # drhodx, dudx, dpdx, dedx = centralGradient(dx, rhoPred, UPred, PPred, ePred)
-        for i in 2:(nCells-1)
+        pCentralGrad, rhoCG, uCG, eCG = central2GradNum(dx, PPred, rhoPred, UPred, ePred)
+        pDenom = central2GradDenom(dx, PPred)[1]
 
-            # Eq. 6.1
+        for i in 2:(nCells-1)
             drhoPred2 = -(rhoPred[i]*dudx[i] + UPred[i]*drhodx[i])
-            # Eq. 6.2
             duPred2 = -(UPred[i]*dudx[i] + dpdx[i]/rhoPred[i])
-            # Eq. 6.4
             dePred2 = -(UPred[i]*dedx[i] + PPred[i]*dudx[i]/rhoPred[i])
 
             # Perform timestep using average gradients
-            rho[i] += (drhoPred2 + drhoPred[i])*dt/2
-            U[i] += (duPred2 + duPred[i])*dt/2
-            e[i] += (dePred2 + dePred[i])*dt/2
+            S = Cx * abs(pCentralGrad[i])/pDenom[i]
+            rho[i] += (drhoPred2 + drhoPred[i])*dt/2 + S*rhoCG[i]
+            U[i] += (duPred2 + duPred[i])*dt/2 + S*uCG[i]
+            e[i] += (dePred2 + dePred[i])*dt/2 + S*eCG[i]
             T[i] = calPerfectT(e[i])
             P[i] = idealGasP(rho[i], T[i])
         end
@@ -399,6 +402,6 @@ end
 
 ################## Output ##################
 nCells = 500
-P, U, T, rho = macCormack1DConservative(initializeShockTube(nCells)..., initDt=0.00000001, endTime=0.1427)
+P, U, T, rho = macCormack1D(initializeShockTubeFDM(nCells)..., initDt=0.00000001, endTime=0.1427)
 # P, U, T, rho = macCormack1D(initializeShockTube(nCells)..., initDt=0.00000001, endTime=0.1)
 plotShockTubeResults(P, U, T, rho)
