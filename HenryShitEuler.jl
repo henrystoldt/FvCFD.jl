@@ -11,6 +11,7 @@ plotly()
 #     cells (list of lists, each containing the index of the faces that make up the cell)
 #     faces (list of lists, each sublist containing two cell indices: the owner cell and the neighbour cell
 #     fAVectors (list of face area vectors)
+#     boundaryFaces (list of lists, each containing the indices of cells on the ith boundary)
 #     cellVolumes (list of cell volumes)
 # )
 
@@ -145,7 +146,7 @@ function upwindGradient(dx, U, values...)
     return result
 end
 
-# Just the numerator of the central second gradient, used for artificial diffusion term
+# Just the numerator of the central second derivative, used for artificial diffusion term
 function central2GradNum(dx, values...)
     result = []
     for vals in values
@@ -180,16 +181,17 @@ end
 ####################### Face value interpolation ####################
 # Interpolates to all interior faces
 function upwindInterp(mesh, U, values...)
+    faces = mesh[2]
+    nFaces = size(mesh)
     result = []
     for vals in values
         n = size(vals,1) + 1
         fVals = Array{Float64, 1}(undef, n)
 
-        # Faces on boundaries not treated, these must be set externally
+        # Faces on boundaries not treated, must be set externally
         fVals[1] = 0
         fVals[n] = 0
 
-        
         processedFaces = Set((1, n))
         for i in 2:n-1
 
@@ -292,7 +294,7 @@ end
 ######################### Solvers #######################
 # Pass in initial values for each variable
 # Shock Tube (undisturbed zero gradient) boundary conditions assumed
-#TODO: Issue with shock position, check equations
+#TODO: Issue with shock position
 function macCormack1DFDM(dx, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.5, gamma=1.4, R=287.05, Cp=1005, Cx=0.3)
     nCells = size(dx, 1)
 
