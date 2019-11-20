@@ -181,29 +181,34 @@ function central2GradDenom(dx, values...)
 end
 
 ####################### Face value interpolation ####################
-# Interpolates to all interior faces
+# Interpolates to all INTERIOR faces
 function upwindInterp(mesh, U, values...)
     faces = mesh[2]
+    fAVecs = mesh[3]
     bdryFaces = mesh[4]
     nFaces = size(faces, 1)
     nBdryFaces = size(bdryFaces, 1)
     
-    fVals = Array{Float64, 1}(undef, nFaces)
-    faceVels = 
+    # Compute face fluxes to see if they're positive or not
+    faceVels = linInterp(mesh, U)[i]
+    fFluxes = Array{Float64, 1}(undef, nFaces)
+    for i in 1:nFaces-nBdryFaces
+        fFluxes[i] = dot(fAVecs[i], faceVels[i])
+    end
 
     result = []
     for vals in values
         fVals = Array{Float64, 1}(undef, nFaces)
-
-        for i in 1:nFaces
-            if i > faces - nBdryFaces:
-                # Faces on boundaries not treated, must be set externally
-                fVals[i] = 0
+        
+        # Use sign of flux to choose between owner or neighbour node values
+        for i in 1:nFaces-nBdryFaces
+            if fFluxes[i] > 0
+                fVals[i] = vals[faces[i][1]]
             else
-                # Find velocity at face using linear interpolation
-
+                fVals[i] = vals[faces[i][2]]
             end
         end
+        
         push!(result, fVals)
     end
     return result
