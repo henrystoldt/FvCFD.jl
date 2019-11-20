@@ -3,8 +3,10 @@ using Plots.PlotMeasures
 using LaTeXStrings
 plotly()
 
+# TODO: Add cell center and face center coordinates
 ################### Mesh Format Definition ####################
 # Cells and faces are numbered according to their storage location in the mesh arrays
+# Faces are numbered such that boundary faces come last
 # Face area vector point outward from the owner cells, into the neighbour cell
 # Mesh is defined as a face-based tuple containing:
 # (
@@ -182,25 +184,57 @@ end
 # Interpolates to all interior faces
 function upwindInterp(mesh, U, values...)
     faces = mesh[2]
-    nFaces = size(mesh)
+    bdryFaces = mesh[4]
+    nFaces = size(faces, 1)
+    nBdryFaces = size(bdryFaces, 1)
+    
+    fVals = Array{Float64, 1}(undef, nFaces)
+    faceVels = 
+
     result = []
     for vals in values
-        n = size(vals,1) + 1
-        fVals = Array{Float64, 1}(undef, n)
+        fVals = Array{Float64, 1}(undef, nFaces)
 
-        # Faces on boundaries not treated, must be set externally
-        fVals[1] = 0
-        fVals[n] = 0
+        for i in 1:nFaces
+            if i > faces - nBdryFaces:
+                # Faces on boundaries not treated, must be set externally
+                fVals[i] = 0
+            else
+                # Find velocity at face using linear interpolation
 
-        processedFaces = Set((1, n))
-        for i in 2:n-1
-
-            if 
-            fVals[i] = 
-
-            push!(processedFaces, i)
+            end
         end
-        push!(result, grad)
+        push!(result, fVals)
+    end
+    return result
+end
+
+# TODO: Take into account distances to each cell center
+function linInterp(mesh, values...)    
+    faces = mesh[2]
+    bdryFaces = mesh[4]
+    nFaces = size(faces, 1)
+    nBdryFaces = size(bdryFaces, 1)
+    
+    fVals = Array{Float64, 1}(undef, nFaces)
+    faceVels = 
+
+    result = []
+    for vals in values
+        fVals = Array{Float64, 1}(undef, nFaces)
+
+        for i in 1:nFaces
+            if i > faces - nBdryFaces:
+                # Faces on boundaries not treated, must be set externally
+                fVals[i] = 0
+            else
+                # Find velocity at face using linear interpolation
+                c1 = faces[i][1]
+                c2 = faces[i][2]
+                fVals[i] = (vals[c1] .+ vals[c2]) ./ 2
+            end
+        end
+        push!(result, fVals)
     end
     return result
 end
@@ -238,7 +272,7 @@ function initializeShockTubeFDM(nCells=100, domainLength=1)
     return dx, P, T, U
 end
 
-# Wrapper for FDM initialization function, adding a mesh definition suitable for FVM
+# Wrapper for FDM initialization function, adding a mesh definition suitable for FVM and vector-format velocity
 function initializeShockTubeFVM(nCells=100, domainLength=1)
     dx, P, T, U = initializeShockTubeFDM(nCells, domainLength)
 
@@ -250,24 +284,34 @@ function initializeShockTubeFVM(nCells=100, domainLength=1)
     faces = []
     fAVecs = []
     cVols = []
-    boundaryFaces = [ [1,], [nCells+1,] ]
+    boundaryFaces = [ [nCells,], [nCells+1,] ]
 
     fAVec = (h*w, 0, 0)
     cV = h*w*domainLength/nCells
-    push!(faces, (0, 1))
-    for i in 1:nCells
+    push!(faces, (1,))
+    for i in 1:nCells      
+        if i == 1
+            push!(cells, (nCells, 1))    
+            push!(faces, (i, i+1)) 
+        elseif i == nCells
+            push!(cells, (nCells-1, nCells+1))
+            push!(faces, (nCells, ))
+        else
+            push!(cells, (i-1, i))
+            push!(faces, (i, i+1)) 
+        end
+
         U[i] = [0, 0, 0]
-        push!(cells, (i, i+1))
-        push!(faces, (i, i+1))
         push!(cVols, cV)
         push!(fAVecs, fAVec)
     end
 
-    # Last boundary face
+    # Last face
     push!(fAVecs, fAVec)
+    push!(faces, (nCells-1, nCells+1))
 
     # Returns in mesh format
-    mesh = [ cells, faces, fAVecs, cVols, boundaryFaces ]
+    mesh = [ cells, faces, fAVecs, boundaryFaces, cVols ]
     return mesh, P, T, U
 end
 
@@ -493,7 +537,8 @@ function upwindFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, 
     cells = mesh[1]
     faces = mesh[2]
     fAVecs = mesh[3]
-    cellVols = mesh[4]
+    bdryFaces = mesh[4]
+    cellVols = mesh[5]
     nCells = size(cells, 1)
     nFaces = size(faces, 1)
 
