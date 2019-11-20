@@ -14,6 +14,18 @@ plotly()
 #     cellVolumes (list of cell volumes)
 # )
 
+################# Nomenclature #################
+# All units SI
+# e = internal energy
+# P = Pressure
+# rho = Density
+# T = Temperature
+# U = Velocity
+# xMom = x-Momentum = rho*U
+# eV2 = total energy = rho*(e + U^2/2)
+# rhoU2p = flux of x-momentum = rho*U^2 + P
+# rhoUeV2PU = flux of energy = U*eV2 + P*U
+
 ######################### Utility Functions ########################
 # Assumes sizes are equal - use it properly!
 function dot(vec1, vec2)
@@ -51,6 +63,7 @@ function decodePrimitives(rho, xMom, eV2, R=287.05, Cp=1005)
     return P, T, U
 end
 
+# Returns rho, xMom, and eV2
 function encodePrimitives(P, T, U, R=287.05, Cp=1005)
     rho = idealGasRho(T, P)
     xMom = U*rho
@@ -88,6 +101,7 @@ function backwardGradient(dx, values...)
     return result
 end
 
+# Unused
 function centralGradient(dx, values...)
     result = []
     for vals in values
@@ -103,6 +117,7 @@ function centralGradient(dx, values...)
     return result
 end
 
+# Unused
 function upwindGradient(dx, U, values...)
     result = []
     for vals in values
