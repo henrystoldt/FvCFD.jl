@@ -221,14 +221,13 @@ function initializeShockTubeFDM(nCells=100, domainLength=1)
     return dx, P, T, U
 end
 
+# Wrapper for FDM initialization function, adding a mesh definition suitable for FVM
 function initializeShockTubeFVM(nCells=100, domainLength=1)
     dx, P, T, U = initializeShockTubeFDM(nCells, domainLength)
 
     #Shock tube dimensions
     h = 0.1
     w = 0.1
-    fAVec = (h*w, 0, 0)
-    cV = h*w*domainLength/nCells
 
     # Indices of faces that form each cell
     cells = []
@@ -239,6 +238,8 @@ function initializeShockTubeFVM(nCells=100, domainLength=1)
     # cell volumes
     cVols = []
 
+    fAVec = (h*w, 0, 0)
+    cV = h*w*domainLength/nCells
     push!(faces, (0, 1))
     for i in 1:nCells
         U[i] = [0, 0, 0]
@@ -252,7 +253,8 @@ function initializeShockTubeFVM(nCells=100, domainLength=1)
     push!(fAVecs, fAVec)
 
     # Returns in mesh format
-    return [ cells, faces, fAVecs, cVols ]
+    mesh = [ cells, faces, fAVecs, cVols ]
+    return mesh, P, T, U
 end
 
 ############################ Plotting ############################
@@ -473,7 +475,13 @@ end
 
 # U is a vector for FVM
 function upwindFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005)
-    nCells = size(dx, 1)
+    # Extract mesh into local variables for readability
+    cells = mesh[1]
+    faces = mesh[2]
+    fAVecs = mesh[3]
+    cellVols = mesh[4]
+    nCells = size(cells, 1)
+    nFaces = size(faces, 1)
 
     # State variables, values are the averages/cell center values
     rho = Array{Float64, 1}(undef, nCells)
@@ -490,8 +498,6 @@ function upwindFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, 
         rhoUeV2PU[i] = U[i]*eV2[i] + P[i]*U[i]
     end
 
-    CFL = Array{Float64, 1}(undef, nCells)
-
     dt = initDt
     currTime = 0
     while currTime < endTime
@@ -499,9 +505,10 @@ function upwindFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, 
             dt = endTime - currTime
         end
         
-        ############## Predictor #############
-        dxMomdx, drhoU2pdx, drhoUeV2PU = upwindGradient(dx, U, xMom, rhoU2p, rhoUeV2PU)
+        # Calculate fluxes through each face
+        dxMomdx, drhoU2pdx, drhoUeV2PU = upwindInterp(mesh, U, xMom, rhoU2p, rhoUeV2PU)
 
+        # Use fluxes to update values in each cell
         for i in 2:(nCells-1)
             # Eq. 2.99, 2.105, 2.106
             drhoP[i] = -dxMomdx[i]
@@ -533,7 +540,6 @@ function upwindFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, 
             CFL = (abs(U[i]) + sqrt(gamma * R * T[i])) * dt / dx[i]
             maxCFL = max(CFL, maxCFL)
         end
-
         # Adjust time step to slowly approach target CFL
         dt *= ((targetCFL/maxCFL - 1)/5+1)
 
