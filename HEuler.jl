@@ -10,7 +10,7 @@ plotly()
 # Face area vector point outward from the owner cells, into the neighbour cell
 # Mesh is defined as a face-based tuple containing:
 # (
-#     cells (list of lists, each containing the index of the faces that make up the cell)
+#     cells (list of lists, each containing the indices of the faces that make up the cell)
 #     faces (list of lists, each sublist containing two cell indices: the owner cell and the neighbour cell
 #     fAVectors (list of face area vectors)
 #     boundaryFaces (list of lists, each containing the indices of cells on the ith boundary)
@@ -32,11 +32,24 @@ plotly()
 ######################### Utility Functions ########################
 # Assumes sizes are equal - use it properly!
 function dot(vec1, vec2)
+    s1 = size(vec1, 1)
+    s2 = size(vec2, 1)
+    if s1 != s2
+        return 0
+    end
     sum = 0
     for i in 1:size(vec1, 1)
         sum += vec1[i]*vec2[i]
     end
     return sum
+end
+
+function mag(vec)
+    sqrSum = 0
+    for i = 1:size(vec,1)
+        sqrSum += vec[i]*vec[i]
+    end
+    return sqrt(sqrSum)
 end
 
 ######################### Constitutive Relations #######################
@@ -66,12 +79,30 @@ function decodePrimitives(rho, xMom, eV2, R=287.05, Cp=1005)
     return P, T, U
 end
 
+#TODO: Multi-D
+function decodePrimitives3D(rho::Float64, xMom::Float64, eV2::Float64, R=287.05, Cp=1005)
+    U = [ xMom/rho, 0.0, 0.0 ]
+    e = (eV2/rho) - (mag(U)^2)/2
+    T = calPerfectT(e, Cp)
+    P = idealGasP(rho, T, R)
+    return P, T, U
+end
+
 # Returns rho, xMom, and eV2
 function encodePrimitives(P, T, U, R=287.05, Cp=1005)
     rho = idealGasRho(T, P)
     xMom = U*rho
     e = calPerfectEnergy(T)
     eV2 = rho*(e + U*U/2)
+    return rho, xMom, eV2
+end
+
+#TODO: Multi-D
+function encodePrimitives3D(P::Float64, T::Float64, U::Array{Float64, 1}, R=287.05, Cp=1005)
+    rho = idealGasRho(T, P)
+    xMom = U[1]*rho
+    e = calPerfectEnergy(T)
+    eV2 = rho*(e + (mag(U)^2)/2)
     return rho, xMom, eV2
 end
 
@@ -190,7 +221,8 @@ function upwindInterp(mesh, U, values...)
     nBdryFaces = size(bdryFaces, 1)
     
     # Compute face fluxes to see if they're positive or not
-    faceVels = linInterp(mesh, U)[i]
+    faceVels = linInterp(mesh, U)[1]
+
     fFluxes = Array{Float64, 1}(undef, nFaces)
     for i in 1:nFaces-nBdryFaces
         fFluxes[i] = dot(fAVecs[i], faceVels[i])
@@ -198,17 +230,20 @@ function upwindInterp(mesh, U, values...)
 
     result = []
     for vals in values
-        fVals = Array{Float64, 1}(undef, nFaces)
+        fVals = []
         
         # Use sign of flux to choose between owner or neighbour node values
         for i in 1:nFaces-nBdryFaces
             if fFluxes[i] > 0
-                fVals[i] = vals[faces[i][1]]
+                push!(fVals, vals[faces[i][1]])
             else
-                fVals[i] = vals[faces[i][2]]
+                push!(fVals, vals[faces[i][2]])
             end
         end
-        
+
+        for i in 1:nBdryFaces
+            push!(fVals, 0)
+        end
         push!(result, fVals)
     end
     return result
@@ -222,23 +257,29 @@ function linInterp(mesh, values...)
     nBdryFaces = size(bdryFaces, 1)
     
     fVals = Array{Float64, 1}(undef, nFaces)
-    faceVels = 
 
     result = []
     for vals in values
-        fVals = Array{Float64, 1}(undef, nFaces)
+        fVals = []
+
+        defaultVal = []
+        for a in vals[1]
+            push!(defaultVal, 0.0)
+        end
 
         for i in 1:nFaces
-            if i > faces - nBdryFaces:
+            if i > nFaces-nBdryFaces
                 # Faces on boundaries not treated, must be set externally
-                fVals[i] = 0
+                push!(fVals, defaultVal)
+                
             else
                 # Find velocity at face using linear interpolation
                 c1 = faces[i][1]
                 c2 = faces[i][2]
-                fVals[i] = (vals[c1] .+ vals[c2]) ./ 2
+                push!(fVals, (vals[c1] .+ vals[c2]) ./ 2)
             end
         end
+
         push!(result, fVals)
     end
     return result
@@ -248,6 +289,18 @@ end
 function copyValues(fromIndex, toIndex, varArrays)
     for varArray in varArrays
         varArray[toIndex] = varArray[fromIndex]
+    end
+end
+
+function setValues(value, indices, varArrays)
+    for varArray in varArrays
+        for i in indices
+            if i <= size(varArray, 1)
+                varArray[i] = value
+            else
+                println("Error, index $i out of bounds for array: $varArray")
+            end
+        end
     end
 end
 
@@ -280,6 +333,7 @@ end
 # Wrapper for FDM initialization function, adding a mesh definition suitable for FVM and vector-format velocity
 function initializeShockTubeFVM(nCells=100, domainLength=1)
     dx, P, T, U = initializeShockTubeFDM(nCells, domainLength)
+    U = []
 
     #Shock tube dimensions
     h = 0.1
@@ -293,27 +347,27 @@ function initializeShockTubeFVM(nCells=100, domainLength=1)
 
     fAVec = (h*w, 0, 0)
     cV = h*w*domainLength/nCells
-    push!(faces, (1,))
     for i in 1:nCells      
         if i == 1
             push!(cells, (nCells, 1))    
             push!(faces, (i, i+1)) 
         elseif i == nCells
             push!(cells, (nCells-1, nCells+1))
-            push!(faces, (nCells, ))
         else
             push!(cells, (i-1, i))
-            push!(faces, (i, i+1)) 
+            push!(faces, (i-1, i+1)) 
         end
 
-        U[i] = [0, 0, 0]
+        push!(U, [0, 0, 0])
         push!(cVols, cV)
         push!(fAVecs, fAVec)
     end
 
     # Last face
     push!(fAVecs, fAVec)
-    push!(faces, (nCells-1, nCells+1))
+    # Boundary faces
+    push!(faces, (1,))
+    push!(faces, (nCells, ))
 
     # Returns in mesh format
     mesh = [ cells, faces, fAVecs, boundaryFaces, cVols ]
@@ -338,10 +392,14 @@ function plotShockTubeResults(P, U, T, rho)
 end
 
 ######################### Solvers #######################
+function updateCellVal(initVal, flux, faceArea, dt, cellVolume)
+    return (initVal*cellVolume + flux*faceArea*dt) / cellVolume
+end
+
 # Pass in initial values for each variable
 # Shock Tube (undisturbed zero gradient) boundary conditions assumed
 #TODO: Issue with shock position
-function macCormack1DFDM(dx, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.5, gamma=1.4, R=287.05, Cp=1005, Cx=0.3)
+function macCormack1DFDM(dx, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, Cx=0.3)
     nCells = size(dx, 1)
 
     rho = Array{Float64, 1}(undef, nCells)
@@ -544,22 +602,26 @@ function upwindFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, 
     fAVecs = mesh[3]
     bdryFaces = mesh[4]
     cellVols = mesh[5]
+
     nCells = size(cells, 1)
     nFaces = size(faces, 1)
+    nBdryFaces = size(bdryFaces, 1)
+    bdryFaceIndices = Array(nFaces-nBdryFaces:nFaces)
 
     # State variables, values are the averages/cell center values
     rho = Array{Float64, 1}(undef, nCells)
     xMom = Array{Float64, 1}(undef, nCells)
     eV2 = Array{Float64, 1}(undef, nCells)
+    stateVars = [ rho, xMom, eV2 ]
     # Flux variables for equations 2 and 3 (xMom is flux variable for the continuity eqn)
     rhoU2p = Array{Float64, 1}(undef, nCells)
     rhoUeV2PU = Array{Float64, 1}(undef, nCells)
 
     # Calc state and flux variables from primitives
     for i in 1:nCells
-        rho[i], xMom[i], eV2[i] = encodePrimitives(P[i], T[i], U[i])
-        rhoU2p[i] = xMom[i]*U[i] + P[i]
-        rhoUeV2PU[i] = U[i]*eV2[i] + P[i]*U[i]
+        rho[i], xMom[i], eV2[i] = encodePrimitives3D(P[i], T[i], U[i])
+        rhoU2p[i] = xMom[i]*U[i][1] + P[i]
+        rhoUeV2PU[i] = mag(U[i])*eV2[i] + P[i]*mag(U[i])
     end
 
     dt = initDt
@@ -568,40 +630,51 @@ function upwindFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, 
         if (endTime - currTime) < dt
             dt = endTime - currTime
         end
+
+        println("Time: $currTime")
         
         # Calculate fluxes through each face
-        dxMomdx, drhoU2pdx, drhoUeV2PU = upwindInterp(mesh, U, xMom, rhoU2p, rhoUeV2PU)
+        # TODO: y and z momemtum-fluxes + equations
+        xMassFlux, xMomFlux, xeV2Flux = upwindInterp(mesh, U, xMom, rhoU2p, rhoUeV2PU)
+        fluxVars = [ xMassFlux, xMomFlux, xeV2Flux ]
+        setValues(0, bdryFaceIndices, [xMassFlux, xMomFlux, xeV2Flux])
 
         # Use fluxes to update values in each cell
-        for i in 2:(nCells-1)
-            # Eq. 2.99, 2.105, 2.106
-            drhoP[i] = -dxMomdx[i]
-            dxMP[i] = -drhoU2pdx[i]
-            deV2P[i] = -drhoUeV2PU[i]
+        for i in 1:nFaces-2
+            fA = mag(fAVecs[i]) #Face Area
+            
+            ownerCell = faces[i][1]
+            neighbourCell = faces[i][2]
 
-            # Timestep
-            rho[i] = rho[i] + drhoP[i]*dt
-            xMom[i] = xMom[i] + dxMP[i]*dt
-            eV2[i] = eV2[i] + deV2P[i]*dt
-
-            # Decode
-            P[i], T[i], U[i] = decodePrimitives(rho[i], xMom[i], eV2[i])
-            rhoU2p[i] = xMom[i]*U[i] + P[i]
-            rhoUeV2PU[i] = U[i]*eV2[i] + P[i]*U[i]
+            for v in 1:3
+                for cell in [ownerCell, neighbourCell]
+                    if cell == ownerCell
+                        stateVars[v][cell] = updateCellVal(stateVars[v][cell], -fluxVars[v][i], fA, dt, cellVols[cell])
+                    else
+                        stateVars[v][cell] = updateCellVal(stateVars[v][cell], fluxVars[v][i], fA, dt, cellVols[cell])
+                    end
+                end
+            end
         end
-
-        ############### Boundaries ################
-        # Waves never reach the boundaries, so boundary treatment doesn't need to be good
-        allVars = [ rho, rhoU2p, rhoUeV2PU, xMom, eV2, U, P, T ]
-        copyValues(3, 2, allVars)
+        
+        # Boundaries - copy values
+        allVars = [rho, xMom, eV2]
         copyValues(2, 1, allVars)
-        copyValues(nCells-2, nCells-1, allVars)
-        copyValues(nCells, nCells, allVars)
+        copyValues(nCells-1, nCells, allVars)
+        
+        # Decode primitive values
+        for i in 1:nCells
+            P[i], T[i], U[i] = decodePrimitives3D(rho[i], xMom[i], eV2[i])
+            rhoU2p[i] = xMom[i]*U[i][1] + P[i]
+            rhoUeV2PU[i] = U[i][1]*eV2[i] + P[i]*U[i][1]
+        end
         
         ############## CFL Calculation, timestep adjustment #############
+        # TODO: Generalize cell size
+        # TODO: 3D definition of CFL: Sum up in all directions
         maxCFL = 0
         for i in 1:nCells
-            CFL = (abs(U[i]) + sqrt(gamma * R * T[i])) * dt / dx[i]
+            CFL = (abs(U[i][1]) + sqrt(gamma * R * T[i])) * dt / (1/nCells)
             maxCFL = max(CFL, maxCFL)
         end
         # Adjust time step to slowly approach target CFL
@@ -614,7 +687,13 @@ function upwindFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, 
 end
 
 ################## Output ##################
-nCells = 500
-P, U, T, rho = macCormack1DFDM(initializeShockTubeFDM(nCells)..., initDt=0.00000001, endTime=0.1427)
-# P, U, T, rho = macCormack1D(initializeShockTube(nCells)..., initDt=0.00000001, endTime=0.1)
-plotShockTubeResults(P, U, T, rho)
+nCells = 50
+# P, U, T, rho = macCormack1DFDM(initializeShockTubeFDM(nCells)..., initDt=0.00000001, endTime=0.14267)
+# P, U, T, rho = macCormack1DFDM(initializeShockTubeFDM(nCells)..., initDt=0.00000001, endTime=0.14267)
+P, U, T, rho = upwindFVM(initializeShockTubeFVM(nCells)..., initDt=0.00000001, endTime=0.14267)
+xVel = Array{Float64, 1}(undef, nCells)
+for i in 1:nCells
+    xVel[i] = U[i][1]
+end
+# println(xVel)
+plotShockTubeResults(P, xVel, T, rho)
