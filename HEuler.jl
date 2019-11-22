@@ -236,8 +236,10 @@ function upwindInterp(mesh, U, values...)
         for i in 1:nFaces-nBdryFaces
             if fFluxes[i] > 0
                 push!(fVals, vals[faces[i][1]])
-            else
+            elseif fFluxes[i] < 0
                 push!(fVals, vals[faces[i][2]])
+            else
+                push!(fVals, (vals[faces[i][1]] + vals[faces[i][2]])/2)
             end
         end
 
@@ -263,8 +265,12 @@ function linInterp(mesh, values...)
         fVals = []
 
         defaultVal = []
-        for a in vals[1]
-            push!(defaultVal, 0.0)
+        if size(vals[1], 1) ==1
+            defaultVal = 0
+        else
+            for a in vals[1]
+                push!(defaultVal, 0.0)
+            end
         end
 
         for i in 1:nFaces

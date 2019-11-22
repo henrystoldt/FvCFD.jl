@@ -73,6 +73,29 @@ end;
     end
 end;
 
-@testset "Linear interpolation" begin
-    #TODO
+@testset "Linear Interpolation" begin
+    mesh, P, T, U = initializeShockTubeFVM(4)
+    cellVals = [ 1, 2, 3, 4 ]
+    faceVals = [ 1.5, 2.5, 3.5, 0, 0 ]
+    faceVals2 = linInterp(mesh, cellVals)[1]
+    @test almostEqual(faceVals, faceVals2)
+end;
+
+@testset "Upwind Interpolation" begin
+    mesh, P, T, U = initializeShockTubeFVM(4)
+    cellVel = [ [-1,0,0], [-1,0,0], [-1,0,0], [-1,0,0] ]
+    cellVals = [ 1, 2, 3, 4 ]
+    faceVals = [ 2, 3, 4, 0, 0 ]
+    faceVals2 = upwindInterp(mesh, cellVel, cellVals)[1]
+    @test almostEqual(faceVals, faceVals2)
+
+    cellVel = [ [1,0,0], [1,0,0], [1,0,0], [1,0,0] ]
+    faceVals = [ 1, 2, 3, 0, 0 ]
+    faceVals2 = upwindInterp(mesh, cellVel, cellVals)[1]
+    @test almostEqual(faceVals, faceVals2)
+
+    cellVel = [ [1,0,0], [1,0,0], [-1,0,0], [-1,0,0] ]
+    faceVals = [ 1, 2.5, 4, 0, 0 ]
+    faceVals2 = upwindInterp(mesh, cellVel, cellVals)[1]
+    @test almostEqual(faceVals, faceVals2)
 end;
