@@ -43,6 +43,36 @@ end;
     @test almostEqual(mesh1[5], mesh2[5])
 end;
 
+@testset "Decode Primitives" begin
+    rho = 2
+    xMom = 1
+    eV2 = 3
+    U = 0.5
+    e = 1.5 - 0.125
+    T = e/(1005 - 287.05)
+    P = rho*287.05*T
+    res1 = [ P, T, U ]
+    res2 = decodePrimitives(rho, xMom, eV2, 287.05, 1005)
+    for i in 1:3
+        @test almostEqual(res1[i], res2[i])
+    end
+end;
+
+@testset "Encode Primitives" begin
+    rho = 2
+    xMom = 1
+    eV2 = 3
+    U = 0.5
+    e = 1.5 - 0.125
+    T = e/(1005 - 287.05)
+    P = rho*287.05*T
+    res1 = [ rho, xMom, eV2 ]
+    res2 = encodePrimitives(P, T, U, 287.05, 1005)
+    for i in 1:3
+        @test almostEqual(res1[i], res2[i])
+    end
+end;
+
 @testset "Linear interpolation" begin
-    @test 1 == 1
+    #TODO
 end;
