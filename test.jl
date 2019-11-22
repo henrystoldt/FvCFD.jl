@@ -1,8 +1,8 @@
 # For numbers of a magnitude less than ~1000
 function almostEqual(iterable1, iterable2, allowedError=0.0000000000001)    
-    if size(iterable1) != size(iterable2)
-        s1 = size(iterable1)
-        s2  = size(iterable2)
+    if size(iterable1, 1) != size(iterable2, 1)
+        s1 = size(iterable1, 1)
+        s2  = size(iterable2, 1)
         println("Size mismatch: $s1 vs $s2")
         println(iterable1)
         println(iterable2)

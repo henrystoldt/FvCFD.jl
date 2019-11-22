@@ -345,20 +345,20 @@ function initializeShockTubeFVM(nCells=100, domainLength=1)
     cVols = []
     boundaryFaces = [ [nCells,], [nCells+1,] ]
 
-    fAVec = (h*w, 0, 0)
+    fAVec = [h*w, 0, 0]
     cV = h*w*domainLength/nCells
     for i in 1:nCells      
         if i == 1
-            push!(cells, (nCells, 1))    
-            push!(faces, (i, i+1)) 
+            push!(cells, [nCells, 1])    
+            push!(faces, [i, i+1]) 
         elseif i == nCells
-            push!(cells, (nCells-1, nCells+1))
+            push!(cells, [nCells-1, nCells+1])
         else
-            push!(cells, (i-1, i))
-            push!(faces, (i-1, i+1)) 
+            push!(cells, [i-1, i])
+            push!(faces, [i, i+1]) 
         end
 
-        push!(U, [0, 0, 0])
+        push!(U, [0.0, 0.0, 0.0] )
         push!(cVols, cV)
         push!(fAVecs, fAVec)
     end
@@ -366,8 +366,8 @@ function initializeShockTubeFVM(nCells=100, domainLength=1)
     # Last face
     push!(fAVecs, fAVec)
     # Boundary faces
-    push!(faces, (1,))
-    push!(faces, (nCells, ))
+    push!(faces, [1,])
+    push!(faces, [nCells,])
 
     # Returns in mesh format
     mesh = [ cells, faces, fAVecs, boundaryFaces, cVols ]
@@ -630,8 +630,6 @@ function upwindFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, 
         if (endTime - currTime) < dt
             dt = endTime - currTime
         end
-
-        println("Time: $currTime")
         
         # Calculate fluxes through each face
         # TODO: y and z momemtum-fluxes + equations
@@ -690,10 +688,10 @@ end
 nCells = 50
 # P, U, T, rho = macCormack1DFDM(initializeShockTubeFDM(nCells)..., initDt=0.00000001, endTime=0.14267)
 # P, U, T, rho = macCormack1DFDM(initializeShockTubeFDM(nCells)..., initDt=0.00000001, endTime=0.14267)
-P, U, T, rho = upwindFVM(initializeShockTubeFVM(nCells)..., initDt=0.00000001, endTime=0.14267)
-xVel = Array{Float64, 1}(undef, nCells)
-for i in 1:nCells
-    xVel[i] = U[i][1]
-end
+# P, U, T, rho = upwindFVM(initializeShockTubeFVM(nCells)..., initDt=0.00000001, endTime=0.14267)
+# xVel = Array{Float64, 1}(undef, nCells)
+# for i in 1:nCells
+#     xVel[i] = U[i][1]
+# end
 # println(xVel)
-plotShockTubeResults(P, xVel, T, rho)
+# plotShockTubeResults(P, xVel, T, rho)
