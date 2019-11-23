@@ -229,7 +229,7 @@ function linInterp(mesh, values...)
         fVals = Array{Float64, 1}(undef, nFaces)
 
         for i in 1:nFaces
-            if i > faces - nBdryFaces:
+            if i > faces - nBdryFaces
                 # Faces on boundaries not treated, must be set externally
                 fVals[i] = 0
             else
