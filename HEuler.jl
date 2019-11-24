@@ -211,6 +211,14 @@ function central2GradDenom(dx, values...)
     return result
 end
 
+function leastSqGrad(mesh, values...)
+    #TODO
+end
+
+function greenGaussGrad(mesh, values...)
+    #TODO
+end
+
 ####################### Face value interpolation ####################
 # Interpolates to all INTERIOR faces
 function upwindInterp(mesh, U, values...)
@@ -282,7 +290,7 @@ function linInterp(mesh, values...)
                 # Find velocity at face using linear interpolation
                 c1 = faces[i][1]
                 c2 = faces[i][2]
-                push!(fVals, (vals[c1] .+ vals[c2]) ./ 2)
+                push!(fVals, vals[c1].*0.5 .+ vals[c2].*0.5)
             end
         end
 
@@ -290,6 +298,8 @@ function linInterp(mesh, values...)
     end
     return result
 end
+
+# TODO: TVD Interp
 
 ######################### Boundary Conditions #######################
 function copyValues(fromIndex, toIndex, varArrays)
@@ -801,14 +811,16 @@ function upwindFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, 
     return P, U, T, rho
 end
 
+#TODO: Proper boundary treatment
+
 ################## Output ##################
-nCells = 200
+nCells = 500
 # P, U, T, rho = macCormack1DFDM(initializeShockTubeFDM(nCells)..., initDt=0.00000001, endTime=0.14267)
 # P, U, T, rho = macCormack1DConservativeFDM(initializeShockTubeFDM(nCells)..., initDt=0.00001, endTime=0.1, Cx=0.3)
 # P, U, T, rho = upwind1DConservativeFDM(initializeShockTubeFDM(nCells)..., initDt=0.00001, endTime=0.1, targetCFL=0.01, Cx=0.3)
 # xVel = U
 
-P, U, T, rho = upwindFVM(initializeShockTubeFVM(nCells)..., initDt=0.0000001, endTime=0.14267, targetCFL=0.05, Cx=0.3)
+P, U, T, rho = upwindFVM(initializeShockTubeFVM(nCells)..., initDt=0.0000001, endTime=0.14267, targetCFL=0.1, Cx=0.3)
 xVel = Array{Float64, 1}(undef, nCells)
 for i in 1:nCells
     xVel[i] = U[i][1]
