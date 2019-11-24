@@ -26,7 +26,7 @@ end;
     # FVM
     U = [ [0.0,0.0,0.0],  [0.0,0.0,0.0],  [0.0,0.0,0.0],  [0.0,0.0,0.0] ]
     cells = [ [4,1], [1,2], [2,3], [3,5] ]
-    faces = [ [1,2], [2,3], [3,4], [1,], [4,] ]
+    faces = [ [1,2], [2,3], [3,4], [-1,1], [4,-1] ]
     fAVecs = [ [0.01,0,0], [0.01,0,0], [0.01,0,0], [0.01,0,0], [0.01,0,0] ]
     cVols = [ 0.0025, 0.0025, 0.0025, 0.0025 ]
     bdryFaces = [ [4,], [5,] ]
@@ -98,4 +98,19 @@ end;
     faceVals = [ 1, 2.5, 4, 0, 0 ]
     faceVals2 = upwindInterp(mesh, cellVel, cellVals)[1]
     @test almostEqual(faceVals, faceVals2)
+end;
+
+@testset "Upwind FVM" begin
+    nCells = 4
+    P = [ 1, 0.99855553, 0.087046989, 0.1 ]
+    U = [ 0, 0.090015665, 0.720126353, 0 ]
+    T = [ 0.00348432, 0.00347929, 0.0024263, 0.00278746 ]
+    P2, U2, T2, rho2 = upwindFVM(initializeShockTubeFVM(nCells, Pratio=0.1)..., initDt=0.051, endTime=0.05)
+    xVel = []
+    for i in 1:4
+        push!(xVel, U2[i][1])
+    end
+    @test almostEqual(P, P2, 6)
+    @test almostEqual(U, xVel, 6)
+    @test almostEqual(T, T2, 6)
 end;

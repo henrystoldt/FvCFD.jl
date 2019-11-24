@@ -311,7 +311,20 @@ function setValues(value, indices, varArrays)
 end
 
 ######################### Initialization #######################
-function initializeShockTubeFDM(nCells=100, domainLength=1)
+function checkPRatio(Pratio)
+    if Pratio < 0
+        throw(ArgumentError("Pratio must be positive"))
+    end
+    if Pratio > 1
+        Pratio = 1/Pratio
+    end
+
+    return Pratio
+end
+
+function initializeShockTubeFDM(nCells=100; domainLength=1, Pratio=10)
+    Pratio = checkPRatio(Pratio)
+    
     # Create arrays to store data (cell # = position in array)
     dx = Array{Float64, 1}(undef, nCells)
     U = Array{Float64, 1}(undef, nCells)
@@ -325,7 +338,7 @@ function initializeShockTubeFDM(nCells=100, domainLength=1)
             P[i] = 1
         else
             T[i] = 0.00278746
-            P[i] = 0.1
+            P[i] = Pratio
         end
         U[i] = 0
 
@@ -337,8 +350,8 @@ function initializeShockTubeFDM(nCells=100, domainLength=1)
 end
 
 # Wrapper for FDM initialization function, adding a mesh definition suitable for FVM and vector-format velocity
-function initializeShockTubeFVM(nCells=100, domainLength=1)
-    dx, P, T, U = initializeShockTubeFDM(nCells, domainLength)
+function initializeShockTubeFVM(nCells=100; domainLength=1, Pratio=10)
+    dx, P, T, U = initializeShockTubeFDM(nCells, domainLength=domainLength, Pratio=Pratio)
     U = []
 
     #Shock tube dimensions
@@ -372,8 +385,8 @@ function initializeShockTubeFVM(nCells=100, domainLength=1)
     # Last face
     push!(fAVecs, fAVec)
     # Boundary faces
-    push!(faces, [1,])
-    push!(faces, [nCells,])
+    push!(faces, [-1,1])
+    push!(faces, [nCells, -1])
 
     # Returns in mesh format
     mesh = [ cells, faces, fAVecs, boundaryFaces, cVols ]
@@ -583,6 +596,70 @@ function macCormack1DConservativeFDM(dx, P, T, U; initDt=0.001, endTime=0.14267,
         copyValues(3, 2, allVars)
         copyValues(2, 1, allVars)
         copyValues(nCells-2, nCells-1, allVars)
+        copyValues(nCells-1, nCells, allVars)
+        
+        ############## CFL Calculation, timestep adjustment #############
+        for i in 1:nCells
+            CFL[i] = (abs(U[i]) + sqrt(gamma * R * T[i])) * dt / dx[i]
+        end
+        maxCFL = maximum(CFL)
+
+        # Adjust time step to slowly approach target CFL
+        dt *= ((targetCFL/maxCFL - 1)/5+1)
+
+        currTime += dt
+    end
+
+    return P, U, T, rho
+end
+
+function upwind1DConservativeFDM(dx, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.1, gamma=1.4, R=287.05, Cp=1005, Cx=0.3)
+    nCells = size(dx, 1)
+
+    rho = Array{Float64, 1}(undef, nCells)
+    xMom = Array{Float64, 1}(undef, nCells)
+    eV2 = Array{Float64, 1}(undef, nCells)
+    rhoU2p = Array{Float64, 1}(undef, nCells)
+    rhoUeV2PU = Array{Float64, 1}(undef, nCells)
+
+    for i in 1:nCells
+        rho[i], xMom[i], eV2[i] = encodePrimitives(P[i], T[i], U[i])
+        rhoU2p[i] = xMom[i]*U[i] + P[i]
+        rhoUeV2PU[i] = U[i]*eV2[i] + P[i]*U[i]
+    end
+
+    CFL = Array{Float64, 1}(undef, nCells)
+
+    dt = initDt
+    currTime = 0
+    while currTime < endTime
+        if (endTime - currTime) < dt
+            dt = endTime - currTime
+        end
+        
+        ############## Predictor #############
+        dxMomdx, drhoU2pdx, drhoUeV2PU = upwindGradient(dx, U, xMom, rhoU2p, rhoUeV2PU)
+        pCentralGrad, rhoCG, xMomCG, eV2CG = central2GradNum(dx, P, rho, xMom, eV2)
+        pDenom = central2GradDenom(dx, P)[1]
+
+        for i in 2:(nCells-1)
+            S = Cx * abs(pCentralGrad[i]) / pDenom[i]
+            rho[i] = rho[i] -dxMomdx[i]*dt + S*rhoCG[i]
+            xMom[i] = xMom[i] -drhoU2pdx[i]*dt + S*xMomCG[i]
+            eV2[i] = eV2[i] -drhoUeV2PU[i]*dt + S*eV2CG[i]
+
+            # Decode
+            P[i], T[i], U[i] = decodePrimitives(rho[i], xMom[i], eV2[i])
+            rhoU2p[i] = xMom[i]*U[i] + P[i]
+            rhoUeV2PU[i] = U[i]*eV2[i] + P[i]*U[i]
+        end
+
+        ############### Boundaries ################
+        # Waves never reach the boundaries, so boundary treatment doesn't need to be good
+        allVars = [ rho, rhoU2p, rhoUeV2PU, xMom, eV2, U, P, T ]
+        copyValues(3, 2, allVars)
+        copyValues(2, 1, allVars)
+        copyValues(nCells-2, nCells-1, allVars)
         copyValues(nCells, nCells, allVars)
         
         ############## CFL Calculation, timestep adjustment #############
@@ -601,19 +678,16 @@ function macCormack1DConservativeFDM(dx, P, T, U; initDt=0.001, endTime=0.14267,
 end
 
 # U is a vector for FVM
-function upwindFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005)
+function upwindFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, Cx=0.3, debug=false)
+    ######### MESH ############
     # Extract mesh into local variables for readability
-    cells = mesh[1]
-    faces = mesh[2]
-    fAVecs = mesh[3]
-    bdryFaces = mesh[4]
-    cellVols = mesh[5]
-
+    cells, faces, fAVecs, bdryFaces, cellVols = mesh
     nCells = size(cells, 1)
     nFaces = size(faces, 1)
     nBdryFaces = size(bdryFaces, 1)
     bdryFaceIndices = Array(nFaces-nBdryFaces:nFaces)
 
+    ########### Variable Arrays #############
     # State variables, values are the averages/cell center values
     rho = Array{Float64, 1}(undef, nCells)
     xMom = Array{Float64, 1}(undef, nCells)
@@ -624,54 +698,92 @@ function upwindFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, 
     rhoUeV2PU = Array{Float64, 1}(undef, nCells)
 
     # Calc state and flux variables from primitives
+    #TODO: Multi-D
     for i in 1:nCells
         rho[i], xMom[i], eV2[i] = encodePrimitives3D(P[i], T[i], U[i])
-        rhoU2p[i] = xMom[i]*U[i][1] + P[i]
-        rhoUeV2PU[i] = mag(U[i])*eV2[i] + P[i]*mag(U[i])
+        Ux = U[i][1]
+        rhoU2p[i] = xMom[i]*Ux + P[i]
+        rhoUeV2PU[i] = Ux*eV2[i] + P[i]*Ux
+    end
+    
+    if debug
+        println("Rho: $rho")
+        println("xMom: $xMom")
+        println("eV2: $eV2")
     end
 
+    ########### SOLVER ###########
     dt = initDt
     currTime = 0
     while currTime < endTime
+
         if (endTime - currTime) < dt
             dt = endTime - currTime
         end
         
         # Calculate fluxes through each face
         # TODO: y and z momemtum-fluxes + equations
-        xMassFlux, xMomFlux, xeV2Flux = upwindInterp(mesh, U, xMom, rhoU2p, rhoUeV2PU)
+        # xMassFlux, xMomFlux, xeV2Flux = upwindInterp(mesh, U, xMom, rhoU2p, rhoUeV2PU)
+        xMassFlux, xMomFlux, xeV2Flux = linInterp(mesh, xMom, rhoU2p, rhoUeV2PU)
         fluxVars = [ xMassFlux, xMomFlux, xeV2Flux ]
-        setValues(0, bdryFaceIndices, [xMassFlux, xMomFlux, xeV2Flux])
+        
+        # TODO: Update with finite volume version of artificial diffusivity
+        dx = 1/nCells
+        pCentralGrad, rhoCG, xMomCG, eV2CG = central2GradNum(dx, P, rho, xMom, eV2)
+        pDenom = central2GradDenom(dx, P)[1]
+
+        # Boundaries
+        copyValues(nCells-1, nCells+1, fluxVars)
+        copyValues(1, nCells, fluxVars)
+        
+        if debug
+            println("xMass Flux: $xMassFlux")
+            println("xMom Flux: $xMomFlux")
+            println("xEv2 Flux: $xeV2Flux")
+        end
 
         # Use fluxes to update values in each cell
-        for i in 1:nFaces-2
+        for i in 1:(nFaces-nBdryFaces)
             fA = mag(fAVecs[i]) #Face Area
-            
+
             ownerCell = faces[i][1]
             neighbourCell = faces[i][2]
-
             for v in 1:3
-                for cell in [ownerCell, neighbourCell]
-                    if cell == ownerCell
-                        stateVars[v][cell] = updateCellVal(stateVars[v][cell], -fluxVars[v][i], fA, dt, cellVols[cell])
-                    else
-                        stateVars[v][cell] = updateCellVal(stateVars[v][cell], fluxVars[v][i], fA, dt, cellVols[cell])
-                    end
-                end
+                stateVars[v][ownerCell] -= fluxVars[v][i]*fA*dt/cellVols[ownerCell]
+                stateVars[v][neighbourCell] += fluxVars[v][i]*fA*dt/cellVols[neighbourCell]
             end
         end
+
+        for i in 2:nCells-1
+            S = Cx * abs(pCentralGrad[i]) / pDenom[i]
+            rho[i] += S*rhoCG[i]
+            xMom[i] += S*xMomCG[i]
+            eV2[i] += S*eV2CG[i]
+        end
+
+        if debug
+            println("Rho2: $rho")
+            println("xMom2: $xMom")
+            println("eV22: $eV2")
+        end
         
-        # Boundaries - copy values
-        allVars = [rho, xMom, eV2]
-        copyValues(2, 1, allVars)
-        copyValues(nCells-1, nCells, allVars)
-        
+        # Boundaries
+        ############### Boundaries ################
+        # Waves never reach the boundaries, so boundary treatment doesn't need to be good
+        copyValues(3, 2, stateVars)
+        copyValues(2, 1, stateVars)
+        copyValues(nCells-2, nCells-1, stateVars)
+        copyValues(nCells-1, nCells, stateVars)    
+
         # Decode primitive values
         for i in 1:nCells
             P[i], T[i], U[i] = decodePrimitives3D(rho[i], xMom[i], eV2[i])
-            rhoU2p[i] = xMom[i]*U[i][1] + P[i]
-            rhoUeV2PU[i] = U[i][1]*eV2[i] + P[i]*U[i][1]
+            Ux = U[i][1]
+            rhoU2p[i] = xMom[i]*Ux + P[i]
+            rhoUeV2PU[i] = Ux*eV2[i] + P[i]*Ux
         end
+
+        currTime += dt
         
         ############## CFL Calculation, timestep adjustment #############
         # TODO: Generalize cell size
@@ -684,20 +796,23 @@ function upwindFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, 
         # Adjust time step to slowly approach target CFL
         dt *= ((targetCFL/maxCFL - 1)/5+1)
 
-        currTime += dt
     end
 
     return P, U, T, rho
 end
 
 ################## Output ##################
-nCells = 50
+nCells = 200
 # P, U, T, rho = macCormack1DFDM(initializeShockTubeFDM(nCells)..., initDt=0.00000001, endTime=0.14267)
-# P, U, T, rho = macCormack1DFDM(initializeShockTubeFDM(nCells)..., initDt=0.00000001, endTime=0.14267)
-# P, U, T, rho = upwindFVM(initializeShockTubeFVM(nCells)..., initDt=0.00000001, endTime=0.14267)
-# xVel = Array{Float64, 1}(undef, nCells)
-# for i in 1:nCells
-#     xVel[i] = U[i][1]
-# end
-# println(xVel)
-# plotShockTubeResults(P, xVel, T, rho)
+# P, U, T, rho = macCormack1DConservativeFDM(initializeShockTubeFDM(nCells)..., initDt=0.00001, endTime=0.1, Cx=0.3)
+# P, U, T, rho = upwind1DConservativeFDM(initializeShockTubeFDM(nCells)..., initDt=0.00001, endTime=0.1, targetCFL=0.01, Cx=0.3)
+# xVel = U
+
+P, U, T, rho = upwindFVM(initializeShockTubeFVM(nCells)..., initDt=0.0000001, endTime=0.14267, targetCFL=0.05, Cx=0.3)
+xVel = Array{Float64, 1}(undef, nCells)
+for i in 1:nCells
+    xVel[i] = U[i][1]
+end
+println(xVel)
+
+plotShockTubeResults(P, xVel, T, rho)
