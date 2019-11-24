@@ -10,7 +10,8 @@ using PyPlot
 function main()
 
     #General Constants
-    R = 8.314462618
+    #R = 8.314462618
+    R = 287.05
     gamma = 1.4
 
     #Define the grid
@@ -23,7 +24,7 @@ function main()
     #t_end = 0.5
     #dt = t_end / 10000
     #t_end = 0.14267
-    dt = t_end/4000
+    dt = t_end/8000
 
     #Check time_step size is appropriate
     #For now, impose a soft cfl limit of 0.2
@@ -41,7 +42,7 @@ function main()
     end
 
     #Artificial Viscosity Constants
-    C_x = 0.5
+    C_x = 0.3
     
 
     
@@ -71,13 +72,13 @@ function main()
     for i in 1:n
         if i <= n_half
             #LHS of tube
-            #temp[i] = 0.00348432
-            temp[i] = 0.120279
+            temp[i] = 0.00348432
+            #temp[i] = 0.120279
             pres[i] = 1
         else
             #RHS of tube
-            #temp[i] = 0.00278746
-            temp[i] = 0.0962223
+            temp[i] = 0.00278746
+            #temp[i] = 0.0962223
             pres[i] = 0.1
         end
 
@@ -118,7 +119,7 @@ function main()
 
     #println("Rho results are: ", rho_res)
 
-    plot(x_pos, rho_res, marker="o", label="RHO")
+    plot(x_pos, rho_res, label="RHO")
     #title("Density Results at the final time")
     #show()
     
