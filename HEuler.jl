@@ -4,6 +4,7 @@ using LaTeXStrings
 plotly()
 
 # TODO: Add cell center and face center coordinates
+# TODO: Make mesh global?
 ################### Mesh Format Definition ####################
 # Cells and faces are numbered according to their storage location in the mesh arrays
 # Faces are numbered such that boundary faces come last
@@ -52,6 +53,12 @@ function mag(vec)
     return sqrt(sqrSum)
 end
 
+# TODO: Generalize cell size
+# TODO: 3D definition of CFL: Sum up in all directions
+function CFL(U, T, dt, dx, gamma=1.4, R=287.05)
+    return (abs(U[1]) + sqrt(gamma * R * T)) * dt / dx
+end
+
 ######################### Constitutive Relations #######################
 function idealGasRho(T, P, R=287.05)
     return P/(R*T)
@@ -85,7 +92,14 @@ function decodePrimitives3D(rho::Float64, xMom::Float64, eV2::Float64, R=287.05,
     e = (eV2/rho) - (mag(U)^2)/2
     T = calPerfectT(e, Cp)
     P = idealGasP(rho, T, R)
-    return P, T, U
+    
+    Ux = U[1]
+    
+    # x-Fluxes
+    rhoU2p = xMom*Ux + P
+    rhoUeV2PU = Ux*eV2 + P.*Ux
+
+    return P, T, U, rhoU2p, rhoUeV2PU
 end
 
 # Returns rho, xMom, and eV2
@@ -99,11 +113,19 @@ end
 
 #TODO: Multi-D
 function encodePrimitives3D(P::Float64, T::Float64, U::Array{Float64, 1}, R=287.05, Cp=1005)
+    # State Variables
     rho = idealGasRho(T, P)
     xMom = U[1]*rho
     e = calPerfectEnergy(T)
     eV2 = rho*(e + (mag(U)^2)/2)
-    return rho, xMom, eV2
+
+    Ux = U[1]
+    
+    # x-Fluxes
+    rhoU2p = xMom*Ux + P
+    rhoUeV2PU = Ux*eV2 + P*Ux
+
+    return rho, xMom, eV2, rhoU2p, rhoUeV2PU
 end
 
 ######################### Gradient Computation #######################
@@ -213,10 +235,50 @@ end
 
 function leastSqGrad(mesh, values...)
     #TODO
+    result = []
+    for vals in values
+    end
+    return result
 end
 
-function greenGaussGrad(mesh, values...)
-    #TODO
+# Pass in values that have already been interpolated to faces to avoid re-interpolating
+# Returns array of 3-D vectors
+function greenGaussGrad(mesh, faceValues...)
+    result = []
+    
+    # Interpret mesh
+    cells, faces, fAVecs, bdryFaces, cellVols = mesh
+    nCells = size(cells, 1)
+    nFaces = size(faces, 1)
+    nBdryFaces = size(bdryFaces, 1)
+    bdryFaceIndices = Array(nFaces-nBdryFaces:nFaces)
+
+    for vals in values
+        # Initialize gradients to zero
+        grad = Array{Array{Float64, 1}, 1}(undef, nCells)
+        for c in 1:nCells
+            grad[c] = [0, 0, 0]
+        end
+
+        # Integrate fluxes from each face
+        for f in 1:nFaces-nBdryFaces
+            faceIntegral = fAVecs[f] .* vals[f]
+
+            ownerCell = faces[f][1]
+            neighbourCell = faces[f][2]
+
+            grad[ownerCell] += faceIntegral
+            grad[neighbourCell] -= faceIntegral
+        end
+
+        # Divide integral by cell volume to obtain gradients
+        for c in 1:nCells
+            grad[c] = grad[c] / cellVols[c]
+        end
+
+        push!(result, grad)
+    end
+    return result
 end
 
 ####################### Face value interpolation ####################
@@ -710,10 +772,7 @@ function upwindFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, 
     # Calc state and flux variables from primitives
     #TODO: Multi-D
     for i in 1:nCells
-        rho[i], xMom[i], eV2[i] = encodePrimitives3D(P[i], T[i], U[i])
-        Ux = U[i][1]
-        rhoU2p[i] = xMom[i]*Ux + P[i]
-        rhoUeV2PU[i] = Ux*eV2[i] + P[i]*Ux
+        rho[i], xMom[i], eV2[i], rhoU2p[i], rhoUeV2PU[i] = encodePrimitives3D(P[i], T[i], U[i])
     end
     
     if debug
@@ -741,10 +800,6 @@ function upwindFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, 
         dx = 1/nCells
         pCentralGrad, rhoCG, xMomCG, eV2CG = central2GradNum(dx, P, rho, xMom, eV2)
         pDenom = central2GradDenom(dx, P)[1]
-
-        # Boundaries
-        copyValues(nCells-1, nCells+1, fluxVars)
-        copyValues(1, nCells, fluxVars)
         
         if debug
             println("xMass Flux: $xMassFlux")
@@ -787,23 +842,18 @@ function upwindFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, 
 
         # Decode primitive values
         for i in 1:nCells
-            P[i], T[i], U[i] = decodePrimitives3D(rho[i], xMom[i], eV2[i])
-            Ux = U[i][1]
-            rhoU2p[i] = xMom[i]*Ux + P[i]
-            rhoUeV2PU[i] = Ux*eV2[i] + P[i]*Ux
+            P[i], T[i], U[i], rhoU2p[i], rhoUeV2PU[i] = decodePrimitives3D(rho[i], xMom[i], eV2[i])
         end
 
         currTime += dt
         
         ############## CFL Calculation, timestep adjustment #############
-        # TODO: Generalize cell size
-        # TODO: 3D definition of CFL: Sum up in all directions
         maxCFL = 0
         for i in 1:nCells
-            CFL = (abs(U[i][1]) + sqrt(gamma * R * T[i])) * dt / (1/nCells)
-            maxCFL = max(CFL, maxCFL)
+            dx = 1/nCells
+            maxCFL = max(maxCFL, CFL(U[i], T[i], dt, dx, gamma, R))
         end
-        # Adjust time step to slowly approach target CFL
+        # Adjust time step to approach target CFL
         dt *= ((targetCFL/maxCFL - 1)/5+1)
 
     end
@@ -825,6 +875,5 @@ xVel = Array{Float64, 1}(undef, nCells)
 for i in 1:nCells
     xVel[i] = U[i][1]
 end
-println(xVel)
 
 plotShockTubeResults(P, xVel, T, rho)
