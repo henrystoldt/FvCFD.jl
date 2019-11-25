@@ -5,7 +5,7 @@ include("HEuler.jl")
 function crossProd(v1::Array{Float64, 1}, v2::Array{Float64, 1})
     x = v1[2]*v2[3] - v1[3]*v2[2]
     y = -(v1[1]*v2[3] - v1[3]*v2[1])
-    z = v1[1]*v2[2] - v1[2]-v2[2]
+    z = v1[1]*v2[2] - v1[2]*v2[1]
     return [x,y,z]
 end
 
@@ -26,8 +26,8 @@ geometricCenter = triangleCentroid
 
 function triangleArea(points::Array{Array{Float64, 1}})
     side1 = points[2] .- points[1]
-    side2 = points[3] .- points[2]
-    fAVec = crossProd(side1, side2)
+    side2 = points[3] .- points[1]
+    fAVec = crossProd(side1, side2) ./ 2
     return fAVec
 end
 
@@ -44,13 +44,18 @@ function faceAreaCentroid(points::Array{Array{Float64, 1}})
     fAVec = [ 0.0, 0.0, 0.0 ]
     centroid = [ 0.0, 0.0, 0.0 ]
 
-    for i in 1:nPts-1
-        subTriPts = [ points[i], points[i+1], gC ]
+    for i in 1:nPts
+        if i < nPts
+            subTriPts = [ gC, points[i], points[i+1] ]
+        else
+            subTriPts = [ gC, points[i], points[1] ]
+        end
+
         triCentroid = triangleCentroid(subTriPts)
         subFAVec = triangleArea(subTriPts)
 
         fAVec += subFAVec
-        centroid += triangleCentroid .* subArea
+        centroid += triCentroid .* mag(subFAVec)
     end
 
     centroid /= mag(fAVec)
@@ -71,9 +76,9 @@ function cellVolCentroid(points::Array{Array{Float64, 1}}, fAVecs::Array{Array{F
     centroid = [ 0.0, 0.0, 0.0 ]
 
     for f in 1:nFaces
-        cellCenterVec = faceCentroids[i] .- gC
-        subPyrVol = sum(fAVecs[i] .* cellCenterVec) / 3
-        subPyrCentroid = 0.75.*faceCentroids[i] + 0.25.*gC
+        cellCenterVec = faceCentroids[f] .- gC
+        subPyrVol = abs(sum(fAVecs[f] .* cellCenterVec) / 3)
+        subPyrCentroid = 0.75.*faceCentroids[f] + 0.25.*gC
 
         vol += subPyrVol
         centroid += subPyrCentroid .* subPyrVol
