@@ -31,7 +31,7 @@ plotly()
 # xMom = x-Momentum = rho*U
 # eV2 = total energy = rho*(e + U^2/2)
 # rhoU2p = flux of x-momentum = rho*U^2 + P
-# rhoUeV2PU = flux of energy = U*eV2 + P*U
+# rhoUeV2PU = x-direction flux of total energy = U*eV2 + P*U
 
 ######################### Utility Functions ########################
 # Assumes sizes are equal - use it properly!
@@ -374,6 +374,25 @@ function linInterp(mesh, values...)
 end
 
 # TODO: TVD Interp
+
+######################### Convective Term Things #######################
+# Returns the fractional portion of the maccormack aritificial diffusivity term (Eq. 6.58 in Anderson). 
+# Result must still be multiplied by (nextU - 2U + U) for each flux variable.
+function macCormackAD_S(mesh, C, P, Pgrad, P2grad)
+    #TODO: Multi-D
+    cells, faces, fAVecs, fCenters, boundaryFaces, cVols, cCenters = mesh
+    nCells = size(cells, 1)
+
+    S = Array{Float64, 1}(undef, nCells)
+    for i in 1:nCells
+        avgDimension = cVols[i]^(1/3)
+        nextPx = P[i] + Pgrad[i][1]*avgDimension + (P2grad[i][1]*avgDimension^2)/2
+        lastPx = P[i] - Pgrad[i][1]*avgDimension + (P2grad[i][1]*avgDimension^2)/2
+        S[i] = C[1]*abs(nextPx - 2*P[i] + lastPx) / (nextPx + 2*P[i] + lastPx)
+    end
+
+    return S
+end
 
 ######################### Boundary Conditions #######################
 function copyValues(fromIndex, toIndex, varArrays)
@@ -819,13 +838,13 @@ function upwindFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, 
         # Calculate fluxes through each face
         # TODO: y and z momemtum-fluxes + equations
         # xMassFlux, xMomFlux, xeV2Flux = upwindInterp(mesh, U, xMom, rhoU2p, rhoUeV2PU)
-        xMassFlux, xMomFlux, xeV2Flux = linInterp(mesh, xMom, rhoU2p, rhoUeV2PU)
+        xMassFlux, xMomFlux, xeV2Flux, faceP = linInterp(mesh, xMom, rhoU2p, rhoUeV2PU, P)
         fluxVars = [ xMassFlux, xMomFlux, xeV2Flux ]
         
         # TODO: Update with finite volume version of artificial diffusivity
-        dx = 1/nCells
-        pCentralGrad, rhoCG, xMomCG, eV2CG = central2GradNum(dx, P, rho, xMom, eV2)
-        pDenom = central2GradDenom(dx, P)[1]
+        # dx = 1/nCells
+        # pCentralGrad, rhoCG, xMomCG, eV2CG = central2GradNum(dx, P, rho, xMom, eV2)
+        # pDenom = central2GradDenom(dx, P)[1]
         
         if debug
             println("xMass Flux: $xMassFlux")
@@ -845,11 +864,22 @@ function upwindFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, 
             end
         end
 
+        pGrad = greenGaussGrad(mesh, faceP)[1]
+        facePGrad = linInterp(mesh, pGrad)[1]
+        facePGradX = Array{Float64, 1}(undef, nFaces)
+        facePGradY = Array{Float64, 1}(undef, nFaces)
+        facePGradZ = Array{Float64, 1}(undef, nFaces)
+        for f in 1:size(facePGrad,1)
+            facePGradX[f] = facePGrad[f][1]
+            facePGradY[f] = facePGrad[f][2]
+            facePGradZ[f] = facePGrad[f][3]
+        end
+        p2Grad = greenGaussGrad(mesh, facePGradX, facePGradY, facePGradZ)
+        S = macCormackAD_S(mesh, [ Cx, Cx, Cx ], P, pGrad, p2Grad)
         for i in 2:nCells-1
-            S = Cx * abs(pCentralGrad[i]) / pDenom[i]
-            rho[i] += S*rhoCG[i]
-            xMom[i] += S*xMomCG[i]
-            eV2[i] += S*eV2CG[i]
+            rho[i] += S[i]*rhoCG[i]
+            xMom[i] += S[i]*xMomCG[i]
+            eV2[i] += S[i]*eV2CG[i]
         end
 
         if debug
