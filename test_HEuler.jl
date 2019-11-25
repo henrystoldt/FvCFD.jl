@@ -73,6 +73,16 @@ end;
     end
 end;
 
+@testset "Green-Gauss Gradient" begin
+    mesh, P, T, U = initializeShockTubeFVM(4)
+    faceVals = [ 1, 2, 3, 4, 5 ]
+    gradient = [ [0.0,0.0,0.0], [4.0,0.0,0.0], [4.0,0.0,0.0], [0.0,0.0,0.0] ]
+    grad2 = greenGaussGrad(mesh, faceVals)[1]
+    for i in 1:4
+        @test almostEqual(gradient[i], grad2[i])
+    end
+end;
+
 @testset "Linear Interpolation" begin
     mesh, P, T, U = initializeShockTubeFVM(4)
     cellVals = [ 1, 2, 3, 4 ]

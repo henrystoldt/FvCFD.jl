@@ -253,7 +253,7 @@ function greenGaussGrad(mesh, faceValues...)
     nBdryFaces = size(bdryFaces, 1)
     bdryFaceIndices = Array(nFaces-nBdryFaces:nFaces)
 
-    for vals in values
+    for vals in faceValues
         # Initialize gradients to zero
         grad = Array{Array{Float64, 1}, 1}(undef, nCells)
         for c in 1:nCells
@@ -274,6 +274,15 @@ function greenGaussGrad(mesh, faceValues...)
         # Divide integral by cell volume to obtain gradients
         for c in 1:nCells
             grad[c] = grad[c] / cellVols[c]
+        end
+
+        # Set boundary gradients to zero
+        for f in nFaces-nBdryFaces+1:nFaces
+            for cell in faces[f]
+                if cell != -1
+                    grad[cell] = [0, 0, 0]
+                end
+            end
         end
 
         push!(result, grad)
@@ -870,10 +879,10 @@ nCells = 500
 # P, U, T, rho = upwind1DConservativeFDM(initializeShockTubeFDM(nCells)..., initDt=0.00001, endTime=0.1, targetCFL=0.01, Cx=0.3)
 # xVel = U
 
-P, U, T, rho = upwindFVM(initializeShockTubeFVM(nCells)..., initDt=0.0000001, endTime=0.14267, targetCFL=0.1, Cx=0.3)
-xVel = Array{Float64, 1}(undef, nCells)
-for i in 1:nCells
-    xVel[i] = U[i][1]
-end
+# P, U, T, rho = upwindFVM(initializeShockTubeFVM(nCells)..., initDt=0.0000001, endTime=0.14267, targetCFL=0.1, Cx=0.3)
+# xVel = Array{Float64, 1}(undef, nCells)
+# for i in 1:nCells
+#     xVel[i] = U[i][1]
+# end
 
-plotShockTubeResults(P, xVel, T, rho)
+# plotShockTubeResults(P, xVel, T, rho)
