@@ -250,7 +250,7 @@ function greenGaussGrad(mesh, faceValues...)
     result = []
     
     # Interpret mesh
-    cells, faces, fAVecs, bdryFaces, cellVols = mesh
+    cells, faces, fAVecs, fCenters, bdryFaces, cellVols, cCenters = mesh
     nCells = size(cells, 1)
     nFaces = size(faces, 1)
     nBdryFaces = size(bdryFaces, 1)
@@ -298,7 +298,7 @@ end
 function upwindInterp(mesh, U, values...)
     faces = mesh[2]
     fAVecs = mesh[3]
-    bdryFaces = mesh[4]
+    bdryFaces = mesh[5]
     nFaces = size(faces, 1)
     nBdryFaces = size(bdryFaces, 1)
     
@@ -336,7 +336,7 @@ end
 # TODO: Take into account distances to each cell center
 function linInterp(mesh, values...)    
     faces = mesh[2]
-    bdryFaces = mesh[4]
+    bdryFaces = mesh[5]
     nFaces = size(faces, 1)
     nBdryFaces = size(bdryFaces, 1)
     
@@ -445,12 +445,16 @@ function initializeShockTubeFVM(nCells=100; domainLength=1, Pratio=10)
     cells = []
     faces = []
     fAVecs = []
-    cVols = []
+    fCenters = []
     boundaryFaces = [ [nCells,], [nCells+1,] ]
+    cVols = []
+    cCenters = []
 
     fAVec = [h*w, 0, 0]
     cV = h*w*domainLength/nCells
-    for i in 1:nCells      
+    dx = dx[1]
+    for i in 1:nCells     
+        # Modify natural face numbering to have boundary faces numbered last 
         if i == 1
             push!(cells, [nCells, 1])    
             push!(faces, [i, i+1]) 
@@ -464,6 +468,15 @@ function initializeShockTubeFVM(nCells=100; domainLength=1, Pratio=10)
         push!(U, [0.0, 0.0, 0.0] )
         push!(cVols, cV)
         push!(fAVecs, fAVec)
+        push!(cCenters, [ (i-0.5)*dx, 0.0, 0.0 ])
+
+        # Face centers also adjusted to have boundaries last
+        if i != nCells
+            push!(fCenters, [ i*dx, 0.0, 0.0 ])
+        else
+            # Left boundary face
+            push!(fCenters, [ 0.0, 0.0, 0.0 ])
+        end
     end
 
     # Last face
@@ -471,9 +484,10 @@ function initializeShockTubeFVM(nCells=100; domainLength=1, Pratio=10)
     # Boundary faces
     push!(faces, [-1,1])
     push!(faces, [nCells, -1])
+    push!(fCenters, [ nCells*dx, 0.0, 0.0 ])
 
     # Returns in mesh format
-    mesh = [ cells, faces, fAVecs, boundaryFaces, cVols ]
+    mesh = [ cells, faces, fAVecs, fCenters, boundaryFaces, cVols, cCenters ]
     return mesh, P, T, U
 end
 
