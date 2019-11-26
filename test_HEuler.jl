@@ -1,5 +1,8 @@
 using Test
-include("HEuler.jl")
+include("finiteVolume.jl")
+include("finiteDifference.jl")
+include("shockTube.jl")
+include("vectorFunctions.jl")
 include("test.jl")
 
 @testset "Vector Utilities" begin
@@ -118,11 +121,13 @@ end;
     P = [ 1, 0.99855553, 0.087046989, 0.1 ]
     U = [ 0, 0.090015665, 0.720126353, 0 ]
     T = [ 0.00348432, 0.00347929, 0.0024263, 0.00278746 ]
-    P2, U2, T2, rho2 = upwindFVM(initializeShockTubeFVM(nCells, Pratio=0.1)..., initDt=0.051, endTime=0.05)
+    
+    P2, U2, T2, rho2 = upwindFVM(initializeShockTubeFVM(nCells, Pratio=0.1)..., initDt=0.051, endTime=0.05, Cx=0)
     xVel = []
     for i in 1:4
         push!(xVel, U2[i][1])
     end
+
     @test almostEqual(P, P2, 6)
     @test almostEqual(U, xVel, 6)
     @test almostEqual(T, T2, 6)

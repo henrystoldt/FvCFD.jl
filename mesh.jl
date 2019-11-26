@@ -1,5 +1,4 @@
 # Methods from Moukalled et al. FVM - OpenFOAM, Matlab
-include("HEuler.jl")
 
 #3D only
 function crossProd(v1::Array{Float64, 1}, v2::Array{Float64, 1})

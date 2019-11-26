@@ -6,18 +6,10 @@
 
 
 # Required Components
-
 1. Parser for SU2 Mesh files
  - Inputs: mesh file name (path)
  - Outputs: 
-	- Dimensionality of the mesh
-	- Number of nodes
-	- Number of elements
-	- Number of boundaries
-	- Connectivity of the mesh
-	- TBD
-
-	- If you're at a cell, need to be know the connectivity to each other cell. Also need all face areas and flux directions
+	- See meshDataStructureDefinition.md
 
 2. Need a standard input file format and a parser for it, which includes
 	- Mesh file path
@@ -50,3 +42,23 @@
 12. Output file format - primitive values at every cell
 	- Make vtk file if possible, csv if not
 	- If transient, should output primitives for each cell at each time step
+
+# Nomenclature
+All units SI  
+For the simple variables:
+
+Var | Meaning 
+--- | ---
+e | internal energy  
+P | Pressure  
+rho | Density  
+T | Temperature  
+U | Velocity   
+
+And the more state & flux variables:
+Var | Meaning | Definition
+--- | --- | ---
+xMom | x-Momentum | rho*U  
+eV2 | total energy | rho*(e + U^2/2)  
+rhoU2p | flux of x-momentum | rho*U^2 + P   
+rhoUeV2PU | x-direction flux of total energy | U*eV2 + P*U  

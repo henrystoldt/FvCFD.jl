@@ -1,4 +1,13 @@
-include("HEuler.jl")
+using Plots
+using Plots.PlotMeasures
+using LaTeXStrings
+
+# TODO: Switch to matplotlib?
+plotly()
+
+include("shockTube.jl")
+include("finiteDifference.jl")
+include("finiteVolume.jl")
 
 
 ################## Output ##################
