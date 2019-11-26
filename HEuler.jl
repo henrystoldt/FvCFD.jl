@@ -346,6 +346,9 @@ function linInterp(mesh, values...)
     for vals in values
         fVals = []
 
+        ############ Default Value ############
+        # Construct a default value of the appropriate dimensionality
+        # defaultVal = 0.0 for 1D, [ 0.0, 0.0 ] for 2D etc...
         defaultVal = []
         if size(vals[1], 1) ==1
             defaultVal = 0
@@ -355,6 +358,7 @@ function linInterp(mesh, values...)
             end
         end
 
+        ########### Do Interpolations ###########
         for i in 1:nFaces
             if i > nFaces-nBdryFaces
                 # Faces on boundaries not treated, must be set externally
@@ -864,6 +868,7 @@ function upwindFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, 
             end
         end
 
+        # Apply McCormack Artificial Diffusivity
         pGrad = greenGaussGrad(mesh, faceP)[1]
         facePGrad = linInterp(mesh, pGrad)[1]
         facePGradX = Array{Float64, 1}(undef, nFaces)
