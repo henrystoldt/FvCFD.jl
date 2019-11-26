@@ -29,24 +29,24 @@ end;
     # FVM
     U = [ [0.0,0.0,0.0],  [0.0,0.0,0.0],  [0.0,0.0,0.0],  [0.0,0.0,0.0] ]
     cells = [ [4,1], [1,2], [2,3], [3,5] ]
+    cVols = [ 0.0025, 0.0025, 0.0025, 0.0025 ]
+    cCenters = [ [0.125,0.0,0.0], [0.375,0.0,0.0], [0.625,0.0,0.0], [0.875,0.0,0.0] ]
     faces = [ [1,2], [2,3], [3,4], [-1,1], [4,-1] ]
     fAVecs = [ [0.01,0,0], [0.01,0,0], [0.01,0,0], [0.01,0,0], [0.01,0,0] ]
     fCenters = [ [0.25,0.0,0.0], [0.5,0.0,0.0], [0.75,0.0,0.0], [0.0,0.0,0.0], [1.0, 0.0, 0.0] ]
-    cVols = [ 0.0025, 0.0025, 0.0025, 0.0025 ]
-    cCenters = [ [0.125,0.0,0.0], [0.375,0.0,0.0], [0.625,0.0,0.0], [0.875,0.0,0.0] ]
-    bdryFaces = [ [4,], [5,] ]
-    mesh1 = [ cells, faces, fAVecs, fCenters, bdryFaces, cVols, cCenters ]
+    boundaryFaces = [ [4,], [5,] ]
+    mesh1 = [ cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces ]
     
     mesh2, P2, T2, U2 = initializeShockTubeFVM(4)
     @test almostEqual(P2, P)
     @test almostEqual(T2, T)
-    for i in [1,2,3,4,5,7]
+    for i in [ 1,3,4,5,6,7 ]
         @test size(mesh1[i], 1) == size(mesh2[i], 1)
         for a in 1:size(mesh1[i], 1)
             @test almostEqual(mesh1[i][a], mesh2[i][a])
         end
     end
-    @test almostEqual(mesh1[6], mesh2[6])
+    @test almostEqual(mesh1[2], mesh2[2])
 end;
 
 @testset "Decode Primitives" begin

@@ -23,10 +23,10 @@ function greenGaussGrad(mesh, faceValues...)
     result = []
     
     # Interpret mesh
-    cells, faces, fAVecs, fCenters, bdryFaces, cellVols, cCenters = mesh
+    cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
     nCells = size(cells, 1)
     nFaces = size(faces, 1)
-    nBdryFaces = size(bdryFaces, 1)
+    nBdryFaces = size(boundaryFaces, 1)
     bdryFaceIndices = Array(nFaces-nBdryFaces:nFaces)
 
     for vals in faceValues
@@ -49,7 +49,7 @@ function greenGaussGrad(mesh, faceValues...)
 
         # Divide integral by cell volume to obtain gradients
         for c in 1:nCells
-            grad[c] = grad[c] / cellVols[c]
+            grad[c] = grad[c] / cVols[c]
         end
 
         # Set boundary gradients to zero
@@ -69,11 +69,9 @@ end
 ####################### Face value interpolation ####################
 # Interpolates to all INTERIOR faces
 function upwindInterp(mesh, U, values...)
-    faces = mesh[2]
-    fAVecs = mesh[3]
-    bdryFaces = mesh[5]
+    cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
     nFaces = size(faces, 1)
-    nBdryFaces = size(bdryFaces, 1)
+    nBdryFaces = size(boundaryFaces, 1)
     
     # Compute face fluxes to see if they're positive or not
     faceVels = linInterp(mesh, U)[1]
@@ -108,10 +106,9 @@ end
 
 # TODO: Take into account distances to each cell center
 function linInterp(mesh, values...)    
-    faces = mesh[2]
-    bdryFaces = mesh[5]
+    cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
     nFaces = size(faces, 1)
-    nBdryFaces = size(bdryFaces, 1)
+    nBdryFaces = size(boundaryFaces, 1)
     
     fVals = Array{Float64, 1}(undef, nFaces)
 
@@ -157,7 +154,7 @@ end
 # Result must still be multiplied by (nextU - 2U + U) for each flux variable.
 function macCormackAD_S(mesh, C, P, Pgrad, P2grad)
     #TODO: Multi-D
-    cells, faces, fAVecs, fCenters, boundaryFaces, cVols, cCenters = mesh
+    cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
     nCells = size(cells, 1)
 
     S = Array{Float64, 1}(undef, nCells)
@@ -175,10 +172,10 @@ end
 function upwindFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, Cx=0.3, debug=false)
     ######### MESH ############
     # Extract mesh into local variables for readability
-    cells, faces, fAVecs, bdryFaces, cellVols = mesh
+    cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
     nCells = size(cells, 1)
     nFaces = size(faces, 1)
-    nBdryFaces = size(bdryFaces, 1)
+    nBdryFaces = size(boundaryFaces, 1)
     bdryFaceIndices = Array(nFaces-nBdryFaces:nFaces)
 
     ########### Variable Arrays #############
@@ -236,8 +233,8 @@ function upwindFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, 
             ownerCell = faces[i][1]
             neighbourCell = faces[i][2]
             for v in 1:3
-                stateVars[v][ownerCell] -= fluxVars[v][i]*fA*dt/cellVols[ownerCell]
-                stateVars[v][neighbourCell] += fluxVars[v][i]*fA*dt/cellVols[neighbourCell]
+                stateVars[v][ownerCell] -= fluxVars[v][i]*fA*dt/cVols[ownerCell]
+                stateVars[v][neighbourCell] += fluxVars[v][i]*fA*dt/cVols[neighbourCell]
             end
         end
 

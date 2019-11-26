@@ -91,7 +91,7 @@ function initializeShockTubeFVM(nCells=100; domainLength=1, Pratio=10)
     push!(fCenters, [ nCells*dx, 0.0, 0.0 ])
 
     # Returns in mesh format
-    mesh = [ cells, faces, fAVecs, fCenters, boundaryFaces, cVols, cCenters ]
+    mesh = [ cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces ]
     return mesh, P, T, U
 end
 
