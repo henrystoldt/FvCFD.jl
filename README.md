@@ -55,9 +55,9 @@ rho | Density
 T | Temperature  
 U | Velocity   
 
-And the more state & flux variables:
-Var | Meaning | Definition
---- | --- | ---
+And the more state & flux variables:  
+Var | Meaning | Definition  
+--- | --- | ---  
 xMom | x-Momentum | rho*U  
 eV2 | total energy | rho*(e + U^2/2)  
 rhoU2p | flux of x-momentum | rho*U^2 + P   
