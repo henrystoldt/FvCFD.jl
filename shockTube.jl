@@ -96,7 +96,7 @@ function initializeShockTubeFVM(nCells=100; domainLength=1, Pratio=10)
 end
 
 ############################ Plotting ############################
-function plotShockTubeResults(P, U, T, rho)
+function plotShockTubeResults_Plotly(P, U, T, rho)
     plots = []
     xAxis = Array{Float64, 1}(undef, nCells)
     for i in 1:nCells
@@ -107,6 +107,22 @@ function plotShockTubeResults(P, U, T, rho)
     rhoPlot = plot(xAxis, rho, label="rho (kg/m3)", title="Density", xlabel="x (m)", bottom_margin=15mm, left_margin=10mm)
     uPlot = plot(xAxis, U, label="Velocity (m/s)", title="Velocity", xlabel="x (m)", bottom_margin=15mm, left_margin=10mm)
     TPlot = plot(xAxis, T, label="T (K)", title="Temperature", xlabel="x (m)", bottom_margin=15mm, left_margin=10mm)
+    plots = [pPlot, rhoPlot, uPlot, TPlot]
+    plot(plots..., layout=(2, 2), size=(1720, 880), window_title="Euler1D_Draft_Henry", legend=false)
+    gui()
+end
+
+function plotShockTubeResults_PyPlot(P, U, T, rho)
+    plots = []
+    xAxis = Array{Float64, 1}(undef, nCells)
+    for i in 1:nCells
+        xAxis[i] = i/nCells - 1/(2*nCells)
+    end
+
+    pPlot = plot(xAxis, P, label="P (Pa)", title="Pressure", xlabel="x (m)")
+    rhoPlot = plot(xAxis, rho, label="rho (kg/m3)", title="Density", xlabel="x (m)")
+    uPlot = plot(xAxis, U, label="Velocity (m/s)", title="Velocity", xlabel="x (m)")
+    TPlot = plot(xAxis, T, label="T (K)", title="Temperature", xlabel="x (m)")
     plots = [pPlot, rhoPlot, uPlot, TPlot]
     plot(plots..., layout=(2, 2), size=(1720, 880), window_title="Euler1D_Draft_Henry", legend=false)
     gui()
