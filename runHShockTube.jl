@@ -2,7 +2,6 @@ using Plots
 using Plots.PlotMeasures
 using LaTeXStrings
 
-# TODO: Switch to matplotlib?
 pyplot()
 
 include("shockTube.jl")
