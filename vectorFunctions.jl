@@ -22,6 +22,10 @@ function mag(vec)
     return sqrt(sqrSum)
 end
 
+function normalize(vec)
+    return vec ./ mag(vec)
+end
+
 function copyValues(fromIndex, toIndex, varArrays)
     for varArray in varArrays
         varArray[toIndex] = varArray[fromIndex]
