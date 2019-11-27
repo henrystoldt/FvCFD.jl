@@ -5,11 +5,11 @@ mesh =
 [
    cells,           #(list of lists, each containing the indices of the faces that make up the cell)  
    cellVolumes,     #(list of scalar cell volumes)  
-   cellCenters,      #(list of position vectors)  
+   cellCenters,     #(list of position vectors)  
    faces,           #(list of lists, each sublist containing two cell indices: the owner cell and the neighbour cell)  
    fAVectors,       #(list of face area vectors)  
    fCenters,        #(list of position vectors)  
-   boundaryFaces   #(list of lists, each containing the indices of cells on the ith boundary)  
+   boundaryFaces    #(list of lists, each containing the indices of cells on the ith boundary)  
 ]
 ```
 
