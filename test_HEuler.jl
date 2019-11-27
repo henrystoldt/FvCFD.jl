@@ -6,10 +6,11 @@ include("vectorFunctions.jl")
 include("test.jl")
 
 @testset "Vector Utilities" begin
-    v1 = (1, 2, 3)
+    v1 = [1, 2, 3]
     @test mag(v1) == 3.7416573867739413
-    v2 = (2, 3, 4)
+    v2 = [2, 3, 4]
     @test dot(v1, v2) == 20.0
+    @test almostEqual(normalize(v1), [0.267261242, 0.534522484, 0.801783726], 9)
 end;
 
 @testset "Shock Tube initialization" begin
