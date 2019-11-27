@@ -66,6 +66,10 @@ function greenGaussGrad(mesh, faceValues...)
     return result
 end
 
+function laplacian(mesh, faceValues...)
+    
+end
+
 ####################### Face value interpolation ####################
 # Interpolates to all INTERIOR faces
 function upwindInterp(mesh, U, values...)
@@ -104,7 +108,7 @@ function upwindInterp(mesh, U, values...)
     return result
 end
 
-# TODO: Take into account distances to each cell center
+# Handles scalar or vector-valued variables
 function linInterp(mesh, values...)    
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
     nFaces = size(faces, 1)
@@ -135,10 +139,15 @@ function linInterp(mesh, values...)
                 push!(fVals, defaultVal)
                 
             else
-                # Find velocity at face using linear interpolation
+                # Find value at face using linear interpolation
                 c1 = faces[i][1]
                 c2 = faces[i][2]
-                push!(fVals, vals[c1].*0.5 .+ vals[c2].*0.5)
+
+                #TODO: Precompute these distances
+                c1Dist = mag(cCenters[c1] .- fCenters[i])
+                c2Dist = mag(cCenters[c2] .- fCenters[i])
+                totalDist = c1Dist + c2Dist
+                push!(fVals, vals[c1].*(c2Dist/totalDist) .+ vals[c2].*(c1Dist/totalDist))
             end
         end
 
