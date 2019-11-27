@@ -1,4 +1,5 @@
 # Methods from Moukalled et al. FVM - OpenFOAM, Matlab
+include("vectorFunctions.jl")
 
 #3D only
 function crossProd(v1::Array{Float64, 1}, v2::Array{Float64, 1})
@@ -77,7 +78,7 @@ function cellVolCentroid(points::Array{Array{Float64, 1}}, fAVecs::Array{Array{F
     for f in 1:nFaces
         cellCenterVec = faceCentroids[f] .- gC
         subPyrVol = abs(sum(fAVecs[f] .* cellCenterVec) / 3)
-        subPyrCentroid = 0.75.*faceCentroids[f] + 0.25.*gC
+        subPyrCentroid = 0.75.*faceCentroids[f] .+ 0.25.*gC
 
         vol += subPyrVol
         centroid += subPyrCentroid .* subPyrVol

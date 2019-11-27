@@ -1,14 +1,7 @@
 using Test
 include("mesh.jl")
 include("test.jl")
-
-@testset "Cross Product" begin
-    v1 = [ 1.0, 2.0, 3.0 ]
-    v2 = [ 2.0, 2.0, 2.0 ]
-    crossProduct = [ -2.0, 4.0, -2.0 ]
-    crossProduct2 = crossProd(v1, v2)
-    @test almostEqual(crossProduct, crossProduct2)
-end;
+include("testMeshes.jl")
 
 @testset "Face Geometry" begin
     # Test for a triangle
@@ -36,7 +29,25 @@ end;
     centroid = [ 0.5, 0.5, 0.0 ]
     area2, centroid2 = faceAreaCentroid(points)
     @test almostEqual(centroid, centroid2, 9)
-    @test almostEqual(area, area2)    
+    @test almostEqual(area, area2)
+
+    # Test mesh from Moukalled, pg. 247
+    cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = meshMoukalled813()
+    
+    # Moukalled pg. 249
+    @test almostEqual(cVols[1], 8.625)
+    # Calculated online (the one in book is incorrect)
+    @test almostEqual(cCenters[1], [1.754, 1.92, 0.5], 2)
+    
+    # Moukalled pg. 249
+    fAVecs2 = [ [2.5, 1.0, 0.0], [-1.0, 2.0, 0.0], [-2.0, 0.5, 0.0], [-1.0, -2.0, 0.0], [1.5, -1.5, 0.0 ] ]
+    for i in 1:5
+        @test almostEqual(fAVecs[i], fAVecs2[i])
+    end
+
+    # @test almostEqual(mag(fAVecs[6]), 8.625)
+    @test almostEqual(mag(fAVecs[7]), 8.625)
+    @test almostEqual(mag(fAVecs[6]), 8.625)
 end;
 
 @testset "Cell Geometry" begin
