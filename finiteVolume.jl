@@ -291,17 +291,14 @@ end
 ######################### Convective Term Things #######################
 # Returns the fractional portion of the maccormack aritificial diffusivity term (Eq. 6.58 in Anderson). 
 # Result must still be multiplied by (nextU - 2U + U) for each flux variable.
-function macCormackAD_S(mesh, C, P, Pgrad, P2grad)
-    #TODO: Multi-D
+function macCormackAD_S(mesh, C, P, lapl_P)
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
     nCells = size(cells, 1)
 
     S = Array{Float64, 1}(undef, nCells)
     for i in 1:nCells
-        avgDimension = cVols[i]^(1/3)
-        nextPx = P[i] + Pgrad[i][1]*avgDimension + (P2grad[i][1]*avgDimension^2)/2
-        lastPx = P[i] - Pgrad[i][1]*avgDimension + (P2grad[i][1]*avgDimension^2)/2
-        S[i] = C[1]*abs(nextPx - 2*P[i] + lastPx) / (nextPx + 2*P[i] + lastPx)
+        avgDimension = 1/nCells
+        S[i] = C * lapl_P[i]*avgDimension^2 / (lapl_P[i]*avgDimension^2 + 4*P[i])
     end
 
     return S
@@ -354,11 +351,6 @@ function upwindFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, 
         xMassFlux, xMomFlux, xeV2Flux, faceP = linInterp(mesh, xMom, rhoU2p, rhoUeV2PU, P)
         fluxVars = [ xMassFlux, xMomFlux, xeV2Flux ]
         
-        # TODO: Update with finite volume version of artificial diffusivity
-        # dx = 1/nCells
-        # pCentralGrad, rhoCG, xMomCG, eV2CG = central2GradNum(dx, P, rho, xMom, eV2)
-        # pDenom = central2GradDenom(dx, P)[1]
-        
         if debug
             println("xMass Flux: $xMassFlux")
             println("xMom Flux: $xMomFlux")
@@ -379,22 +371,14 @@ function upwindFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, 
 
         if Cx > 0
             # Apply McCormack Artificial Diffusivity
-            pGrad = greenGaussGrad(mesh, faceP)[1]
-            facePGrad = linInterp(mesh, pGrad)[1]
-            facePGradX = Array{Float64, 1}(undef, nFaces)
-            facePGradY = Array{Float64, 1}(undef, nFaces)
-            facePGradZ = Array{Float64, 1}(undef, nFaces)
-            for f in 1:size(facePGrad,1)
-                facePGradX[f] = facePGrad[f][1]
-                facePGradY[f] = facePGrad[f][2]
-                facePGradZ[f] = facePGrad[f][3]
-            end
-            p2Grad = greenGaussGrad(mesh, facePGradX, facePGradY, facePGradZ)
-            S = macCormackAD_S(mesh, [ Cx, Cx, Cx ], P, pGrad, p2Grad)
+            lapl_P, lapl_rho, lapl_xMom, lapl_eV2 = laplacian(mesh, "None", P, rho, xMom, eV2)
+            S = macCormackAD_S(mesh, Cx , P, lapl_P)
+
             for i in 2:nCells-1
-                rho[i] += S[i]*rhoCG[i]
-                xMom[i] += S[i]*xMomCG[i]
-                eV2[i] += S[i]*eV2CG[i]
+                avgD = 1/nCells
+                rho[i] += S[i]*lapl_rho[i]*avgD^2
+                xMom[i] += S[i]*lapl_xMom[i]*avgD^2
+                eV2[i] += S[i]*lapl_eV2[i]*avgD^2
             end
         end
 
