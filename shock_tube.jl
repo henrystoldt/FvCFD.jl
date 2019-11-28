@@ -15,8 +15,8 @@ function main()
     gamma = 1.4
 
     #Define the grid
-    n = 1001
-    n_half = 501
+    n = 501
+    n_half = 251
     x_pos = range(0,stop=1,length=n)
 
     #Time step size
