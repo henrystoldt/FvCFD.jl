@@ -20,11 +20,13 @@ nCells = 500
 # xVel = U
 
 ### FVM ###
-P, U, T, rho = upwindFVM(initializeShockTubeFVM(nCells)..., initDt=0.0000001, endTime=0.14267, targetCFL=0.1, Cx=0.3)
+P, U, T, rho = upwindFVM(initializeShockTubeFVM(nCells, silent=false)..., initDt=0.0000001, endTime=0.14267, targetCFL=0.1, Cx=0.5, silent=false)
+println("Formatting results")
 
 xVel = Array{Float64, 1}(undef, nCells)
 for i in 1:nCells
     xVel[i] = U[i][1]
 end
 
+println("Plotting results")
 plotShockTubeResults_PyPlot(P, xVel, T, rho)
