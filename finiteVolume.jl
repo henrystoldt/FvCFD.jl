@@ -9,6 +9,7 @@ function CFL(U, T, dt, dx, gamma=1.4, R=287.05)
 end
 
 ######################### Gradient Computation #######################
+#TODO: make all these function return a single array if you pass in a single value
 function leastSqGrad(mesh, values...)
     #TODO
     result = []
@@ -73,6 +74,7 @@ function greenGaussGrad(mesh, valuesAtFaces=false, values...)
     return result
 end
 
+######################### Laplacian Computation #######################
 # Calculates the vector Ef for use in the laplacian calculation, as described in Moukalled pg. 241-244
 function laplacian_Ef(nonOrthoCorrection, Sf, n, CF, e)
     if nonOrthoCorrection == "None"
@@ -104,6 +106,7 @@ function laplacian_FaceFlux(mesh, nonOrthoCorrection, face, interpolatedFaceGrad
     return mag(Ef)*orthoFaceGrad + dot(interpolatedFaceGrad, Tf)
 end
 
+# Used as orthogonal contribution in calculation of laplacian
 function ortho_FaceGradient(mesh, values...)
     result = []
     
@@ -115,28 +118,24 @@ function ortho_FaceGradient(mesh, values...)
     bdryFaceIndices = Array(nFaces-nBdryFaces:nFaces)
 
     for vals in values
-        orthoGrad = Array{Array{Float64, 1}, 1}(undef, nFaces)
+        orthoGrad = Array{Float64, 1}(undef, nFaces)
 
         # Integrate fluxes from each face
         for f in 1:nFaces-nBdryFaces
             ownerCell = faces[f][1]
             neighbourCell = faces[f][2]
 
-            distance = mag(cCenters[neightbourCell] .- cCenters[ownerCell])
-
-            orthoGrad[f] = (vals[neighbourCell] .- vals[ownerCell]) ./ mag
+            #TODO: Precompute these distances
+            distance = mag(cCenters[neighbourCell] .- cCenters[ownerCell])
+            orthoGrad[f] = (vals[neighbourCell] .- vals[ownerCell]) ./ distance
         end
 
         # Set boundary gradients to zero
         for f in nFaces-nBdryFaces+1:nFaces
-            for cell in faces[f]
-                if cell != -1
-                    grad[cell] = [0, 0, 0]
-                end
-            end
+            orthoGrad[f] = 0.0
         end
 
-        push!(result, grad)
+        push!(result, orthoGrad)
     end
     return result
 end
@@ -159,43 +158,44 @@ function laplacian(mesh, nonOrthoCorrection="None", values...)
     for vals in values
         ###### Precomputations ######
         # Compute gradients
-        faceVals = linInterp(mesh, vals)[1]
-        grads = greenGaussGrad(mesh, faceVals)[1]
+        grads = greenGaussGrad(mesh, false, vals)[1]
+        orthoFaceGrads = ortho_FaceGradient(mesh, vals)[1]
 
         #Interpolate gradients to faces
         faceGrads = linInterp(mesh, grads)[1]
-        orthoFaceGrads = ortho_FaceGrads(mesh, vals)
         
         ###### Laplacian ######
         # Initialize to zero
-        lapl = Array{Array{Float64, 1}, 1}(undef, nCells)
+        lapl = Array{Float64, 1}(undef, nCells)
         for c in 1:nCells
-            lapl[c] = [0, 0, 0]
+            lapl[c] = 0.0
         end
 
         # Integrate gradient fluxes from each face
         for f in 1:nFaces-nBdryFaces
-            faceIntegral = laplacian_FaceFlux(mesh, nonOrthoCorrection, f, faceGrads[f], orthoFaceGrad[f])
+            faceIntegral = laplacian_FaceFlux(mesh, nonOrthoCorrection, f, faceGrads[f], orthoFaceGrads[f])
 
+            ownerCell = faces[f][1]
+            neighbourCell = faces[f][2]
             lapl[ownerCell] += faceIntegral
             lapl[neighbourCell] -= faceIntegral
         end
 
         # Divide integral by cell volume to obtain gradients
         for c in 1:nCells
-            grad[c] = grad[c] / cVols[c]
+            lapl[c] = lapl[c] / cVols[c]
         end
 
-        # Set boundary gradients to zero
+        # Set boundary laplacians to zero
         for f in nFaces-nBdryFaces+1:nFaces
             for cell in faces[f]
                 if cell != -1
-                    lapl[cell] = [0, 0, 0]
+                    lapl[cell] = 0.0
                 end
             end
         end
 
-        push!(result, grad)
+        push!(result, lapl)
     end
     return result
 end
