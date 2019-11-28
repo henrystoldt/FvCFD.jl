@@ -43,8 +43,8 @@ function initializeShockTubeFVM(nCells=100; domainLength=1, Pratio=10)
     U = []
 
     #Shock tube dimensions
-    h = 0.1
-    w = 0.1
+    h = dx[1]
+    w = dx[1]
 
     cells = []
     faces = []
