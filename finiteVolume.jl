@@ -298,7 +298,7 @@ function macCormackAD_S(mesh, C, P, lapl_P)
     S = Array{Float64, 1}(undef, nCells)
     for i in 1:nCells
         avgDimension = 1/nCells
-        S[i] = C * lapl_P[i]*avgDimension^2 / (lapl_P[i]*avgDimension^2 + 4*P[i])
+        S[i] = C * abs(lapl_P[i]*avgDimension^2) / (lapl_P[i]*avgDimension^2 + 4*P[i])
     end
 
     return S
