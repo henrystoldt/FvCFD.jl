@@ -169,7 +169,14 @@ end;
     faceIntegral2 = laplacian_FaceFlux(mesh, "OverRelax", 1, faceGrad[1], orthoGrad)
     @test almostEqual(faceIntegral, faceIntegral2, 1)
     
-    #TODO: 1D Test Case
+    mesh, P, T, U = initializeShockTubeFVM(4)
+    Vals = [ 1, 2, 4, 8 ]
+    faceGrads = [ 4, 8, 16, 0, 0 ]
+    lapl = [ 0.0, 16.0, 32.0, 0.0 ]
+    lapl2 = laplacian(mesh, "None", Vals)[1]
+    for i in 1:4
+        @test almostEqual(lapl[i], lapl2[i])
+    end
 end;
 
 @testset "Linear Interpolation" begin
