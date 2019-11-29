@@ -38,7 +38,10 @@ function initializeShockTubeFDM(nCells=100; domainLength=1, Pratio=10)
 end
 
 # Wrapper for FDM initialization function, adding a mesh definition suitable for FVM and vector-format velocity
-function initializeShockTubeFVM(nCells=100; domainLength=1, Pratio=10)
+function initializeShockTubeFVM(nCells=100; domainLength=1, Pratio=10, silent=true)
+    if silent == false
+        println("Meshing shock tube, $nCells cells")
+    end
     dx, P, T, U = initializeShockTubeFDM(nCells, domainLength=domainLength, Pratio=Pratio)
     U = []
 

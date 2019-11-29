@@ -65,7 +65,7 @@ end
     function gTest1(x2, x3)
         return 6*sin(x2) + 8*sin(x3) + 4*sin(3.8397)
     end    
-    result = solve_NonLinear!([fTest1, gTest1], [0.523598776, 0.0 ])
+    result = solve_NonLinear!([fTest1, gTest1], [0.523598776, 0.0 ], printResiduals=false)
     solution = [ 0.558770302, -0.076288115 ]
     @test almostEqual(result, solution, 0.0001)
 end

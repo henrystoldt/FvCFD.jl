@@ -1,3 +1,4 @@
+using Printf
 include("constitutiveRelations.jl")
 include("vectorFunctions.jl")
 
@@ -9,6 +10,7 @@ function CFL(U, T, dt, dx, gamma=1.4, R=287.05)
 end
 
 ######################### Gradient Computation #######################
+#TODO: make all these function return a single array if you pass in a single value
 function leastSqGrad(mesh, values...)
     #TODO
     result = []
@@ -19,7 +21,7 @@ end
 
 # Pass in values that have already been interpolated to faces to avoid re-interpolating
 # Returns array of 3-D vectors
-function greenGaussGrad(mesh, faceValues...)
+function greenGaussGrad(mesh, valuesAtFaces=false, values...)
     result = []
     
     # Interpret mesh
@@ -29,7 +31,14 @@ function greenGaussGrad(mesh, faceValues...)
     nBdryFaces = size(boundaryFaces, 1)
     bdryFaceIndices = Array(nFaces-nBdryFaces:nFaces)
 
-    for vals in faceValues
+    for vals in values
+        #Interpolate values to faces
+        if valuesAtFaces != true
+            faceVals = linInterp(mesh, vals)[1]
+        else
+            faceVals = vals
+        end
+        
         # Initialize gradients to zero
         grad = Array{Array{Float64, 1}, 1}(undef, nCells)
         for c in 1:nCells
@@ -38,7 +47,7 @@ function greenGaussGrad(mesh, faceValues...)
 
         # Integrate fluxes from each face
         for f in 1:nFaces-nBdryFaces
-            faceIntegral = fAVecs[f] .* vals[f]
+            faceIntegral = fAVecs[f] .* faceVals[f]
 
             ownerCell = faces[f][1]
             neighbourCell = faces[f][2]
@@ -66,8 +75,130 @@ function greenGaussGrad(mesh, faceValues...)
     return result
 end
 
-function laplacian(mesh, faceValues...)
+######################### Laplacian Computation #######################
+# Calculates the vector Ef for use in the laplacian calculation, as described in Moukalled pg. 241-244
+function laplacian_Ef(nonOrthoCorrection, Sf, n, CF, e)
+    if nonOrthoCorrection == "None"
+        return Sf
+    elseif nonOrthoCorrection == "MinCorr"
+        return dot(e, Sf) .* e
+    elseif nonOrthoCorrection == "OrthogCorr"
+        return mag(Sf) .* e
+    elseif nonOrthoCorrection == "OverRelax"
+        return (dot(Sf, Sf) / dot(e, Sf)) .* e
+    end
+end
+
+function laplacian_FaceFlux(mesh, nonOrthoCorrection, face, interpolatedFaceGrad, orthoFaceGrad)
+    cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
+
+    ownerCell = faces[face][1]
+    neighbourCell = faces[face][2]
+
+    Sf = fAVecs[face]
+    n = normalize(Sf)
+    CF = cCenters[neighbourCell] .- cCenters[ownerCell]
+    e = normalize(CF)
+
+    Ef = laplacian_Ef(nonOrthoCorrection, Sf, n, CF, e)
+    Tf = Sf .- Ef
+
+    # Orthogonal contribution + non-ortho correction term
+    return mag(Ef)*orthoFaceGrad + dot(interpolatedFaceGrad, Tf)
+end
+
+# Used as orthogonal contribution in calculation of laplacian
+function ortho_FaceGradient(mesh, values...)
+    result = []
     
+    # Interpret mesh
+    cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
+    nCells = size(cells, 1)
+    nFaces = size(faces, 1)
+    nBdryFaces = size(boundaryFaces, 1)
+    bdryFaceIndices = Array(nFaces-nBdryFaces:nFaces)
+
+    for vals in values
+        orthoGrad = Array{Float64, 1}(undef, nFaces)
+
+        # Integrate fluxes from each face
+        for f in 1:nFaces-nBdryFaces
+            ownerCell = faces[f][1]
+            neighbourCell = faces[f][2]
+
+            #TODO: Precompute these distances
+            distance = mag(cCenters[neighbourCell] .- cCenters[ownerCell])
+            orthoGrad[f] = (vals[neighbourCell] .- vals[ownerCell]) ./ distance
+        end
+
+        # Set boundary gradients to zero
+        for f in nFaces-nBdryFaces+1:nFaces
+            orthoGrad[f] = 0.0
+        end
+
+        push!(result, orthoGrad)
+    end
+    return result
+end
+
+# Non-ortho correction options are: (all from Moukalled)
+#   None
+#   MinCorr (Section 8.6.2)
+#   OrthogCorr (Section 8.6.3)
+#   OverRelax (Seciton 8.6.4)
+function laplacian(mesh, nonOrthoCorrection="None", values...)
+    result = []
+    
+    # Interpret mesh
+    cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
+    nCells = size(cells, 1)
+    nFaces = size(faces, 1)
+    nBdryFaces = size(boundaryFaces, 1)
+    bdryFaceIndices = Array(nFaces-nBdryFaces:nFaces)
+
+    for vals in values
+        ###### Precomputations ######
+        # Compute gradients
+        grads = greenGaussGrad(mesh, false, vals)[1]
+        orthoFaceGrads = ortho_FaceGradient(mesh, vals)[1]
+
+        #Interpolate gradients to faces
+        faceGrads = linInterp(mesh, grads)[1]
+        
+        ###### Laplacian ######
+        # Initialize to zero
+        lapl = Array{Float64, 1}(undef, nCells)
+        for c in 1:nCells
+            lapl[c] = 0.0
+        end
+
+        # Integrate gradient fluxes from each face
+        for f in 1:nFaces-nBdryFaces
+            faceIntegral = laplacian_FaceFlux(mesh, nonOrthoCorrection, f, faceGrads[f], orthoFaceGrads[f])
+
+            ownerCell = faces[f][1]
+            neighbourCell = faces[f][2]
+            lapl[ownerCell] += faceIntegral
+            lapl[neighbourCell] -= faceIntegral
+        end
+
+        # Divide integral by cell volume to obtain gradients
+        for c in 1:nCells
+            lapl[c] = lapl[c] / cVols[c]
+        end
+
+        # Set boundary laplacians to zero
+        for f in nFaces-nBdryFaces+1:nFaces
+            for cell in faces[f]
+                if cell != -1
+                    lapl[cell] = 0.0
+                end
+            end
+        end
+
+        push!(result, lapl)
+    end
+    return result
 end
 
 ####################### Face value interpolation ####################
@@ -161,24 +292,24 @@ end
 ######################### Convective Term Things #######################
 # Returns the fractional portion of the maccormack aritificial diffusivity term (Eq. 6.58 in Anderson). 
 # Result must still be multiplied by (nextU - 2U + U) for each flux variable.
-function macCormackAD_S(mesh, C, P, Pgrad, P2grad)
-    #TODO: Multi-D
+function macCormackAD_S(mesh, C, P, lapl_P)
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
     nCells = size(cells, 1)
 
     S = Array{Float64, 1}(undef, nCells)
     for i in 1:nCells
-        avgDimension = cVols[i]^(1/3)
-        nextPx = P[i] + Pgrad[i][1]*avgDimension + (P2grad[i][1]*avgDimension^2)/2
-        lastPx = P[i] - Pgrad[i][1]*avgDimension + (P2grad[i][1]*avgDimension^2)/2
-        S[i] = C[1]*abs(nextPx - 2*P[i] + lastPx) / (nextPx + 2*P[i] + lastPx)
+        avgDimension = 1/nCells
+        S[i] = C * abs(lapl_P[i]*avgDimension^2) / (lapl_P[i]*avgDimension^2 + 4*P[i])
     end
 
     return S
 end
 
 ######################### Solvers #######################
-function upwindFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, Cx=0.3, debug=false)
+function upwindFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, Cx=0.3, debug=false, silent=true)
+    if silent == false
+        println("Initializing solver")
+    end
     ######### MESH ############
     # Extract mesh into local variables for readability
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
@@ -210,8 +341,12 @@ function upwindFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, 
     end
 
     ########### SOLVER ###########
+    if silent == false
+        println("Starting iterations")
+    end
     dt = initDt
     currTime = 0
+    timeStepCounter = 0
     while currTime < endTime
 
         if (endTime - currTime) < dt
@@ -223,11 +358,6 @@ function upwindFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, 
         # xMassFlux, xMomFlux, xeV2Flux = upwindInterp(mesh, U, xMom, rhoU2p, rhoUeV2PU)
         xMassFlux, xMomFlux, xeV2Flux, faceP = linInterp(mesh, xMom, rhoU2p, rhoUeV2PU, P)
         fluxVars = [ xMassFlux, xMomFlux, xeV2Flux ]
-        
-        # TODO: Update with finite volume version of artificial diffusivity
-        # dx = 1/nCells
-        # pCentralGrad, rhoCG, xMomCG, eV2CG = central2GradNum(dx, P, rho, xMom, eV2)
-        # pDenom = central2GradDenom(dx, P)[1]
         
         if debug
             println("xMass Flux: $xMassFlux")
@@ -249,22 +379,14 @@ function upwindFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, 
 
         if Cx > 0
             # Apply McCormack Artificial Diffusivity
-            pGrad = greenGaussGrad(mesh, faceP)[1]
-            facePGrad = linInterp(mesh, pGrad)[1]
-            facePGradX = Array{Float64, 1}(undef, nFaces)
-            facePGradY = Array{Float64, 1}(undef, nFaces)
-            facePGradZ = Array{Float64, 1}(undef, nFaces)
-            for f in 1:size(facePGrad,1)
-                facePGradX[f] = facePGrad[f][1]
-                facePGradY[f] = facePGrad[f][2]
-                facePGradZ[f] = facePGrad[f][3]
-            end
-            p2Grad = greenGaussGrad(mesh, facePGradX, facePGradY, facePGradZ)
-            S = macCormackAD_S(mesh, [ Cx, Cx, Cx ], P, pGrad, p2Grad)
+            lapl_P, lapl_rho, lapl_xMom, lapl_eV2 = laplacian(mesh, "None", P, rho, xMom, eV2)
+            S = macCormackAD_S(mesh, Cx , P, lapl_P)
+
             for i in 2:nCells-1
-                rho[i] += S[i]*rhoCG[i]
-                xMom[i] += S[i]*xMomCG[i]
-                eV2[i] += S[i]*eV2CG[i]
+                avgD = 1/nCells
+                rho[i] += S[i]*lapl_rho[i]*avgD^2
+                xMom[i] += S[i]*lapl_xMom[i]*avgD^2
+                eV2[i] += S[i]*lapl_eV2[i]*avgD^2
             end
         end
 
@@ -297,6 +419,9 @@ function upwindFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, 
         end
         # Adjust time step to approach target CFL
         dt *= ((targetCFL/maxCFL - 1)/5+1)
+
+        timeStepCounter += 1
+        @printf("Timestep: %5.0f, simTime: %8.4g, Max CFL: %8.4g \n", timeStepCounter, currTime, maxCFL)
 
     end
 
