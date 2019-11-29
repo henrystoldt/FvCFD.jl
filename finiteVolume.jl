@@ -305,7 +305,7 @@ function macCormackAD_S(mesh, C, P, lapl_P)
 end
 
 ######################### Solvers #######################
-function upwindFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, Cx=0.3, debug=false)
+function central_ADFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, Cx=0.3, debug=false)
     ######### MESH ############
     # Extract mesh into local variables for readability
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
@@ -412,6 +412,70 @@ function upwindFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, 
         # Adjust time step to approach target CFL
         dt *= ((targetCFL/maxCFL - 1)/5+1)
 
+    end
+
+    return P, U, T, rho
+end
+
+function JST_1DFDM(dx, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, Cx=0.3)
+    nCells = size(dx, 1)
+
+    rho = Array{Float64, 1}(undef, nCells)
+    xMom = Array{Float64, 1}(undef, nCells)
+    eV2 = Array{Float64, 1}(undef, nCells)
+    rhoU2p = Array{Float64, 1}(undef, nCells)
+    rhoUeV2PU = Array{Float64, 1}(undef, nCells)
+
+    for i in 1:nCells
+        rho[i], xMom[i], eV2[i] = encodePrimitives(P[i], T[i], U[i])
+        rhoU2p[i] = xMom[i]*U[i] + P[i]
+        rhoUeV2PU[i] = U[i]*eV2[i] + P[i]*U[i]
+    end
+
+    CFL = Array{Float64, 1}(undef, nCells)
+
+    dt = initDt
+    currTime = 0
+    while currTime < endTime
+        if (endTime - currTime) < dt
+            dt = endTime - currTime
+        end
+        
+        ############## Predictor #############
+        dxMomdx, drhoU2pdx, drhoUeV2PU = upwindGradient(dx, U, xMom, rhoU2p, rhoUeV2PU)
+        pCentralGrad, rhoCG, xMomCG, eV2CG = central2GradNum(dx, P, rho, xMom, eV2)
+        pDenom = central2GradDenom(dx, P)[1]
+
+        for i in 2:(nCells-1)
+            S = Cx * abs(pCentralGrad[i]) / pDenom[i]
+            rho[i] = rho[i] -dxMomdx[i]*dt + S*rhoCG[i]
+            xMom[i] = xMom[i] -drhoU2pdx[i]*dt + S*xMomCG[i]
+            eV2[i] = eV2[i] -drhoUeV2PU[i]*dt + S*eV2CG[i]
+
+            # Decode
+            P[i], T[i], U[i] = decodePrimitives(rho[i], xMom[i], eV2[i])
+            rhoU2p[i] = xMom[i]*U[i] + P[i]
+            rhoUeV2PU[i] = U[i]*eV2[i] + P[i]*U[i]
+        end
+
+        ############### Boundaries ################
+        # Waves never reach the boundaries, so boundary treatment doesn't need to be good
+        allVars = [ rho, rhoU2p, rhoUeV2PU, xMom, eV2, U, P, T ]
+        copyValues(3, 2, allVars)
+        copyValues(2, 1, allVars)
+        copyValues(nCells-2, nCells-1, allVars)
+        copyValues(nCells, nCells, allVars)
+        
+        ############## CFL Calculation, timestep adjustment #############
+        for i in 1:nCells
+            CFL[i] = (abs(U[i]) + sqrt(gamma * R * T[i])) * dt / dx[i]
+        end
+        maxCFL = maximum(CFL)
+
+        # Adjust time step to slowly approach target CFL
+        dt *= ((targetCFL/maxCFL - 1)/5+1)
+
+        currTime += dt
     end
 
     return P, U, T, rho

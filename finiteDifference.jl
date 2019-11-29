@@ -154,7 +154,7 @@ function macCormack1DFDM(dx, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0
         pDenom = central2GradDenom(dx, P)[1]
 
         for i in 2:(nCells-1)
-            # Eq. 6.1, 6.2, 6.4
+            # Eq. 6.1, 6.2, 6.4 (Checked)
             drhoPred[i] = -(rho[i]*dudx[i] + U[i]*drhodx[i])
             duPred[i] = -(U[i]*dudx[i] + dpdx[i]/rho[i])
             dePred[i] = -(U[i]*dedx[i] + P[i]*dudx[i]/rho[i])

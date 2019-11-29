@@ -124,6 +124,6 @@ function plotShockTubeResults_PyPlot(P, U, T, rho)
     uPlot = plot(xAxis, U, label="Velocity (m/s)", title="Velocity", xlabel="x (m)")
     TPlot = plot(xAxis, T, label="T (K)", title="Temperature", xlabel="x (m)")
     plots = [pPlot, rhoPlot, uPlot, TPlot]
-    plot(plots..., layout=(2, 2), size=(1720, 880), window_title="Euler1D_Draft_Henry", legend=false)
+    plot(plots..., layout=(2, 2), size=(860, 600), window_title="Euler1D_Draft_Henry", legend=false)
     gui()
 end
