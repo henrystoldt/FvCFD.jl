@@ -287,6 +287,102 @@ function linInterp(mesh, values...)
     return result
 end
 
+function structured_1DlinInterp(dx, values...)
+    result = []
+    nFaces = size(dx, 1) + 1
+
+    for vals in values
+        fVals = []
+
+        ############ Default Value ############
+        # Construct a default value of the appropriate dimensionality
+        # defaultVal = 0.0 for 1D, [ 0.0, 0.0 ] for 2D etc...
+        defaultVal = []
+        if size(vals[1], 1) ==1
+            defaultVal = 0
+        else
+            for a in vals[1]
+                push!(defaultVal, 0.0)
+            end
+        end
+
+        push!(fVals, defaultVal)
+        ########### Do Interpolations ###########
+        for i in 2:nFaces-1
+            c1Dist = dx[i-1]/2
+            c2Dist = dx[i]/2
+            totalDist = c1Dist + c2Dist
+            push!(fVals, vals[i-1].*(c2Dist/totalDist) .+ vals[i].*(c1Dist/totalDist))
+        end
+        push!(fVals, defaultVal)
+
+        push!(result, fVals)
+    end
+    return result
+end
+
+function structured_1DMaxInterp(dx, values...)
+    result = []
+    nFaces = size(dx, 1) + 1
+
+    for vals in values
+        fVals = []
+
+        ############ Default Value ############
+        # Construct a default value of the appropriate dimensionality
+        # defaultVal = 0.0 for 1D, [ 0.0, 0.0 ] for 2D etc...
+        defaultVal = []
+        if size(vals[1], 1) ==1
+            defaultVal = 0
+        else
+            for a in vals[1]
+                push!(defaultVal, 0.0)
+            end
+        end
+
+        push!(fVals, defaultVal)
+        ########### Do Interpolations ###########
+        for i in 2:nFaces-1
+            push!(fVals, max(vals[i-1], vals[i]))
+        end
+        push!(fVals, defaultVal)
+
+        push!(result, fVals)
+    end
+    return result
+end
+
+function structured_1DFaceDelta(dx, values...)
+    result = []
+    nFaces = size(dx, 1) + 1
+
+    for vals in values
+        fVals = []
+
+        ############ Default Value ############
+        # Construct a default value of the appropriate dimensionality
+        # defaultVal = 0.0 for 1D, [ 0.0, 0.0 ] for 2D etc...
+        defaultVal = []
+        if size(vals[1], 1) ==1
+            defaultVal = 0
+        else
+            for a in vals[1]
+                push!(defaultVal, 0.0)
+            end
+        end
+
+        push!(fVals, defaultVal)
+        ########### Do Interpolations ###########
+        for f in 2:nFaces-1
+            push!(fVals, vals[f] - vals[f-1])
+        end
+        push!(fVals, defaultVal)
+
+        push!(result, fVals)
+    end
+    return result
+end
+
 # TODO: TVD Interp
 
 ######################### Convective Term Things #######################
@@ -305,8 +401,51 @@ function macCormackAD_S(mesh, C, P, lapl_P)
     return S
 end
 
+function structured_1D_JST_sj(P::Array{Float64, 1})
+    nCells = size(P, 1)
+    sj = Array{Float64, 1}(undef, nCells)
+    
+    # Boundary values unset
+    sj[1] = 0.0
+    sj[nCells] = 0.0
+
+    for c in 2:nCells-1
+        sj[c] = abs( (P[c+1] - 2*P[c] + P[c-1]) / (P[c+1] + 2*P[c] + P[c-1]) )
+    end
+
+    return sj
+end
+
+function structured_1D_JST_rj(T::Array{Float64, 1}, U::Array{Float64, 1}, gamma=1.4, R=287.05)
+    nCells = size(T, 1)
+    rj = Array{Float64, 1}(undef, nCells)
+
+    for c in 1:nCells
+        rj[c] = abs(U[c]) + sqrt(gamma * R * T[c])
+    end
+    return rj
+end
+
+function structured_1D_JST_Eps(dx, k2, k4, c4, P::Array{Float64, 1}, T::Array{Float64, 1}, U::Array{Float64, 1})
+    nFaces = size(P, 1) + 1
+
+    sj = structured_1D_JST_sj(P)
+    #TODO: Pass through gamma and R
+    rj = structured_1D_JST_rj(T, U)
+    sjF, rjF = structured_1DMaxInterp(dx, sj, rj)
+
+    eps2 = Array{Float64, 1}(undef, nFaces)
+    eps4 = Array{Float64, 1}(undef, nFaces)
+    for f in 2:nFaces-1
+        eps2[f] = k2 * sjF[f] * rjF[f]
+        eps4[f] = max(0, k4*rjF[f] - c4*eps2[f])
+    end
+
+    return eps2, eps4
+end
+
 ######################### Solvers #######################
-function central_ADFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, Cx=0.3, debug=false, silent=true)
+function central_UnstructuredADFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, Cx=0.3, debug=false, silent=true)
     if silent == false
         println("Initializing solver")
     end
@@ -421,14 +560,17 @@ function central_ADFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0
         dt *= ((targetCFL/maxCFL - 1)/5+1)
 
         timeStepCounter += 1
-        @printf("Timestep: %5.0f, simTime: %8.4g, Max CFL: %8.4g \n", timeStepCounter, currTime, maxCFL)
+        if silent == false
+            @printf("Timestep: %5.0f, simTime: %8.4g, Max CFL: %8.4g \n", timeStepCounter, currTime, maxCFL)
+        end
 
     end
 
     return P, U, T, rho
 end
 
-function JST_1DFDM(dx, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, Cx=0.3)
+# Structured: relies on cells being ordered sequentially, uses FDM mesh definition
+function JST_Structured1DFVM(dx, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, silent=true)
     nCells = size(dx, 1)
 
     rho = Array{Float64, 1}(undef, nCells)
@@ -443,30 +585,44 @@ function JST_1DFDM(dx, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, ga
         rhoUeV2PU[i] = U[i]*eV2[i] + P[i]*U[i]
     end
 
+    stateVars = [ rho, xMom, eV2 ]
+
     CFL = Array{Float64, 1}(undef, nCells)
 
+    if silent == false
+        println("Starting iterations")
+    end
     dt = initDt
     currTime = 0
+    timeStepCounter = 0
     while currTime < endTime
         if (endTime - currTime) < dt
             dt = endTime - currTime
         end
         
         ############## Predictor #############
-        dxMomdx, drhoU2pdx, drhoUeV2PU = upwindGradient(dx, U, xMom, rhoU2p, rhoUeV2PU)
-        pCentralGrad, rhoCG, xMomCG, eV2CG = central2GradNum(dx, P, rho, xMom, eV2)
-        pDenom = central2GradDenom(dx, P)[1]
+        xMassFlux, xMomFlux, xeV2Flux = structured_1DlinInterp(dx, xMom, rhoU2p, rhoUeV2PU)
+        xMassDelta, xMomDelta, xeV2Delta = structured_1DFaceDelta(dx, rho, xMom, eV2)
+        eps2, eps4 = structured_1D_JST_Eps(dx, 1, (1/32), 2, P, T, U)
 
-        for i in 2:(nCells-1)
-            S = Cx * abs(pCentralGrad[i]) / pDenom[i]
-            rho[i] = rho[i] -dxMomdx[i]*dt + S*rhoCG[i]
-            xMom[i] = xMom[i] -drhoU2pdx[i]*dt + S*xMomCG[i]
-            eV2[i] = eV2[i] -drhoUeV2PU[i]*dt + S*eV2CG[i]
+        fluxVars = [ xMassFlux, xMomFlux, xeV2Flux ]
+        deltas = [ xMassDelta, xMomDelta, xeV2Delta ]
 
-            # Decode
-            P[i], T[i], U[i] = decodePrimitives(rho[i], xMom[i], eV2[i])
-            rhoU2p[i] = xMom[i]*U[i] + P[i]
-            rhoUeV2PU[i] = U[i]*eV2[i] + P[i]*U[i]
+        # nCells = nFaces - 1
+        for f in 2:(nCells)
+            for v in 1:3
+                diffusionFlux = eps2[f]*deltas[v][f] - eps4[f]*(deltas[v][f+1] - 2*deltas[v][f] + deltas[v][f-1])
+                flux = (fluxVars[v][f] - diffusionFlux)*dt
+                stateVars[v][f-1] -= flux/dx[f-1]
+                stateVars[v][f] += flux/dx[f]
+            end
+        end
+
+        # Decode
+        for c in 1:nCells
+            P[c], T[c], U[c] = decodePrimitives(rho[c], xMom[c], eV2[c])
+            rhoU2p[c] = xMom[c]*U[c] + P[c]
+            rhoUeV2PU[c] = U[c]*eV2[c] + P[c]*U[c]
         end
 
         ############### Boundaries ################
@@ -475,7 +631,7 @@ function JST_1DFDM(dx, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, ga
         copyValues(3, 2, allVars)
         copyValues(2, 1, allVars)
         copyValues(nCells-2, nCells-1, allVars)
-        copyValues(nCells, nCells, allVars)
+        copyValues(nCells-1, nCells, allVars)
         
         ############## CFL Calculation, timestep adjustment #############
         for i in 1:nCells
@@ -487,6 +643,11 @@ function JST_1DFDM(dx, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, ga
         dt *= ((targetCFL/maxCFL - 1)/5+1)
 
         currTime += dt
+
+        timeStepCounter += 1
+        if silent == false
+            @printf("Timestep: %5.0f, simTime: %8.4g, Max CFL: %8.4g \n", timeStepCounter, currTime, maxCFL)
+        end
     end
 
     return P, U, T, rho

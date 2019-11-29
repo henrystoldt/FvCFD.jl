@@ -225,7 +225,7 @@ end;
     U = [ 0, 0.090015665, 0.720126353, 0 ]
     T = [ 0.00348432, 0.00347929, 0.0024263, 0.00278746 ]
     
-    P2, U2, T2, rho2 = central_ADFVM(initializeShockTubeFVM(nCells, Pratio=0.1)..., initDt=0.051, endTime=0.05, Cx=0)
+    P2, U2, T2, rho2 = central_UnstructuredADFVM(initializeShockTubeFVM(nCells, Pratio=0.1)..., initDt=0.051, endTime=0.05, Cx=0)
     xVel = []
     for i in 1:4
         push!(xVel, U2[i][1])
