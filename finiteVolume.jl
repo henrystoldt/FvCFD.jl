@@ -1,3 +1,4 @@
+using Printf
 include("constitutiveRelations.jl")
 include("vectorFunctions.jl")
 
@@ -298,14 +299,17 @@ function macCormackAD_S(mesh, C, P, lapl_P)
     S = Array{Float64, 1}(undef, nCells)
     for i in 1:nCells
         avgDimension = 1/nCells
-        S[i] = C * lapl_P[i]*avgDimension^2 / (lapl_P[i]*avgDimension^2 + 4*P[i])
+        S[i] = C * abs(lapl_P[i]*avgDimension^2) / (lapl_P[i]*avgDimension^2 + 4*P[i])
     end
 
     return S
 end
 
 ######################### Solvers #######################
-function central_ADFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, Cx=0.3, debug=false)
+function central_ADFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, Cx=0.3, debug=false, silent=true)
+    if silent == false
+        println("Initializing solver")
+    end
     ######### MESH ############
     # Extract mesh into local variables for readability
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
@@ -337,8 +341,12 @@ function central_ADFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0
     end
 
     ########### SOLVER ###########
+    if silent == false
+        println("Starting iterations")
+    end
     dt = initDt
     currTime = 0
+    timeStepCounter = 0
     while currTime < endTime
 
         if (endTime - currTime) < dt
@@ -411,6 +419,9 @@ function central_ADFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0
         end
         # Adjust time step to approach target CFL
         dt *= ((targetCFL/maxCFL - 1)/5+1)
+
+        timeStepCounter += 1
+        @printf("Timestep: %5.0f, simTime: %8.4g, Max CFL: %8.4g \n", timeStepCounter, currTime, maxCFL)
 
     end
 
