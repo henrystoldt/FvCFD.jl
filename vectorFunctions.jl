@@ -2,6 +2,7 @@
 ######################### Vector Functions ########################
 # Assumes sizes are equal
 function dot(vec1, vec2)
+    #Returns dot product of two vectors
     s1 = size(vec1, 1)
     s2 = size(vec2, 1)
     if s1 != s2
@@ -15,6 +16,7 @@ function dot(vec1, vec2)
 end
 
 function mag(vec)
+    #Returns 2-norm of vector
     sqrSum = 0
     for i = 1:size(vec,1)
         sqrSum += vec[i]*vec[i]
@@ -23,6 +25,7 @@ function mag(vec)
 end
 
 function normalize(vec)
+    #Turns a vector into a unit vector
     return vec ./ mag(vec)
 end
 

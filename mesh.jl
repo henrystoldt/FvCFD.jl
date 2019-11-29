@@ -67,7 +67,7 @@ end
 # fAVecs can be computed using the faceAreaCentroids function
 # Splits cell into polygonal pyramids, each incorporating a single face and the geometric center of the cell
 #   Computes volume and centroid of each sub-pyramid
-#   Resulting volume is um, centroid is the volume-weighted sum
+#   Resulting volume is sum, centroid is the volume-weighted sum
 function cellVolCentroid(points::Array{Array{Float64, 1}}, fAVecs::Array{Array{Float64, 1}}, faceCentroids::Array{Array{Float64, 1}})
     gC = geometricCenter(points)
     nFaces = size(fAVecs,1)
@@ -87,4 +87,19 @@ function cellVolCentroid(points::Array{Array{Float64, 1}}, fAVecs::Array{Array{F
     centroid /= vol
 
     return vol, centroid
+end
+
+function cellCentroidToFaceVec(points::Array{Array{Float64, 1}}, faceCentroids::Array{Array{Float64, 1}}, cellCentroids::Array{Array{Float64, 1}})
+    # Calculates vectors from cell centroid to face centers
+    #TODO: Understand ordering to make sure we're accepting faces in the order we need to pass them back in??
+
+    nFaces = size(faceCentroids, 1)
+
+    cellToFaceVec = zeros(nFaces, 3)
+
+    for f in 1:nFaces
+        cellToFaceVec[f,:] = faceCentroids[f] - cellCentroids
+    end
+
+    return cellToFaceVec
 end
