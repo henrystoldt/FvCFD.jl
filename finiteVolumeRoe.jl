@@ -208,6 +208,152 @@ function roeAveraged(n, rhoLeft,rhoRight,uLeft,uRight,HLeft,HRight, gamma=1.4)
     return roeRho, roeU, roeH, roeA
 end
 
+function fluxVector(cons, prim, fAVec)
+    #=This vector takes inputs of conserved and primitive quantities on the L or R side of a face, and returns the flux vector for that side
+    =#
+    nFaces = size(fAVec, 1)
+
+    fluxVec = Array{Float64, 2}(undef, nFaces, 3) #Over all faces, storing rho*u, rhou^2+P, u(E+P)
+
+    #In 2D, would need to multiply each element by the x/y unit vector components of the face, but in 1D that should already be dealt with??
+    for i in 1:nFaces
+        fluxVec[i][1] = (cons[i][2]) 
+        fluxVec[i][2] = (cons[i][2]*prim[i][1] + prim[i][2]) 
+        fluxVec[i][3] = (prim[i][1]*(cons[i][3] + prim[i][2]))
+    end
+
+
+    return fluxVec
+
+end
+
+function eigenFluxVectors(rhoRoe, uRoe, HRoe, aRoe, deltaRho, deltaU, deltaP, deltaA, fAVecs)
+    #=This function takes (mostly) roe averaged quantities as inputs, and returns the eigenvalue corresponding vectors
+        F_1 -> U~
+        F_2 -> U~ + a~
+        F_3 -> U~ - a~
+    =#
+    nFaces = size(fAVecs,1)
+
+    #First step is to find the eigenvalues at each face
+    eig1, eig2, eig3 = findEigenvalues(uRoe, aRoe, fAVecs)
+
+    #Check, and if required correct them
+    #This is the step I'm least sure about in the whole process
+    newEig1, newEig2, newEig3 = checkEigenvalues(eig1, eig2, eig3, deltaU, deltaA, nFaces)
+
+    #Construct vectors
+
+    f1 = Array{Float64, 2}(undef, nFaces, 3)
+    f2 = Array{Float64, 2}(undef, nFaces, 3)
+    f3 = Array{Float64, 2}(undef, nFaces, 3)
+
+    for i in 1:nFaces
+        #TODO: All the * 1 in this loop are places where the *1 should be replaced by the unit vector of the face area
+        #First vector is easiest
+        f1[i][1] = newEig1[i] * (deltaRho[i] - (deltaP[i]/(aRoe[i]^2))  )
+        f1[i][2] = newEig1[i] * ( uRoe[i]*( deltaRho[i] - (deltaP[i]/(aRoe[i]^2)) ) + rhoRoe[i]*( deltaU[i] - 1 *deltaU[i] ) ) #The last term only matters for 2D/3D
+        f1[i][3] = newEig1[i] * ( 0.5*uRoe[i]*( deltaRho[i] - (deltaP[i]/(aRoe[i]^2)) ) + rhoRoe[i]*( uRoe[i]*deltaU[i] - 1 * newEig1[i]*deltaU[i] ) ) #same as above
+
+        f2_pre = newEig2[i] * ( deltaP[i]/(2*aRoe[i]^2) + rhoRoe[i]* 1 * deltaU[i]/(2*aRoe[i]) )
+        f2[i][1] = f2_pre
+        f2[i][2] = f2_pre * (uRoe[i] + 1 * aRoe[i])
+        f2[i][3] = f2_pre * (HRoe[i] + 1 * uRoe[i] * aRoe[i])
+
+        f3_pre = newEig3[i] * ( deltaP[i]/(2*aRoe[i]^2) - rhoRoe[i]* 1 * deltaU[i]/(2*aRoe[i]) )
+        f3[i][1] = f3_pre
+        f3[i][2] = f3_pre * (uRoe[i] - 1 * aRoe[i])
+        f3[i][3] = f3_pre * (HRoe[i] - 1 * uRoe[i] * aRoe[i])
+    end
+    return f1, f2, f3
+end
+
+function findEigenvalues(u, a, fA)
+    #=Given input of u, a, and area vectors find the eigenvalues of the matrix
+    TODO: Extend this to 2D, use fA
+    =#
+    nFaces = size(fA, 1)
+    eig1 = Array{Float64,1}(undef, nFaces)
+    eig2 = Array{Float64,1}(undef, nFaces)
+    eig3 = Array{Float64,1}(undef, nFaces)
+
+    eig1 = u
+    eig2 = u + a
+    eig3 = u - a
+
+    return eig1, eig2, eig3
+end
+
+function checkEigenvalues(eig1, eig2, eig3, dU, dA, n, K=0.04)
+    #=Really not sure if this is the way to do it, but
+        taking max of (U_r-U_l or 0)
+
+        And using that to replace the U value???
+    =#
+    new_eig1 = Array{Float64, 1}(undef, n)
+    new_eig2 = Array{Float64, 1}(undef, n)
+    new_eig3 = Array{Float64, 1}(undef, n)
+
+    for i in 1:n #Entropy fix I hope??
+        if dU[i] > 0
+            #replace
+            eps = K * dU[i]
+            if eps > abs(eig1[i])
+                new_eig1[i] = (eig1[i]^2 + eps^2)/(2*eps)
+            else
+                new_eig1[i] = eig1[i]
+            end
+        else
+            new_eig1[i] = eig1[i]
+        end
+
+        if (dU[i]+dA[i])>0
+            #replace
+            eps = K * (dU[i] + dA[i])
+            if eps > abs(eig2[i])
+                new_eig2[i] = (eig2[i]^2 + eps^2)/(2*eps)
+            else
+                new_eig2[i] = eig2[i]
+            end
+        else
+            new_eig2[i] = eig2[i]
+        end
+
+        if (dU[i]-dA[i])>0
+            #replace
+            eps = K * (dU[i] - dA[i])
+            if eps > abs(eig3[i])
+                new_eig3[i] = (eig3[i]^2 + eps^2)/(2*eps)
+            else
+                new_eig3[i] = eig3[i]
+            end
+        else
+            new_eig3[i] = eig3[i]
+        end
+
+    end
+
+    return new_eig1, new_eig2, new_eig3
+
+end
+
+function findFluxes(lF, rF, e1F, e2F, e3F, fA)
+    #=This function combines the decomposed vectors into a single flux vector
+    =#
+    n = size(fA, 1)
+    xMassFlux = Array{Float64, 1}(undef, n)
+    xMomFlux = Array{Float64, 1}(undef, n)
+    xEneFlux = Array{Float64, 1}(undef, n)
+
+    for i in 1:n
+        xMassFlux[i] = 0.5 * (lF[i][1] + rF[i][1] - e1F[i][1] - e2F[i][1] - e3F[i][1])
+        xMomFlux[i] = 0.5 * (lF[i][2] + rF[i][2] - e1F[i][2] - e2F[i][2] - e3F[i][2])
+        xEneFlux[i] = 0.5 * (lF[i][3] + rF[i][3] - e1F[i][3] - e2F[i][3] - e3F[i][3])
+    end
+
+    return xMassFlux, xMomFlux, xEneFlux
+end
+
 
 ######################### Convective Term Things #######################
 
@@ -223,6 +369,9 @@ function upwindFVMRoe1D(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=
     nBdryFaces = size(boundaryFaces, 1)
     bdryFaceIndices = Array(nFaces-nBdryFaces:nFaces)
 
+
+    dx = cCenters[2] - cCenters[1]
+    
     ########### Variable Arrays #############
     # State variables, values are the averages/cell center values
     rho = Array{Float64, 1}(undef, nCells)
@@ -243,6 +392,14 @@ function upwindFVMRoe1D(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=
         println("Rho: $rho")
         println("xMom: $xMom")
         println("eV2: $eV2")
+    end
+
+    if verbose
+        #println("-------------------------------------------------------------------------------------------------------")
+        println("------------------------------  Intialize complete, commencing time stepping  -------------------------")
+        println("-------------------------------------------------------------------------------------------------------")
+        println("")
+        println("CurrentTime ------ dt ------ max mom res")
     end
 
     ########### SOLVER ###########
@@ -268,15 +425,33 @@ function upwindFVMRoe1D(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=
         uLeft = primsLeft[:][1]
         uRight = primsRight[:][1]
 
+        pLeft = primsLeft[:][2]
+        pRight = primsRight[:][2]
+
         HLeft = primsLeft[:][3]
         HRight = primsRight[:][3]
 
+        aLeft = (gamma-1)*(HLeft - 0.5*uLeft.^2)
+        aRight = (gamma-1)*(HRight - 0.5*uRight.^2)
+
 
         #Find ROE averaged quantities at each face
-        rhoRoe, uRoe, hRoe, aRoe = roeAveraged(nFaces, rhoLeft, rhoRight, uLeft, uRight, HLeft, HRight)
+        rhoRoe, uRoe, HRoe, aRoe = roeAveraged(nFaces, rhoLeft, rhoRight, uLeft, uRight, HLeft, HRight)
 
-        #Use left, right and roe averaged quantities to create the flux matrices at every face. Entropy fix happens inside this step
-        xMassFlux, xMomFlux, xeV2Flux = fluxVectors(left, right, Roe, faceVector )
+        #Construct flux partial vectors
+        leftFlux = fluxVector(consLeft, primsLeft, fAVecs)
+        rightFlux = fluxVector(consRight, primsRight, fAVecs)
+
+        deltaRho = rhoRight - rhoLeft
+        deltaU = uRight - uLeft
+        deltaP = pRight - pLeft
+        deltaA = aRight - aLeft
+
+        eigen1Flux, eigen2Flux, eigen3Flux = eigenFluxVectors(rhoRoe, uRoe, HRoe, aRoe, deltaRho, deltaU, deltaP, deltaA, fAVecs) #Eigenvalue check and correction for entropy happens in this step
+
+
+        #Combines decomposed flux vectors into flux at every step
+        xMassFlux, xMomFlux, xeV2Flux = findFluxes(leftFlux, rightFlux, eigen1Flux, eigen2Flux, eigen3Flux, fAVecs )
 
         
   
@@ -330,6 +505,11 @@ function upwindFVMRoe1D(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=
         # Decode primitive values
         for i in 1:nCells
             P[i], T[i], U[i], rhoU2p[i], rhoUeV2PU[i] = decodePrimitives3D(rho[i], xMom[i], eV2[i])
+        end
+
+        if verbose
+            println(" ", currTime, " --- ", dt, " --- ", max(xMassFlux))
+
         end
 
         currTime += dt
