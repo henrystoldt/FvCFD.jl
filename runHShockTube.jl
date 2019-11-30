@@ -4,7 +4,7 @@ using LaTeXStrings
 using Profile
 using ProfileView
 
-pyplot()
+plotly()
 
 include("shockTube.jl")
 include("finiteDifference.jl")
@@ -18,8 +18,7 @@ nCells = 1000
 # P, U, T, rho = macCormack1DFDM(initializeShockTubeFDM(nCells)..., initDt=0.000001, targetCFL=0.95, endTime=0.14267, Cx=0.1)
 # P, U, T, rho = macCormack1DConservativeFDM(initializeShockTubeFDM(nCells)..., initDt=0.00001, targetCFL=0.95, endTime=0.14267, Cx=0.3)
 # P, U, T, rho = upwind1DConservativeFDM(initializeShockTubeFDM(nCells)..., initDt=0.00001, endTime=0.14267, targetCFL=0.01, Cx=0.3)
-P, U, T, rho = JST_Structured1DFVM(initializeShockTubeFDM(nCells)..., initDt=0.00001, endTime=0.14267, targetCFL=0.25, silent=true)
-
+@profview P, U, T, rho = JST_Structured1DFVM(initializeShockTube_StructuredFVM(nCells)..., initDt=0.00001, endTime=0.14267, targetCFL=0.2, silent=true)
 xVel = U
 
 ### Unstructured FVM ###
