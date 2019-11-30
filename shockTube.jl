@@ -56,7 +56,7 @@ function initializeShockTubeFVM(nCells=100; domainLength=1, Pratio=10, silent=tr
     if !silent
         println("Meshing shock tube, $nCells cells")
     end
-
+    dx, P, T, U = initializeShockTubeFDM(nCells, domainLength=domainLength, Pratio=Pratio)
     U = []
 
     #Shock tube dimensions
