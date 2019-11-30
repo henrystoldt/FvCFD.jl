@@ -604,7 +604,7 @@ function JST_Structured1DFVM(dx, P, T, U; initDt=0.001, endTime=0.14267, targetC
         ############## Predictor #############
         xMassFlux, xMomFlux, xeV2Flux = structured_1DlinInterp(dx, xMom, rhoU2p, rhoUeV2PU)
         xMassDelta, xMomDelta, xeV2Delta = structured_1DFaceDelta(dx, rho, xMom, eV2)
-        eps2, eps4 = structured_1D_JST_Eps(dx, 1, (1/32), 2, P, T, U)
+        eps2, eps4 = structured_1D_JST_Eps(dx, 1, (1/32), 4, P, T, U)
 
         fluxVars = [ xMassFlux, xMomFlux, xeV2Flux ]
         deltas = [ xMassDelta, xMomDelta, xeV2Delta ]
