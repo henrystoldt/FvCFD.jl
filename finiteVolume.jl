@@ -23,7 +23,7 @@ end
 # Returns array of 3-D vectors
 function greenGaussGrad(mesh, valuesAtFaces=false, values...)
     result = []
-    
+
     # Interpret mesh
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
     nCells = size(cells, 1)
@@ -38,7 +38,7 @@ function greenGaussGrad(mesh, valuesAtFaces=false, values...)
         else
             faceVals = vals
         end
-        
+
         # Initialize gradients to zero
         grad = Array{Array{Float64, 1}, 1}(undef, nCells)
         for c in 1:nCells
@@ -110,7 +110,7 @@ end
 # Used as orthogonal contribution in calculation of laplacian
 function ortho_FaceGradient(mesh, values...)
     result = []
-    
+
     # Interpret mesh
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
     nCells = size(cells, 1)
@@ -148,7 +148,7 @@ end
 #   OverRelax (Seciton 8.6.4)
 function laplacian(mesh, nonOrthoCorrection="None", values...)
     result = []
-    
+
     # Interpret mesh
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
     nCells = size(cells, 1)
@@ -164,7 +164,7 @@ function laplacian(mesh, nonOrthoCorrection="None", values...)
 
         #Interpolate gradients to faces
         faceGrads = linInterp(mesh, grads)[1]
-        
+
         ###### Laplacian ######
         # Initialize to zero
         lapl = Array{Float64, 1}(undef, nCells)
@@ -207,7 +207,7 @@ function upwindInterp(mesh, U, values...)
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
     nFaces = size(faces, 1)
     nBdryFaces = size(boundaryFaces, 1)
-    
+
     # Compute face fluxes to see if they're positive or not
     faceVels = linInterp(mesh, U)[1]
 
@@ -219,7 +219,7 @@ function upwindInterp(mesh, U, values...)
     result = []
     for vals in values
         fVals = []
-        
+
         # Use sign of flux to choose between owner or neighbour node values
         for i in 1:nFaces-nBdryFaces
             if fFluxes[i] > 0
@@ -239,12 +239,13 @@ function upwindInterp(mesh, U, values...)
     return result
 end
 
+# Array versions
 # Handles scalar or vector-valued variables
-function linInterp(mesh, values...)    
+function linInterp(mesh, values...)
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
     nFaces = size(faces, 1)
     nBdryFaces = size(boundaryFaces, 1)
-    
+
     fVals = Array{Float64, 1}(undef, nFaces)
 
     result = []
@@ -268,7 +269,7 @@ function linInterp(mesh, values...)
             if i > nFaces-nBdryFaces
                 # Faces on boundaries not treated, must be set externally
                 push!(fVals, defaultVal)
-                
+
             else
                 # Find value at face using linear interpolation
                 c1 = faces[i][1]
@@ -383,10 +384,68 @@ function structured_1DFaceDelta(dx, values...)
     return result
 end
 
+# Matrix versions
+# results are stored in faceValues vectors
+function checkInputs_structured1DInterp(dx, faceValues::Array{Float64,2}, cellValues::Array{Float64, 2})
+    nCells = size(cellValues, 1)
+    nFaces = size(faceValues, 1)
+    nVars = size(faceValues, 2)
+    nVars2 = size(cellValues, 2)
+    if nCells != nFaces-1 || nVars2 != nVars
+        throw(ArgumentError("ERROR: nCells ($nCells) != nFaces ($nFaces) or Number of variables stored in cells($nVars2) and faces($nVars) are not equal!"))
+    end
+    nDxs = size(dx, 1)
+    if nDxs != nCells
+        throw(ArgumentError("ERROR: nCells ($nCells) != nDxs ($nDxs)"))
+    end
+end
+
+function structured_1DlinInterp(dx, faceValues::Array{Float64,2}, cellValues::Array{Float64, 2})
+    nFaces = size(faceValues, 1)
+    nVars = size(faceValues, 2)
+    checkInputs_structured1DInterp(dx, faceValues, cellValues)
+
+    # Do interpolation
+    for f in 2:nFaces-1
+        for v in 1:nVars
+            c1Dist = dx[f-1]/2
+            c2Dist = dx[f]/2
+            totalDist = c1Dist + c2Dist
+            faceValues[f, v] = cellValues[f-1, v].*(c2Dist/totalDist) .+ cellValues[f, v].*(c1Dist/totalDist)
+        end
+    end
+end
+
+function structured_1DMaxInterp(dx, faceValues::Array{Float64,2}, cellValues::Array{Float64, 2})
+    nFaces = size(faceValues, 1)
+    nVars = size(faceValues, 2)
+    checkInputs_structured1DInterp(dx, faceValues, cellValues)
+
+    # Do interpolation
+    for f in 2:nFaces-1
+        for v in 1:nVars
+            faceValues[f, v] = max(cellValues[f-1,v],  cellValues[f,v])
+        end
+    end
+end
+
+function structured_1DFaceDelta(dx, faceValues::Array{Float64,2}, cellValues::Array{Float64, 2})
+    nFaces = size(faceValues, 1)
+    nVars = size(faceValues, 2)
+    checkInputs_structured1DInterp(dx, faceValues, cellValues)
+
+    # Do interpolation
+    for f in 2:nFaces-1
+        for v in 1:nVars
+            faceValues[f, v] = cellValues[f, v] - cellValues[f-1, v]
+        end
+    end
+end
+
 # TODO: TVD Interp
 
 ######################### Convective Term Things #######################
-# Returns the fractional portion of the maccormack aritificial diffusivity term (Eq. 6.58 in Anderson). 
+# Returns the fractional portion of the maccormack aritificial diffusivity term (Eq. 6.58 in Anderson).
 # Result must still be multiplied by (nextU - 2U + U) for each flux variable.
 function macCormackAD_S(mesh, C, P, lapl_P)
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
@@ -404,7 +463,7 @@ end
 function structured_1D_JST_sj(P::Array{Float64, 1})
     nCells = size(P, 1)
     sj = Array{Float64, 1}(undef, nCells)
-    
+
     # Boundary values unset
     sj[1] = 0.0
     sj[nCells] = 0.0
@@ -421,7 +480,7 @@ end
 function structured_1D_JST_sj2(dvar)
     nCells = size(dvar, 1)
     sj = Array{Float64, 1}(undef, nCells)
-    
+
     # Boundary values unset
     sj[1] = 0.0
     sj[nCells] = 0.0
@@ -469,9 +528,188 @@ function structured_1D_JST_Eps(dx, k2, k4, c4, P::Array{Float64, 1}, T::Array{Fl
     return eps2, eps4
 end
 
+# Pass in pressure or density for the pressure-based or density-based version respectively
+# Density-based version detects contact discontinuities
+function structured_1D_JST_sj2(dvar::Array{Float64, 1}, sj::Array{Float64, 1})
+    nCells = size(dvar, 1)
+
+    for c in 2:nCells-1
+        sj[c] = (abs( dvar[c] - dvar[c-1] )/ max( abs(dvar[c]) + abs(dvar[c-1]), 0.0000000001))^2
+    end
+end
+
+function structured_1D_JST_rj(cellPrimitives::Array{Float64, 2}, rj::Array{Float64, 1}, gamma=1.4, R=287.05)
+    nCells = size(T, 1)
+
+    for c in 1:nCells
+        rj[c] = abs(U[c]) + sqrt(gamma * R * T[c])
+    end
+end
+
+function structured_1D_JST_Eps(dx, k2, k4, c4, cellPrimitives::Array{Float64,2}, gamma=1.4, R=287.05)
+    nFaces = size(cellPrimitives, 1) + 1
+    # Pressure sensor seems to work best for the shock tube
+    dP = structured_1DFaceDelta(dx, cellPrimitives[:,1])[1]
+    sj = structured_1D_JST_sj2(dP)
+
+    rj = structured_1D_JST_rj(cellPrimitives[:,2], cellPrimitives[:,3], gamma, R)
+    sjF, rjF = structured_1DMaxInterp(dx, sj, rj)
+
+    eps2 = Array{Float64, 1}(undef, nFaces)
+    eps4 = Array{Float64, 1}(undef, nFaces)
+    for f in 2:nFaces-1
+        eps2[f] = k2 * sjF[f] * rjF[f]
+        eps4[f] = max(0, k4*rjF[f] - c4*eps2[f])
+    end
+
+    return eps2, eps4
+end
+
+# Requires correct cellState and cellPrimitives as input
+function structured_JSTFlux(dx, solutionState)
+    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
+    nCells = size(cellState, 1)
+    nFaces = nCells + 1
+    faceDeltas = Array{Float64, 2}(undef, nFaces, 3)
+
+    # Centrally differenced fluxes
+    structured_1DlinInterp(dx, faceFluxes, cellFluxes)
+
+    #### Add JST artificial Diffusion ####
+    structured_1DFaceDelta(dx, faceDeltas, cellState)
+    eps2, eps4 = structured_1D_JST_Eps(dx, 0.4, (1/32), 4, cellPrimitives)
+    # nCells = nFaces - 1
+    for f in 2:(nCells)
+        for v in 1:3
+            diffusionFlux = eps2[f]*faceDeltas[f, v] - eps4[f]*(faceDeltas[f+1, v] - 2*faceDeltas[f, v] + faceDeltas[f-1, v])
+            faceFluxes[f,v] -= diffusionFlux
+        end
+    end
+
+    return integrateFluxes_structured(dx, solutionState)
+end
+
+######################### TimeStepping #######################
+function decodeSolution(solutionState)
+    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
+    nCells = size(cellState, 1)
+    for c in 1:nCells
+        cellPrimitives[c,:] = decodePrimitives(cellState[c,1], cellState[c,2], cellState[c,3])
+        # Mass Flux
+        cellFluxes[c, 1] = cellState[c, 2]
+        # x-Momentum Flux
+        cellFluxes[c, 2] = cellState[c,2]*cellPrimitives[c,3] + cellPrimitives[c,1]
+        # x-Total Energy Flux
+        cellFluxes[c, 3] = cellPrimitives[c,3]*cellState[c,3] + cellPrimitives[c,1]*cellPrimitives[c,3]
+    end
+end
+
+function integrateFluxes_structured(dx, solutionState)
+    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
+    nCells = size(cellState, 1)
+
+    # Recomputing flux balances, so wipe existing values
+    fill!(fluxResiduals, 0)
+
+    # Face-based integration of fluxes
+    #TODO: Multiply by face area here
+    for f in 2:nCells
+        for v in 1:3
+            flux = faceFluxes[f,v]
+            # Subtract from owner cell
+            fluxResiduals[f-1, v] -= flux
+            # Add to neighbour cell
+            fluxResiduals[f, v] += flux
+        end
+    end
+
+    # Divide by cell volume
+    for c in 2:nCells-1
+        fluxResiduals[c,:] ./= dx[c]
+    end
+
+    fluxResiduals[1,:] = [ 0, 0, 0 ]
+    fluxResiduals[nCells,:] = [ 0, 0, 0 ]
+    fluxResiduals[2,:] = [ 0, 0, 0 ]
+    fluxResiduals[nCells-1,:] = [ 0, 0, 0 ]
+
+    return fluxResiduals
+end
+
+function forwardEuler(mesh, fluxResidualFn, solutionState, dt)
+    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
+
+    fluxResiduals = fluxResidualFn(mesh, solutionState)
+    cellState .+= fluxResiduals.*dt
+    decodeSolution(solutionState)
+
+    return solutionState
+end
+
+function RK2_Mid(mesh, fluxResidualFn, solutionState, dt)
+    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
+
+    fluxResiduals1 = fluxResidualFn(mesh, solutionState)
+    halfwayEstimate = cellState .+ fluxResiduals1.*dt/2
+    solutionState2 = [ halfwayEstimate, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes ]
+    decodeSolution(solutionState2)
+
+    fluxResiduals2 = fluxResidualFn(mesh, solutionState2)
+    cellState .+= fluxResiduals2.*dt
+    decodeSolution(solutionState)
+
+    return solutionState
+end
+
+function RK4(mesh, fluxResidualFn, solutionState, dt)
+    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
+
+    fluxResiduals1 = fluxResidualFn(mesh, solutionState)
+    halfwayEstimate = cellState .+ fluxResiduals1.*dt/2
+    lastSolutionState = [ halfwayEstimate, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes ]
+    decodeSolution(lastSolutionState)
+
+    fluxResiduals2 = fluxResidualFn(mesh, lastSolutionState)
+    halfwayEstimate2 = cellState .+ fluxResiduals2.*dt/2
+    lastSolutionState = [ halfwayEstimate2, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes ]
+    decodeSolution(lastSolutionState)
+
+    fluxResiduals3 = fluxResidualFn(mesh, lastSolutionState)
+    finalEstimate1 = cellState .+ fluxResiduals3.*dt
+    lastSolutionState = [ finalEstimate1, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes ]
+    decodeSolution(lastSolutionState)
+
+    fluxResiduals4 = fluxResidualFn(mesh, lastSolutionState)
+    cellState .+= (fluxResiduals1 .+ 2 .* fluxResiduals2 .+ 2 .* fluxResiduals3 .+ fluxResiduals4 ).*(dt/6)
+    decodeSolution(solutionState)
+
+    return solutionState
+end
+
+function ShuOsher(mesh, fluxResidualFn, solutionState, dt)
+    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
+
+    fluxResiduals1 = fluxResidualFn(mesh, solutionState)
+    endEstimate = cellState .+ fluxResiduals1.*dt
+    lastSolutionState = [ endEstimate, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes ]
+    decodeSolution(lastSolutionState)
+
+    fluxResiduals2 = fluxResidualFn(mesh, lastSolutionState)
+    estimate2 = (3/4).*cellState .+ (1/4).*(endEstimate .+ fluxResiduals2.*dt)
+    lastSolutionState = [ estimate2, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes ]
+    decodeSolution(lastSolutionState)
+
+    fluxResiduals3 = fluxResidualFn(mesh, lastSolutionState)
+    cellState .= (1/3).*cellState .+ (2/3).*(estimate2 .+ dt.*fluxResiduals3)
+    solutionState = [ cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes ]
+    decodeSolution(solutionState)
+
+    return solutionState
+end
+
 ######################### Solvers #######################
 function central_UnstructuredADFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, Cx=0.3, debug=false, silent=true)
-    if silent == false
+    if !silent
         println("Initializing solver")
     end
     ######### MESH ############
@@ -497,7 +735,7 @@ function central_UnstructuredADFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267,
     for i in 1:nCells
         rho[i], xMom[i], eV2[i], rhoU2p[i], rhoUeV2PU[i] = encodePrimitives3D(P[i], T[i], U[i])
     end
-    
+
     if debug
         println("Rho: $rho")
         println("xMom: $xMom")
@@ -505,7 +743,7 @@ function central_UnstructuredADFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267,
     end
 
     ########### SOLVER ###########
-    if silent == false
+    if !silent
         println("Starting iterations")
     end
     dt = initDt
@@ -516,13 +754,13 @@ function central_UnstructuredADFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267,
         if (endTime - currTime) < dt
             dt = endTime - currTime
         end
-        
+
         # Calculate fluxes through each face
         # TODO: y and z momemtum-fluxes + equations
         # xMassFlux, xMomFlux, xeV2Flux = upwindInterp(mesh, U, xMom, rhoU2p, rhoUeV2PU)
         xMassFlux, xMomFlux, xeV2Flux, faceP = linInterp(mesh, xMom, rhoU2p, rhoUeV2PU, P)
         fluxVars = [ xMassFlux, xMomFlux, xeV2Flux ]
-        
+
         if debug
             println("xMass Flux: $xMassFlux")
             println("xMom Flux: $xMomFlux")
@@ -559,14 +797,14 @@ function central_UnstructuredADFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267,
             println("xMom2: $xMom")
             println("eV22: $eV2")
         end
-        
+
         # Boundaries
         ############### Boundaries ################
         # Waves never reach the boundaries, so boundary treatment doesn't need to be good
         copyValues(3, 2, stateVars)
         copyValues(2, 1, stateVars)
         copyValues(nCells-2, nCells-1, stateVars)
-        copyValues(nCells-1, nCells, stateVars)    
+        copyValues(nCells-1, nCells, stateVars)
 
         # Decode primitive values
         for i in 1:nCells
@@ -574,7 +812,7 @@ function central_UnstructuredADFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267,
         end
 
         currTime += dt
-        
+
         ############## CFL Calculation, timestep adjustment #############
         maxCFL = 0
         for i in 1:nCells
@@ -585,7 +823,7 @@ function central_UnstructuredADFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267,
         dt *= ((targetCFL/maxCFL - 1)/5+1)
 
         timeStepCounter += 1
-        if silent == false
+        if !silent
             @printf("Timestep: %5.0f, simTime: %8.4g, Max CFL: %8.4g \n", timeStepCounter, currTime, maxCFL)
         end
 
@@ -595,88 +833,89 @@ function central_UnstructuredADFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267,
 end
 
 #TODO: Runge-Kutta Timestepping
-# Structured: relies on cells being ordered sequentially, uses FDM mesh definition
-function JST_Structured1DFVM(dx, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, silent=true)
+# Structured: relies on cells being ordered sequentially
+# Expected and used Data Structures defined in dataStructureDefinitions.md
+function JST_Structured1DFVM(dx::Array{Float64, 1}, cellPrimitives::Array{Float64, 2}, timeIntegrationFn=forwardEuler; initDt=0.001, endTime=0.14267, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, silent=true)
+    if !silent
+        println("Initializing Simulation")
+    end
     nCells = size(dx, 1)
+    nFaces = nCells+1
+    nDims = 1
+    # Each dimension adds one momentume equation
+    nVars = 2+nDims
+    # Each dimension adds a flux for each conserved quantity
+    nFluxes = nVars*nDims
 
-    rho = Array{Float64, 1}(undef, nCells)
-    xMom = Array{Float64, 1}(undef, nCells)
-    eV2 = Array{Float64, 1}(undef, nCells)
-    rhoU2p = Array{Float64, 1}(undef, nCells)
-    rhoUeV2PU = Array{Float64, 1}(undef, nCells)
+    cellState = Array{Float64, 2}(undef, nCells, nVars)
+    cellFluxes = Array{Float64, 2}(undef, nCells, nFluxes)
+    fluxResiduals = Array{Float64, 2}(undef, nCells, nVars)
+    faceFluxes = Array{Float64, 2}(undef, nFaces, nFluxes)
+    solutionState = [ cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes ]
 
-    for i in 1:nCells
-        rho[i], xMom[i], eV2[i] = encodePrimitives(P[i], T[i], U[i])
-        rhoU2p[i] = xMom[i]*U[i] + P[i]
-        rhoUeV2PU[i] = U[i]*eV2[i] + P[i]*U[i]
+    # Easy access functions
+    function P(cell::Int)           return cellPrimitives[cell, 1]      end
+    function T(cell::Int)           return cellPrimitives[cell, 2]      end
+    function Ux(cell::Int)          return cellPrimitives[cell, 3]      end
+    function rho(cell::Int)         return cellState[cell, 1]           end
+    function xMom(cell::Int)        return cellState[cell, 2]           end
+    function eV2(cell::Int)         return cellState[cell, 3]           end
+    function massXFlux(cell::Int)   return cellFluxes[cell, 1]          end
+    function xMomXFlux(cell::Int)   return cellFluxes[cell, 2]          end
+    function eV2XFlux(cell::Int)    return cellFluxes[cell, 3]          end
+
+    #Initialize States and Fluxes
+    for c in 1:nCells
+        # rho, xMom, total energy from P, T, U
+        cellState[c, :] = encodePrimitives(P(c), T(c), Ux(c))
+
+        # Mass Flux
+        cellFluxes[c, 1] = cellState[c, 2]
+        # x-Momentum Flux
+        cellFluxes[c, 2] = xMom(c)*Ux(c) + P(c)
+        # x-Total Energy Flux
+        cellFluxes[c, 3] = Ux(c)*eV2(c) + P(c)*Ux(c)
     end
 
-    stateVars = [ rho, xMom, eV2 ]
-
-    CFL = Array{Float64, 1}(undef, nCells)
-
-    if silent == false
+    if !silent
         println("Starting iterations")
     end
+
     dt = initDt
     currTime = 0
     timeStepCounter = 0
     while currTime < endTime
+        ############## Timestep adjustment #############
+        maxCFL = 0.0
+        for c in 1:nCells
+            maxCFL = max(maxCFL, (abs(Ux(c)) + sqrt(gamma * R * T(c))) * dt / dx[c])
+        end
+        # Slowly approach target CFL
+        dt *= ((targetCFL/maxCFL - 1)/5+1)
+        # Adjust timestep to hit endtime if this is the final time step
         if (endTime - currTime) < dt
             dt = endTime - currTime
         end
-        
-        ############## Predictor #############
-        xMassFlux, xMomFlux, xeV2Flux = structured_1DlinInterp(dx, xMom, rhoU2p, rhoUeV2PU)
-        xMassDelta, xMomDelta, xeV2Delta = structured_1DFaceDelta(dx, rho, xMom, eV2)
-        eps2, eps4 = structured_1D_JST_Eps(dx, 0.4, (1/32), 4, P, T, U, rho)
 
-        fluxVars = [ xMassFlux, xMomFlux, xeV2Flux ]
-        deltas = [ xMassDelta, xMomDelta, xeV2Delta ]
+        ############## Take a timestep #############
+        solutionState = timeIntegrationFn(dx, structured_JSTFlux, solutionState, dt)
+        currTime += dt
+        timeStepCounter += 1
 
-        # nCells = nFaces - 1
-        for f in 2:(nCells)
-            for v in 1:3
-                diffusionFlux = eps2[f]*deltas[v][f] - eps4[f]*(deltas[v][f+1] - 2*deltas[v][f] + deltas[v][f-1])
-                flux = (fluxVars[v][f] - diffusionFlux)*dt
-                stateVars[v][f-1] -= flux/dx[f-1]
-                stateVars[v][f] += flux/dx[f]
-            end
-        end
-
-        # Decode
-        for c in 1:nCells
-            P[c], T[c], U[c] = decodePrimitives(rho[c], xMom[c], eV2[c])
-            rhoU2p[c] = xMom[c]*U[c] + P[c]
-            rhoUeV2PU[c] = U[c]*eV2[c] + P[c]*U[c]
-        end
-
-        ############### Boundaries ################
+        ############### Apply Boundary conditions ################
         # Waves never reach the boundaries, so boundary treatment doesn't need to be good
-        allVars = [ rho, rhoU2p, rhoUeV2PU, xMom, eV2, U, P, T ]
+        allVars = [ cellState, cellFluxes ]
         copyValues(3, 2, allVars)
         copyValues(2, 1, allVars)
         copyValues(nCells-2, nCells-1, allVars)
         copyValues(nCells-1, nCells, allVars)
-        
-        ############## CFL Calculation, timestep adjustment #############
-        for i in 1:nCells
-            CFL[i] = (abs(U[i]) + sqrt(gamma * R * T[i])) * dt / dx[i]
-        end
-        maxCFL = maximum(CFL)
 
-        # Adjust time step to slowly approach target CFL
-        dt *= ((targetCFL/maxCFL - 1)/5+1)
-
-        currTime += dt
-
-        timeStepCounter += 1
-        if silent == false
+        if !silent
             @printf("Timestep: %5.0f, simTime: %8.4g, Max CFL: %8.4g \n", timeStepCounter, currTime, maxCFL)
         end
     end
 
-    return P, U, T, rho
+    return cellPrimitives[:,1], cellPrimitives[:,3], cellPrimitives[:,2], cellState[:,1]
 end
 
 #TODO: Proper boundary treatment

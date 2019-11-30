@@ -35,6 +35,13 @@ function copyValues(fromIndex, toIndex, varArrays)
     end
 end
 
+# From and to indices are assumed to be the first index
+function copyValues(fromIndex, toIndex, varArrays::Array{Array{Float64, 2},1})
+    for varArray in varArrays
+        varArray[toIndex, :] .= varArray[fromIndex, :]
+    end
+end
+
 function setValues(value, indices, varArrays)
     for varArray in varArrays
         for i in indices

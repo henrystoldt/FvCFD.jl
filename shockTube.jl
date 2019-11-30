@@ -12,7 +12,7 @@ end
 
 function initializeShockTubeFDM(nCells=100; domainLength=1, Pratio=10)
     Pratio = checkPRatio(Pratio)
-    
+
     # Create arrays to store data (cell # = position in array)
     dx = Array{Float64, 1}(undef, nCells)
     U = Array{Float64, 1}(undef, nCells)
@@ -37,9 +37,23 @@ function initializeShockTubeFDM(nCells=100; domainLength=1, Pratio=10)
     return dx, P, T, U
 end
 
+function initializeShockTube_StructuredFVM(nCells=100; domainLength=1, Pratio=10, silent=true)
+    if !silent
+        println("Meshing shock tube, $nCells cells")
+    end
+    dx, P, T, U = initializeShockTubeFDM(nCells, domainLength=domainLength, Pratio=Pratio)
+
+    cellPrimitives = Array{Float64, 2}(undef, nCells, 3)
+    for c in 1:nCells
+        cellPrimitives[c,:] = [ P[c], T[c], U[c] ]
+    end
+
+    return dx, cellPrimitives
+end
+
 # Wrapper for FDM initialization function, adding a mesh definition suitable for FVM and vector-format velocity
 function initializeShockTubeFVM(nCells=100; domainLength=1, Pratio=10, silent=true)
-    if silent == false
+    if !silent
         println("Meshing shock tube, $nCells cells")
     end
     dx, P, T, U = initializeShockTubeFDM(nCells, domainLength=domainLength, Pratio=Pratio)
@@ -60,16 +74,16 @@ function initializeShockTubeFVM(nCells=100; domainLength=1, Pratio=10, silent=tr
     fAVec = [h*w, 0, 0]
     cV = h*w*domainLength/nCells
     dx = dx[1]
-    for i in 1:nCells     
-        # Modify natural face numbering to have boundary faces numbered last 
+    for i in 1:nCells
+        # Modify natural face numbering to have boundary faces numbered last
         if i == 1
-            push!(cells, [nCells, 1])    
-            push!(faces, [i, i+1]) 
+            push!(cells, [nCells, 1])
+            push!(faces, [i, i+1])
         elseif i == nCells
             push!(cells, [nCells-1, nCells+1])
         else
             push!(cells, [i-1, i])
-            push!(faces, [i, i+1]) 
+            push!(faces, [i, i+1])
         end
 
         push!(U, [0.0, 0.0, 0.0] )
