@@ -565,6 +565,7 @@ function structured_1D_JST_Eps(dx, k2, k4, c4, cellPrimitives::Array{Float64,2},
     return eps2, eps4
 end
 
+# Requires correct cellState and cellPrimitives as input
 function structured_JSTFlux(dx, solutionState)
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
     nCells = size(cellState, 1)
@@ -589,6 +590,20 @@ function structured_JSTFlux(dx, solutionState)
 end
 
 ######################### TimeStepping #######################
+function decodeSolution(solutionState)
+    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
+    nCells = size(cellState, 1)
+    for c in 1:nCells
+        cellPrimitives[c,:] = decodePrimitives(cellState[c,1], cellState[c,2], cellState[c,3])
+        # Mass Flux
+        cellFluxes[c, 1] = cellState[c, 2]
+        # x-Momentum Flux
+        cellFluxes[c, 2] = cellState[c,2]*cellPrimitives[c,3] + cellPrimitives[c,1]
+        # x-Total Energy Flux
+        cellFluxes[c, 3] = cellPrimitives[c,3]*cellState[c,3] + cellPrimitives[c,1]*cellPrimitives[c,3]
+    end
+end
+
 function integrateFluxes_structured(dx, solutionState)
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
     nCells = size(cellState, 1)
@@ -626,6 +641,68 @@ function forwardEuler(mesh, fluxResidualFn, solutionState, dt)
 
     fluxResiduals = fluxResidualFn(mesh, solutionState)
     cellState .+= fluxResiduals.*dt
+    decodeSolution(solutionState)
+
+    return solutionState
+end
+
+function RK2_Mid(mesh, fluxResidualFn, solutionState, dt)
+    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
+
+    fluxResiduals1 = fluxResidualFn(mesh, solutionState)
+    halfwayEstimate = cellState .+ fluxResiduals1.*dt/2
+    solutionState2 = [ halfwayEstimate, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes ]
+    decodeSolution(solutionState2)
+
+    fluxResiduals2 = fluxResidualFn(mesh, solutionState2)
+    cellState .+= fluxResiduals2.*dt
+    decodeSolution(solutionState)
+
+    return solutionState
+end
+
+function RK4(mesh, fluxResidualFn, solutionState, dt)
+    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
+
+    fluxResiduals1 = fluxResidualFn(mesh, solutionState)
+    halfwayEstimate = cellState .+ fluxResiduals1.*dt/2
+    lastSolutionState = [ halfwayEstimate, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes ]
+    decodeSolution(lastSolutionState)
+
+    fluxResiduals2 = fluxResidualFn(mesh, lastSolutionState)
+    halfwayEstimate2 = cellState .+ fluxResiduals2.*dt/2
+    lastSolutionState = [ halfwayEstimate2, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes ]
+    decodeSolution(lastSolutionState)
+
+    fluxResiduals3 = fluxResidualFn(mesh, lastSolutionState)
+    finalEstimate1 = cellState .+ fluxResiduals3.*dt
+    lastSolutionState = [ finalEstimate1, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes ]
+    decodeSolution(lastSolutionState)
+
+    fluxResiduals4 = fluxResidualFn(mesh, lastSolutionState)
+    cellState .+= (fluxResiduals1 .+ 2 .* fluxResiduals2 .+ 2 .* fluxResiduals3 .+ fluxResiduals4 ).*(dt/6)
+    decodeSolution(solutionState)
+
+    return solutionState
+end
+
+function ShuOsher(mesh, fluxResidualFn, solutionState, dt)
+    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
+
+    fluxResiduals1 = fluxResidualFn(mesh, solutionState)
+    endEstimate = cellState .+ fluxResiduals1.*dt
+    lastSolutionState = [ endEstimate, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes ]
+    decodeSolution(lastSolutionState)
+
+    fluxResiduals2 = fluxResidualFn(mesh, lastSolutionState)
+    estimate2 = (3/4).*cellState .+ (1/4).*(endEstimate .+ fluxResiduals2.*dt)
+    lastSolutionState = [ estimate2, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes ]
+    decodeSolution(lastSolutionState)
+
+    fluxResiduals3 = fluxResidualFn(mesh, lastSolutionState)
+    cellState .= (1/3).*cellState .+ (2/3).*(estimate2 .+ dt.*fluxResiduals3)
+    solutionState = [ cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes ]
+    decodeSolution(solutionState)
 
     return solutionState
 end
@@ -758,7 +835,7 @@ end
 #TODO: Runge-Kutta Timestepping
 # Structured: relies on cells being ordered sequentially
 # Expected and used Data Structures defined in dataStructureDefinitions.md
-function JST_Structured1DFVM(dx::Array{Float64, 1}, cellPrimitives::Array{Float64, 2}; initDt=0.001, endTime=0.14267, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, silent=true)
+function JST_Structured1DFVM(dx::Array{Float64, 1}, cellPrimitives::Array{Float64, 2}, timeIntegrationFn=forwardEuler; initDt=0.001, endTime=0.14267, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, silent=true)
     if !silent
         println("Initializing Simulation")
     end
@@ -815,30 +892,15 @@ function JST_Structured1DFVM(dx::Array{Float64, 1}, cellPrimitives::Array{Float6
         end
         # Slowly approach target CFL
         dt *= ((targetCFL/maxCFL - 1)/5+1)
-        if isnan(maxCFL)
-            println(cellPrimitives[:,2])
-        end
         # Adjust timestep to hit endtime if this is the final time step
         if (endTime - currTime) < dt
             dt = endTime - currTime
         end
 
-
         ############## Take a timestep #############
-        forwardEuler(dx, structured_JSTFlux, solutionState, dt)
+        solutionState = timeIntegrationFn(dx, structured_JSTFlux, solutionState, dt)
         currTime += dt
         timeStepCounter += 1
-
-        ############## Decode Primitives #############
-        for c in 1:nCells
-            cellPrimitives[c,:] = decodePrimitives(rho(c), xMom(c), eV2(c))
-            # Mass Flux
-            cellFluxes[c, 1] = cellState[c, 2]
-            # x-Momentum Flux
-            cellFluxes[c, 2] = xMom(c)*Ux(c) + P(c)
-            # x-Total Energy Flux
-            cellFluxes[c, 3] = Ux(c)*eV2(c) + P(c)*Ux(c)
-        end
 
         ############### Apply Boundary conditions ################
         # Waves never reach the boundaries, so boundary treatment doesn't need to be good
