@@ -60,10 +60,11 @@ function linInterp(mesh, values...)
 end
 
 
-function musclDifference(mesh, rho, xMom, eV2, dx)
+function musclDifference(mesh, rho, xMom, eV2, dx, gamma=1.4, debug=false)
     #= Uses MUSCL differencing to get the conserved values at the left and right side of each face
     Then determines the primitive values at the left and right side. BC's are treated as zero grad for now
     =#
+    #TODO: Rewrite all of these with parent/neighbor/parent+-1 indexing
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
     nFaces = size(faces, 1)
     nBdryFaces = size(boundaryFaces, 1)
@@ -75,52 +76,136 @@ function musclDifference(mesh, rho, xMom, eV2, dx)
         #L/R Conserved quantities on non-boundary faces
         #This treatment doesn't deal with connectivity
         #How do we deal with the 2nd and 2ndlast faces?? Neither are on boundaries, but still can't be differenced
-        
+        if i == 1
+            #Deal with it as if it were next face for the backwards differences
+            consLeft[i][1] = leftFaceVals(rho[3], rho[2], rho[1], dx) #These are fake news numbers until we treat the boundaries properly
+            consRight[i][1] = rightFaceVals(rho[i+2], rho[i+1], rho[i], dx)
 
-        #rho
-        consLeft[i][1] = leftFaceVals(dx)
-        consRight[i][1] = rightFaceVals(dx)
+            consLeft[i][2] = leftFaceVals(xMom[3], xMom[2], xMom[1],dx)
+            consRight[i][2] = rightFaceVals(xMom[i+2], xMom[i+1], xMom[i],dx)
 
-        #xMom
-        consLeft[i][2] = leftFaceVals(dx)
-        consRight[i][2] = rightFaceVals(dx)
+            consLeft[i][3] = leftFaceVals(eV2[3], eV2[2], eV2[1], dx)
+            consRight[i][3] = rightFaceVals(eV2[i+2], eV2[i+1], eV2[i], dx)
 
-        #eV2
-        consLeft[i][3] = leftFaceVals(dx)
-        consRight[i][3] = rightFaceVals(dx)
+        elseif i==(nFaces-nBdryFaces)
+            #TODO: Verify it actually trips this block for the last difference
+            #Deal with it as if it were previous face
+            consLeft[i][1] = leftFaceVals(rho[i+1], rho[i], rho[i-1], dx)
+            consRight[i][1] = rightFaceVals(rho[nFaces-nBdryFaces], rho[nFaces-(nBdryFaces+1)], rho[nFaces-(nBdryFaces+2)], dx)
 
+            consLeft[i][2] = leftFaceVals(xMom[i+1], xMom[i], xMom[i-1],dx)
+            consRight[i][2] = rightFaceVals(xMom[nFaces-nBdryFaces], xMom[nFaces-(nBdryFaces+1)], xMom[nFaces-(nBdryFaces+2)],dx)
 
+            consLeft[i][3] = leftFaceVals(eV2[i+1], eV2[i], eV2[i-1], dx)
+            consRight[i][3] = rightFaceVals(eV2[nFaces-nBdryFaces], eV2[nFaces-(nBdryFaces+1)], eV2[nFaces-(nBdryFaces+2)], dx)
+
+        else      
+            #rho
+            consLeft[i][1] = leftFaceVals(rho[i+1], rho[i], rho[i-1], dx)
+            consRight[i][1] = rightFaceVals(rho[i+2], rho[i+1], rho[i], dx)
+
+            #xMom
+            consLeft[i][2] = leftFaceVals(xMom[i+1], xMom[i], xMom[i-1],dx)
+            consRight[i][2] = rightFaceVals(xMom[i+2], xMom[i+1], xMom[i],dx)
+
+            #eV2
+            consLeft[i][3] = leftFaceVals(eV2[i+1], eV2[i], eV2[i-1], dx)
+            consRight[i][3] = rightFaceVals(eV2[i+2], eV2[i+1], eV2[i], dx)
+
+        end
 
     end
+
+    if debug
+        println("Rho Left: ", consLeft[:][1])
+        println("xMom Left: ", consLeft[:][2])
+        println("E Left: ", consLeft[:][3])
+    end
+
 
     for i in 1:nBdryFaces
         #Treatment of boundary faces
+        #Determine what cell it's connected to, then copy values from that
+        neighbourCell = faces[i+nFaces][2]
+        for j in 1:3
+            consLeft[i+nFaces][j] = consLeft[neighbourCell][j]
+            consRight[i+nFaces][j] = consRight[neighbourCell][j]
+        end
+        #And that's why if the world was zero gradient we would definitely be living in a simulation
 
     end
 
-    primsLeft = Array{Float64, 2}(undef, nFaces, 3)
+    primsLeft = Array{Float64, 2}(undef, nFaces, 3) #u, P, H
     primsRight = Array{Float64, 2}(undef, nFaces, 3)
 
     for i in 1:nFaces
         #Find L/R values of (rho, u, H, P) for each face 
 
+        primsLeft[i][1] = consLeft[i][2] / consLeft[i][1] #u =rhou/rho
+        primsLeft[i][2] = (gamma-1)*( consLeft[i][3] - 0.5*consLeft[i][1]*primsLeft[i][1]^2 ) # P =(gamma-1)*(E-0.5rho(v^2))
+        primsLeft[i][3] = ((consLeft[i][3]/consLeft[i][1])-0.5*primsLeft[i][1]^2  +  primsLeft[i][2])/consLeft[i][1] #H = (e+P)/rho = ( (E/rho - v^2) + P )/rho
+
+        primsRight[i][1] = consRight[i][2] / consRight[i][1]
+        primsRight[i][2] = (gamma-1)*( consRight[i][3] - 0.5*consRight[i][1]*primsRight[i][1]^2 )
+        primsRight[i][3] = ((consRight[i][3]/consRight[i][1])-0.5*primsRight[i][1]^2  +  primsRight[i][2])/consRight[i][1]
 
     end
-
 
     return consLeft, primsLeft, consRight, primsRight
 end
 
-function leftFaceVals()
+function leftFaceVals(q_ip, q_i, q_im, dx)
+    #=MUSCL difference interpolates values to the left face
+    q_i - value at your cell
+    q_ip - value at the cell opposite the face you're interpolating TODO
+    q_im - value at the cell further away from the current face
+    =#
+    s = vanAlbeda(q_ip, q_i, q_im, dx)
+    Q_L = q_i + 0.25*s*( (1+s)*(q_i-q_im) + (1-s)*(q_ip-q_i) ) * q_i
+
+    return Q_L
 
 
 end
 
-function rightFaceVals()
+function rightFaceVals(q_ip, q_i, q_im, dx)
+    #=MUSCL difference to the right face
+    Slightly different than left face function
+        q_i - value at the cell
+        q_im - value at the cell on the other side of your face
+        q_ip - value at the cell further away from your current face
+    =#
+    s = vanAlbeda(q_ip, q_i, q_im, dx)
+    Q_R = q_i + 0.25*s*( (1+s)*(q_ip-q_i) + (1-s)*(q_i-q_im) )*q_i
+
+    return Q_R
 end
 
-function vanAlbeda()
+function vanAlbeda(q_ip, q_i, q_im, dx)
+    #=Impplements the vanAlbeda flux limiter, with a delta value of dx^3
+    =#
+    delta = dx*dx*dx
+    s = (2 * (q_ip-q_i)*(q_i-q_im) + delta )/( (q_ip-q_i)^2 * (q_i-q_im)^2 + delta )
 
+    return s
+end
+
+function roeAveraged(n, rhoLeft,rhoRight,uLeft,uRight,HLeft,HRight, gamma=1.4)
+    #=Takes inputs of left and right primitive quantities, returns roe averaged quantities for each
+    =#
+    
+    roeRho = Array{Float64, 1}(undef, n)
+    roeU = Array{Float64, 1}(undef, n)
+    roeH = Array{Float64, 1}(undef, n)
+    roeA = Array{Float64, 1}(undef, n)
+
+    roeRho = sqrt(rhoLeft .* rhoRight)
+    roeU = ( sqrt(rhoLeft).*uLeft + sqrt(rhoRight).*uRight ) ./ (sqrt(rhoLeft)+sqrt(rhoRight))
+    roeH = ( sqrt(rhoLeft).*HLeft + sqrt(rhoRight).*HRight ) ./ (sqrt(rhoLeft)+sqrt(rhoRight))
+
+    roeA = (gamma-1).*(roeH - 0.5 .*roeU)
+
+    return roeRho, roeU, roeH, roeA
 end
 
 
@@ -129,7 +214,7 @@ end
 
 
 ######################### Solvers #######################
-function upwindFVMRoe1D(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, debug=false)
+function upwindFVMRoe1D(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, debug=false, verbose=false)
     ######### MESH ############
     # Extract mesh into local variables for readability
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
@@ -175,10 +260,20 @@ function upwindFVMRoe1D(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=
         #xMassFlux, xMomFlux, xeV2Flux, faceP = linInterp(mesh, xMom, rhoU2p, rhoUeV2PU, P)
 
         #Use MUSCL differencing to get values at left/right of each face. Boundaries are treated inside this function
-        consLeft, primsLeft, consRight, primsRight = musclDifference(mesh, rho, xMom, eV2, dx)
+        consLeft, primsLeft, consRight, primsRight = musclDifference(mesh, rho, xMom, eV2, dx, debug=debug)
+
+        rhoLeft = consLeft[:][1]
+        rhoRight = consRight[:][1]
+
+        uLeft = primsLeft[:][1]
+        uRight = primsRight[:][1]
+
+        HLeft = primsLeft[:][3]
+        HRight = primsRight[:][3]
+
 
         #Find ROE averaged quantities at each face
-        rhoRoe, uRoe, hRoe, aRoe = roeAveraged(rhoLeft,rhoRight,uLeft,uRight,hLeft,hRight)
+        rhoRoe, uRoe, hRoe, aRoe = roeAveraged(nFaces, rhoLeft, rhoRight, uLeft, uRight, HLeft, HRight)
 
         #Use left, right and roe averaged quantities to create the flux matrices at every face. Entropy fix happens inside this step
         xMassFlux, xMomFlux, xeV2Flux = fluxVectors(left, right, Roe, faceVector )
