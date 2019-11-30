@@ -22,7 +22,7 @@ function decodePrimitives(rho, xMom, eV2, R=287.05, Cp=1005)
     e = (eV2/rho) - U*U/2
     T = calPerfectT(e, Cp)
     P = idealGasP(rho, T, R)
-    return P, T, U
+    return [ P, T, U ]
 end
 
 #TODO: Multi-D
@@ -31,9 +31,9 @@ function decodePrimitives3D(rho::Float64, xMom::Float64, eV2::Float64, R=287.05,
     e = (eV2/rho) - (mag(U)^2)/2
     T = calPerfectT(e, Cp)
     P = idealGasP(rho, T, R)
-    
+
     Ux = U[1]
-    
+
     # x-Fluxes
     rhoU2p = xMom*Ux + P
     rhoUeV2PU = Ux*eV2 + P.*Ux
@@ -47,7 +47,7 @@ function encodePrimitives(P, T, U, R=287.05, Cp=1005)
     xMom = U*rho
     e = calPerfectEnergy(T)
     eV2 = rho*(e + U*U/2)
-    return rho, xMom, eV2
+    return [rho, xMom, eV2]
 end
 
 #TODO: Multi-D
@@ -59,7 +59,7 @@ function encodePrimitives3D(P::Float64, T::Float64, U::Array{Float64, 1}, R=287.
     eV2 = rho*(e + (mag(U)^2)/2)
 
     Ux = U[1]
-    
+
     # x-Fluxes
     rhoU2p = xMom*Ux + P
     rhoUeV2PU = Ux*eV2 + P*Ux
