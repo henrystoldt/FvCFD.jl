@@ -416,6 +416,23 @@ function structured_1D_JST_sj(P::Array{Float64, 1})
     return sj
 end
 
+# Pass in pressure or density for the pressure-based or density-based version respectively
+# Density-based version detects contact discontinuities
+function structured_1D_JST_sj2(dvar)
+    nCells = size(dvar, 1)
+    sj = Array{Float64, 1}(undef, nCells)
+    
+    # Boundary values unset
+    sj[1] = 0.0
+    sj[nCells] = 0.0
+
+    for c in 2:nCells-1
+        sj[c] = (abs( dvar[c] - dvar[c-1] )/ max( abs(dvar[c]) + abs(dvar[c-1]), 0.0000000001))^2
+    end
+
+    return sj
+end
+
 function structured_1D_JST_rj(T::Array{Float64, 1}, U::Array{Float64, 1}, gamma=1.4, R=287.05)
     nCells = size(T, 1)
     rj = Array{Float64, 1}(undef, nCells)
@@ -426,10 +443,18 @@ function structured_1D_JST_rj(T::Array{Float64, 1}, U::Array{Float64, 1}, gamma=
     return rj
 end
 
-function structured_1D_JST_Eps(dx, k2, k4, c4, P::Array{Float64, 1}, T::Array{Float64, 1}, U::Array{Float64, 1})
+function structured_1D_JST_Eps(dx, k2, k4, c4, P::Array{Float64, 1}, T::Array{Float64, 1}, U::Array{Float64, 1}, rho::Array{Float64, 1})
     nFaces = size(P, 1) + 1
 
-    sj = structured_1D_JST_sj(P)
+    # sj = structured_1D_JST_sj(P)
+
+    # Pressure sensor seems to work best for the shock tube
+    dP = structured_1DFaceDelta(dx, P)[1]
+    sj = structured_1D_JST_sj2(dP)
+
+    # drho = structured_1DFaceDelta(dx, rho)[1]
+    # sj = structured_1D_JST_sj2(drho)
+
     #TODO: Pass through gamma and R
     rj = structured_1D_JST_rj(T, U)
     sjF, rjF = structured_1DMaxInterp(dx, sj, rj)
@@ -604,7 +629,7 @@ function JST_Structured1DFVM(dx, P, T, U; initDt=0.001, endTime=0.14267, targetC
         ############## Predictor #############
         xMassFlux, xMomFlux, xeV2Flux = structured_1DlinInterp(dx, xMom, rhoU2p, rhoUeV2PU)
         xMassDelta, xMomDelta, xeV2Delta = structured_1DFaceDelta(dx, rho, xMom, eV2)
-        eps2, eps4 = structured_1D_JST_Eps(dx, 1, (1/32), 4, P, T, U)
+        eps2, eps4 = structured_1D_JST_Eps(dx, 0.4, (1/32), 4, P, T, U, rho)
 
         fluxVars = [ xMassFlux, xMomFlux, xeV2Flux ]
         deltas = [ xMassDelta, xMomDelta, xeV2Delta ]
