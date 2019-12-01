@@ -17,6 +17,10 @@ end
 #TODO: make all these function return a single array if you pass in a single value
 function leastSqGrad(mesh, values...)
     #TODO
+    cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
+    nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
+    bdryFaceIndices = Array(nFaces-nBdryFaces:nFaces)
+
     result = []
     for vals in values
     end
@@ -30,9 +34,7 @@ function greenGaussGrad(mesh, valuesAtFaces=false, values...)
 
     # Interpret mesh
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
-    nCells = size(cells, 1)
-    nFaces = size(faces, 1)
-    nBdryFaces = size(boundaryFaces, 1)
+    nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     bdryFaceIndices = Array(nFaces-nBdryFaces:nFaces)
 
     for vals in values
@@ -117,9 +119,7 @@ function ortho_FaceGradient(mesh, values...)
 
     # Interpret mesh
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
-    nCells = size(cells, 1)
-    nFaces = size(faces, 1)
-    nBdryFaces = size(boundaryFaces, 1)
+    nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     bdryFaceIndices = Array(nFaces-nBdryFaces:nFaces)
 
     for vals in values
@@ -155,9 +155,7 @@ function laplacian(mesh, nonOrthoCorrection="None", values...)
 
     # Interpret mesh
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
-    nCells = size(cells, 1)
-    nFaces = size(faces, 1)
-    nBdryFaces = size(boundaryFaces, 1)
+    nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     bdryFaceIndices = Array(nFaces-nBdryFaces:nFaces)
 
     for vals in values
@@ -247,8 +245,7 @@ end
 # Handles scalar or vector-valued variables
 function linInterp(mesh, values...)
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
-    nFaces = size(faces, 1)
-    nBdryFaces = size(boundaryFaces, 1)
+    nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
 
     fVals = Array{Float64, 1}(undef, nFaces)
 
@@ -293,24 +290,17 @@ function linInterp(mesh, values...)
 end
 
 # Matrix version
-function linInterp(mesh, solutionState)
+function linInterp_3D(mesh, solutionState)
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
-    nFaces = size(faces, 1)
+    nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     nFluxes = size(cellFluxes, 2)
-    nBoundaries = size(boundaryFaces, 1)
-
-    # Count boundary faces
-    nBdryFaces = 0
-    for bdry in 1:nBoundaries
-        nBdryFaces += size(boundaryFaces[bdry], 1)
-    end
 
     # Boundary face fluxes must be set separately
     for f in 1:nFaces-nBdryFaces
         # Find value at face using linear interpolation
-        c1 = faces[i][1]
-        c2 = faces[i][2]
+        c1 = faces[f][1]
+        c2 = faces[f][2]
 
         #TODO: Precompute these distances
         c1Dist = mag(cCenters[c1] .- fCenters[i])
@@ -324,16 +314,9 @@ end
 
 function avgInterp(mesh, solutionState)
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
+    nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
-    nFaces = size(faces, 1)
     nFluxes = size(cellFluxes, 2)
-    nBoundaries = size(boundaryFaces, 1)
-
-    # Count boundary faces
-    nBdryFaces = 0
-    for bdry in 1:nBoundaries
-        nBdryFaces += size(boundaryFaces[bdry], 1)
-    end
 
     # Boundary face fluxes must be set separately
     for f in 1:nFaces-nBdryFaces
@@ -344,6 +327,27 @@ function avgInterp(mesh, solutionState)
             faceFluxes[f, v] = (cellFluxes[c1, v] + cellFluxes[c2, v])/2
         end
     end
+end
+
+function faceDeltas(mesh, solutionState)
+    cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
+    nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
+    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
+    nVars = size(cellState, 2)
+
+    faceDeltas = Array{Float64, 2}(undef, nFaces, nVars)
+
+    # Boundary face fluxes must be set separately
+    for f in 1:nFaces-nBdryFaces
+        ownerCell = faces[i][1]
+        neighbourCell = faces[i][2]
+
+        for v in 1:nVars
+            faceDeltas[f, v] = cellState[neighbourCell, v] - cellState[ownerCell, v]
+        end
+    end
+
+    return faceDeltas
 end
 
 # TODO: TVD Interp
@@ -364,21 +368,31 @@ function macCormackAD_S(mesh, C, P, lapl_P)
     return S
 end
 
+function unstructured_JSTEps(mesh, solutionState, k2=0.5, k4=(1/32), c4=1)
+    cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
+    nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
+    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
+
+    Pgrad = greenGaussGrad(mesh, false, celLPrimitives[:,1])
+    for f in 1:nFaces-nBdryFaces
+    end
+end
+
 # Requires correct cellState and cellPrimitives as input
-# TODO: Complete
+# Classical JST, central differencing + artificial diffusion. Each face treated as 1D
+# TODO
 function unstructured_JSTFlux(mesh, solutionState)
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
     nCells = size(cellState, 1)
-    nFaces = nCells + 1
-    faceDeltas = Array{Float64, 2}(undef, nFaces, 3)
+    nFaces = size(faces, 1)
 
     # Centrally differenced fluxes
-    linInterp(mesh, solutionState)
+    linInterp_3D(mesh, solutionState)
 
     #### Add JST artificial Diffusion ####
-    structured_1DFaceDelta(dx, faceDeltas, cellState)
-    eps2, eps4 = structured_1D_JST_Eps(dx, 0.5, (1/32), 0, cellPrimitives)
+    faceDeltas = faceDeltas(mesh, solutionState)
+    eps2, eps4 = unstructured_JSTEps(mesh, solutionState, 0.5, (1/32), 0)
     # nCells = nFaces - 1
     for f in 2:(nCells)
         for v in 1:3
