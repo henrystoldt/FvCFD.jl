@@ -2,6 +2,8 @@ using Printf
 include("constitutiveRelations.jl")
 include("vectorFunctions.jl")
 
+__precompile__()
+
 ######################### CFL ########################
 # TODO: Generalize cell size
 # TODO: 3D definition of CFL: Sum up in all directions
@@ -534,7 +536,7 @@ function structured_1D_JST_sj2(dvar::Array{Float64, 1}, sj::Array{Float64, 1})
     nCells = size(dvar, 1)
 
     for c in 2:nCells-1
-        sj[c] = (abs( dvar[c] - dvar[c-1] )/ max( abs(dvar[c]) + abs(dvar[c-1]), 0.0000000001))^2
+        sj[c] = (abs( dvar[c] - dvar[c-1] )/ max( abs(dvar[c]) + abs(dvar[c-1]), 0.0001))^2
     end
 end
 
@@ -577,7 +579,7 @@ function structured_JSTFlux(dx, solutionState)
 
     #### Add JST artificial Diffusion ####
     structured_1DFaceDelta(dx, faceDeltas, cellState)
-    eps2, eps4 = structured_1D_JST_Eps(dx, 0.4, (1/32), 4, cellPrimitives)
+    eps2, eps4 = structured_1D_JST_Eps(dx, 0.5, (10/32), 10, cellPrimitives)
     # nCells = nFaces - 1
     for f in 2:(nCells)
         for v in 1:3
@@ -665,22 +667,22 @@ function RK4(mesh, fluxResidualFn, solutionState, dt)
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
 
     fluxResiduals1 = fluxResidualFn(mesh, solutionState)
-    halfwayEstimate = cellState .+ fluxResiduals1.*dt/2
+    halfwayEstimate = cellState .+ fluxResiduals1*dt/2
     lastSolutionState = [ halfwayEstimate, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes ]
     decodeSolution(lastSolutionState)
 
     fluxResiduals2 = fluxResidualFn(mesh, lastSolutionState)
-    halfwayEstimate2 = cellState .+ fluxResiduals2.*dt/2
+    halfwayEstimate2 = cellState .+ fluxResiduals2*dt/2
     lastSolutionState = [ halfwayEstimate2, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes ]
     decodeSolution(lastSolutionState)
 
     fluxResiduals3 = fluxResidualFn(mesh, lastSolutionState)
-    finalEstimate1 = cellState .+ fluxResiduals3.*dt
+    finalEstimate1 = cellState .+ fluxResiduals3*dt
     lastSolutionState = [ finalEstimate1, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes ]
     decodeSolution(lastSolutionState)
 
     fluxResiduals4 = fluxResidualFn(mesh, lastSolutionState)
-    cellState .+= (fluxResiduals1 .+ 2 .* fluxResiduals2 .+ 2 .* fluxResiduals3 .+ fluxResiduals4 ).*(dt/6)
+    cellState .+= (fluxResiduals1 .+ 2*fluxResiduals2 .+ 2*fluxResiduals3 .+ fluxResiduals4 )*(dt/6)
     decodeSolution(solutionState)
 
     return solutionState
