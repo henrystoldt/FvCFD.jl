@@ -13,50 +13,6 @@ function checkInputs_structured1DInterp(dx, faceValues::Array{Float64,2}, cellVa
     end
 end
 
-### Unused ###
-function structured_1DlinInterp(dx, faceValues::Array{Float64,2}, cellValues::Array{Float64, 2})
-    nFaces = size(faceValues, 1)
-    nVars = size(faceValues, 2)
-    checkInputs_structured1DInterp(dx, faceValues, cellValues)
-
-    # Do interpolation
-    for f in 2:nFaces-1
-        for v in 1:nVars
-            c1Dist = dx[f-1]/2
-            c2Dist = dx[f]/2
-            totalDist = c1Dist + c2Dist
-            faceValues[f, v] = cellValues[f-1, v].*(c2Dist/totalDist) .+ cellValues[f, v].*(c1Dist/totalDist)
-        end
-    end
-end
-
-function structured_1DMaxInterp(dx, faceValues::Array{Float64,2}, cellValues::Array{Float64, 2})
-    nFaces = size(faceValues, 1)
-    nVars = size(faceValues, 2)
-    checkInputs_structured1DInterp(dx, faceValues, cellValues)
-
-    # Do interpolation
-    for f in 2:nFaces-1
-        for v in 1:nVars
-            faceValues[f, v] = max(cellValues[f-1,v],  cellValues[f,v])
-        end
-    end
-end
-
-function structured_1DFaceDelta(dx, faceValues::Array{Float64,2}, cellValues::Array{Float64, 2})
-    nFaces = size(faceValues, 1)
-    nVars = size(faceValues, 2)
-    checkInputs_structured1DInterp(dx, faceValues, cellValues)
-
-    # Do interpolation
-    for f in 2:nFaces-1
-        for v in 1:nVars
-            faceValues[f, v] = cellValues[f, v] - cellValues[f-1, v]
-        end
-    end
-end
-
-### Used ###
 function structured_1DlinInterp(dx, values...)
     result = []
     nFaces = size(dx, 1) + 1
