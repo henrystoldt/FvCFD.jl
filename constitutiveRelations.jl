@@ -66,3 +66,10 @@ function encodePrimitives3D(P::Float64, T::Float64, U::Array{Float64, 1}, R=287.
 
     return rho, xMom, eV2, rhoU2p, rhoUeV2PU
 end
+
+function calculateFluxes1D(P, Ux, xMom, eV2)
+    massFlux = xMom
+    xMomxFlux = xMom*Ux + P
+    eV2xFlux = Ux*eV2 + P*Ux
+    return [ massFlux, xMomxFlux, eV2xFlux ]
+end
