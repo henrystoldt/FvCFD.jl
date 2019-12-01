@@ -550,6 +550,7 @@ end
 
 function structured_1D_JST_Eps(dx, k2, k4, c4, cellPrimitives::Array{Float64,2}, gamma=1.4, R=287.05)
     nFaces = size(cellPrimitives, 1) + 1
+    
     # Pressure sensor seems to work best for the shock tube
     dP = structured_1DFaceDelta(dx, cellPrimitives[:,1])[1]
     sj = structured_1D_JST_sj2(dP)
@@ -579,7 +580,7 @@ function structured_JSTFlux(dx, solutionState)
 
     #### Add JST artificial Diffusion ####
     structured_1DFaceDelta(dx, faceDeltas, cellState)
-    eps2, eps4 = structured_1D_JST_Eps(dx, 0.5, (10/32), 10, cellPrimitives)
+    eps2, eps4 = structured_1D_JST_Eps(dx, 0.5, (1/32), 0, cellPrimitives)
     # nCells = nFaces - 1
     for f in 2:(nCells)
         for v in 1:3
