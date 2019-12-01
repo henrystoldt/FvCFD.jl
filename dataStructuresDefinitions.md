@@ -1,5 +1,6 @@
 # Unstructured FVM Mesh Format Definition
 Passed to nearly all FVM functions  
+TODO: Convert these to matrices instead of arrays of arrays  
 Defined as follows:  
 ```julia
 mesh =
