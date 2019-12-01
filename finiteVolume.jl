@@ -292,6 +292,7 @@ function linInterp(mesh, values...)
     return result
 end
 
+# Matrix version
 function linInterp(mesh, solutionState)
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
@@ -305,8 +306,6 @@ function linInterp(mesh, solutionState)
         nBdryFaces += size(boundaryFaces[bdry], 1)
     end
 
-    faceValues = Array{Float64, 2}(undef, nFaces, nFluxes)
-
     # Boundary face fluxes must be set separately
     for f in 1:nFaces-nBdryFaces
         # Find value at face using linear interpolation
@@ -318,11 +317,33 @@ function linInterp(mesh, solutionState)
         c2Dist = mag(cCenters[c2] .- fCenters[i])
         totalDist = c1Dist + c2Dist
         for v in 1:nFluxes
-            faceValues[f, v] = cellFluxes[c1, v].*(c2Dist/totalDist) .+ cellFluxes[c2, v].*(c1Dist/totalDist)
+            faceFluxes[f, v] = cellFluxes[c1, v].*(c2Dist/totalDist) .+ cellFluxes[c2, v].*(c1Dist/totalDist)
         end
     end
+end
 
-    return faceValues
+function avgInterp(mesh, solutionState)
+    cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
+    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
+    nFaces = size(faces, 1)
+    nFluxes = size(cellFluxes, 2)
+    nBoundaries = size(boundaryFaces, 1)
+
+    # Count boundary faces
+    nBdryFaces = 0
+    for bdry in 1:nBoundaries
+        nBdryFaces += size(boundaryFaces[bdry], 1)
+    end
+
+    # Boundary face fluxes must be set separately
+    for f in 1:nFaces-nBdryFaces
+        c1 = faces[i][1]
+        c2 = faces[i][2]
+
+        for v in 1:nFluxes
+            faceFluxes[f, v] = (cellFluxes[c1, v] + cellFluxes[c2, v])/2
+        end
+    end
 end
 
 # TODO: TVD Interp
@@ -353,7 +374,7 @@ function unstructured_JSTFlux(mesh, solutionState)
     faceDeltas = Array{Float64, 2}(undef, nFaces, 3)
 
     # Centrally differenced fluxes
-    structured_1DlinInterp(dx, faceFluxes, cellFluxes)
+    linInterp(mesh, solutionState)
 
     #### Add JST artificial Diffusion ####
     structured_1DFaceDelta(dx, faceDeltas, cellState)
