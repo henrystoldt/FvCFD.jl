@@ -292,8 +292,38 @@ function linInterp(mesh, values...)
     return result
 end
 
-# Matrix versions
-# results are stored in faceValues vectors
+function linInterp(mesh, solutionState)
+    cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
+    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
+    nFaces = size(faces, 1)
+    nFluxes = size(cellFluxes, 2)
+    nBoundaries = size(boundaryFaces, 1)
+
+    # Count boundary faces
+    nBdryFaces = 0
+    for bdry in 1:nBoundaries
+        nBdryFaces += size(boundaryFaces[bdry], 1)
+    end
+
+    faceValues = Array{Float64, 2}(undef, nFaces, nFluxes)
+
+    # Boundary face fluxes must be set separately
+    for f in 1:nFaces-nBdryFaces
+        # Find value at face using linear interpolation
+        c1 = faces[i][1]
+        c2 = faces[i][2]
+
+        #TODO: Precompute these distances
+        c1Dist = mag(cCenters[c1] .- fCenters[i])
+        c2Dist = mag(cCenters[c2] .- fCenters[i])
+        totalDist = c1Dist + c2Dist
+        for v in 1:nFluxes
+            faceValues[f, v] = cellFluxes[c1, v].*(c2Dist/totalDist) .+ cellFluxes[c2, v].*(c1Dist/totalDist)
+        end
+    end
+
+    return faceValues
+end
 
 # TODO: TVD Interp
 
@@ -316,6 +346,7 @@ end
 # Requires correct cellState and cellPrimitives as input
 # TODO: Complete
 function unstructured_JSTFlux(mesh, solutionState)
+    cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
     nCells = size(cellState, 1)
     nFaces = nCells + 1
@@ -335,7 +366,7 @@ function unstructured_JSTFlux(mesh, solutionState)
         end
     end
 
-    return integrateFluxes_structured1D(dx, solutionState)
+    return integrateFluxes_unstructured3D(mesh, solutionState)
 end
 
 ######################### TimeStepping #######################
@@ -387,13 +418,12 @@ function integrateFluxes_unstructured3D(mesh, solutionState)
     nCells = size(cells, 1)
     nFaces = size(faces, 1)
     nVars = cellState(size, 2)
+    nBdries = size(boundaryFaces, 1)
 
     # Recomputing flux balances, so wipe existing values
     fill!(fluxResiduals, 0)
 
-    # TODO: Boundary Treatment HERE
-
-    # Face-based integration of fluxes
+    #### FLux Integration ####
     for f in 2:nFaces-1
         for v in 1:nVars
             flux = 0
@@ -417,8 +447,43 @@ function integrateFluxes_unstructured3D(mesh, solutionState)
         fluxResiduals[c,:] ./= cVols[c]
     end
 
+    #### Boundaries ####
+    # TODO: Add other boundary treatments as appropriate
+    for b in 1:nBdries
+        consValueBoundary(mesh, solutionState, b)
+    end
+
     return fluxResiduals
 end
+
+######################### Boundary Conditions #######################
+# Can work as a supersonic inlet if initial conditions are set to the inlet conditions
+function constValueBoundary(mesh, solutionState, boundaryNumber)
+    cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
+    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
+
+    currentBoundary = boundaryFaces[boundaryNumber]
+    for face in currentBoundary
+        # Find associated cell
+        ownerCell = max(faces[face][1], faces[face][2]) #One of these will be -1 (no cell), the other is the boundary cell we want
+        fluxResiduals[ownerCell] = 0
+    end
+end
+
+function zeroGradientBoundary(mesh, solutionState, boundaryNumber)
+    cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
+    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
+
+    # Directly extrapolate cell center flux to boundary (zero gradient between the cell center and the boundary)
+    currentBoundary = boundaryFaces[boundaryNumber]
+    for face in currentBoundary
+        ownerCell = max(faces[face][1], faces[face][2]) #One of these will be -1 (no cell), the other is the boundary cell we want
+        faceFluxes[face, :] = cellFluxes[ownerCell, :]
+    end
+end
+
+# Slip wall boundary condition does not require treatment, flux is simply zero across the boundary
+#TODO: Gradient calculation at slip walls
 
 ######################### Solvers #######################
 function central_UnstructuredADFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, Cx=0.3, debug=false, silent=true)
