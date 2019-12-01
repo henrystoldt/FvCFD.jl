@@ -1,4 +1,3 @@
-include("finiteVolume.jl")
 
 function checkInputs_structured1DInterp(dx, faceValues::Array{Float64,2}, cellValues::Array{Float64, 2})
     nCells = size(cellValues, 1)
@@ -14,6 +13,7 @@ function checkInputs_structured1DInterp(dx, faceValues::Array{Float64,2}, cellVa
     end
 end
 
+### Unused ###
 function structured_1DlinInterp(dx, faceValues::Array{Float64,2}, cellValues::Array{Float64, 2})
     nFaces = size(faceValues, 1)
     nVars = size(faceValues, 2)
@@ -54,6 +54,103 @@ function structured_1DFaceDelta(dx, faceValues::Array{Float64,2}, cellValues::Ar
             faceValues[f, v] = cellValues[f, v] - cellValues[f-1, v]
         end
     end
+end
+
+### Used ###
+function structured_1DlinInterp(dx, values...)
+    result = []
+    nFaces = size(dx, 1) + 1
+
+    for vals in values
+        fVals = []
+
+        ############ Default Value ############
+        # Construct a default value of the appropriate dimensionality
+        # defaultVal = 0.0 for 1D, [ 0.0, 0.0 ] for 2D etc...
+        defaultVal = []
+        if size(vals[1], 1) ==1
+            defaultVal = 0
+        else
+            for a in vals[1]
+                push!(defaultVal, 0.0)
+            end
+        end
+
+        push!(fVals, defaultVal)
+        ########### Do Interpolations ###########
+        for i in 2:nFaces-1
+            c1Dist = dx[i-1]/2
+            c2Dist = dx[i]/2
+            totalDist = c1Dist + c2Dist
+            push!(fVals, vals[i-1].*(c2Dist/totalDist) .+ vals[i].*(c1Dist/totalDist))
+        end
+        push!(fVals, defaultVal)
+
+        push!(result, fVals)
+    end
+    return result
+end
+
+function structured_1DMaxInterp(dx, values...)
+    result = []
+    nFaces = size(dx, 1) + 1
+
+    for vals in values
+        fVals = []
+
+        ############ Default Value ############
+        # Construct a default value of the appropriate dimensionality
+        # defaultVal = 0.0 for 1D, [ 0.0, 0.0 ] for 2D etc...
+        defaultVal = []
+        if size(vals[1], 1) ==1
+            defaultVal = 0
+        else
+            for a in vals[1]
+                push!(defaultVal, 0.0)
+            end
+        end
+
+        push!(fVals, defaultVal)
+        ########### Do Interpolations ###########
+        for i in 2:nFaces-1
+            push!(fVals, max(vals[i-1], vals[i]))
+        end
+        push!(fVals, defaultVal)
+
+        push!(result, fVals)
+    end
+    return result
+end
+
+function structured_1DFaceDelta(dx, values...)
+    result = []
+    nFaces = size(dx, 1) + 1
+
+    for vals in values
+        fVals = []
+
+        ############ Default Value ############
+        # Construct a default value of the appropriate dimensionality
+        # defaultVal = 0.0 for 1D, [ 0.0, 0.0 ] for 2D etc...
+        defaultVal = []
+        if size(vals[1], 1) ==1
+            defaultVal = 0
+        else
+            for a in vals[1]
+                push!(defaultVal, 0.0)
+            end
+        end
+
+        push!(fVals, defaultVal)
+        ########### Do Interpolations ###########
+        for f in 2:nFaces-1
+            push!(fVals, vals[f] - vals[f-1])
+        end
+        push!(fVals, defaultVal)
+
+        push!(result, fVals)
+    end
+    return result
 end
 
 # Pass in pressure or density for the pressure-based or density-based version respectively
