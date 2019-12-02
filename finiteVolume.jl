@@ -970,14 +970,6 @@ function unstructured3DFVM(mesh, cellPrimitives::Array{Float64, 2}, timeIntegrat
         currTime += dt
         timeStepCounter += 1
 
-        ############### Apply Boundary conditions ################
-        # Waves never reach the boundaries, so boundary treatment doesn't need to be good
-        allVars = [ cellState, cellFluxes ]
-        copyValues(3, 2, allVars)
-        copyValues(2, 1, allVars)
-        copyValues(nCells-2, nCells-1, allVars)
-        copyValues(nCells-1, nCells, allVars)
-
         if !silent
             @printf("Timestep: %5.0f, simTime: %8.4g, Max CFL: %8.4g \n", timeStepCounter, currTime, maxCFL)
         end
