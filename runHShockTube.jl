@@ -5,7 +5,7 @@ using Profile
 using ProfileView
 using BenchmarkTools
 
-plotly()
+pyplot()
 
 include("shockTube.jl")
 include("finiteDifference.jl")
@@ -13,8 +13,9 @@ include("finiteVolume.jl")
 
 
 ################## Output ##################
-nCells = 200
+nCells = 500
 
+println("Meshing")
 #### FDM or Structured FVM ###
 # P, U, T, rho = macCormack1DFDM(initializeShockTubeFDM(nCells)..., initDt=0.000001, targetCFL=0.95, endTime=0.14267, Cx=0.1)
 # P, U, T, rho = macCormack1DConservativeFDM(initializeShockTubeFDM(nCells)..., initDt=0.00001, targetCFL=0.95, endTime=0.14267, Cx=0.3)
@@ -36,4 +37,4 @@ xVel = U
 # end
 
 println("Plotting results")
-plotShockTubeResults_Plotly(P, xVel, T, rho)
+plotShockTubeResults_PyPlot(P, xVel, T, rho)

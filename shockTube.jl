@@ -132,7 +132,7 @@ function initializeShockTube3DFVM(nCells=100; domainLength=1, Pratio=10, silent=
     faces = []
     fAVecs = []
     fCenters = []
-    boundaryFaces = [ [nCells,], [nCells+1,] ]
+    boundaryFaces = [ [nCells,], [nCells+1,], [] ]
     cVols = []
     cCenters = []
 
@@ -170,6 +170,29 @@ function initializeShockTube3DFVM(nCells=100; domainLength=1, Pratio=10, silent=
     push!(faces, [-1,1])
     push!(faces, [nCells, -1])
     push!(fCenters, [ nCells*dx, 0.0, 0.0 ])
+
+    for c in 1:nCells
+        push!(faces, [c, -1])
+        push!(faces, [c, -1])
+        push!(faces, [c, -1])
+        push!(faces, [c, -1])
+        push!(fCenters, [ (c-0.5)*dx, 0.05, 0.0 ])
+        push!(fCenters, [ (c-0.5)*dx, -0.05, 0.0 ])
+        push!(fCenters, [ (c-0.5)*dx, 0.0, 0.05 ])
+        push!(fCenters, [ (c-0.5)*dx, 0.0, -0.05 ])
+        push!(boundaryFaces[3], nCells+1+c)
+        push!(boundaryFaces[3], nCells+2+c)
+        push!(boundaryFaces[3], nCells+3+c)
+        push!(boundaryFaces[3], nCells+4+c)
+        push!(cells[c], nCells+1+c)
+        push!(cells[c], nCells+2+c)
+        push!(cells[c], nCells+3+c)
+        push!(cells[c], nCells+4+c)
+        push!(fAVecs, [0, h*w, 0])
+        push!(fAVecs, [0, -h*w, 0])
+        push!(fAVecs, [0, 0, h*w])
+        push!(fAVecs, [0, 0, -h*w])
+    end
 
     # Returns in mesh format
     mesh = [ cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces ]

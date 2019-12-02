@@ -14,8 +14,34 @@ function CFL(U, T, dt, dx, gamma=1.4, R=287.05)
     return (abs(U[1]) + sqrt(gamma * R * T)) * dt / dx
 end
 
-function CFL3D(mesh, solutionState, gamma=1.4, R=287.05)
-    #TODO:
+function maxCFL3D(mesh, solutionState, dt, gamma=1.4, R=287.05)
+    cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
+    nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
+    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
+
+    maxCFL = 0
+    for c in 1:nCells
+        cDeltaT = (abs(cellPrimitives[c,3]) + sqrt(gamma * R * cellPrimitives[c,2])) * dt
+        #TODO: Precompute
+        maxCoords = [ -1000000.0, -1000000.0, -1000000.0 ]
+        minCoords = [ 1000000.0, 1000000.0, 1000000.0 ]
+        for f in cells[c]
+            for d in 1:3
+                maxCoords[d] = max(maxCoords[d], fCenters[f][d])
+                minCoords[d] = min(minCoords[d], fCenters[f][d])
+            end
+        end
+        CFL = 0.0
+        for d in 1:3
+            dx = (maxCoords[d] - minCoords[d])
+            if dx > 0
+                CFL += cDeltaT / dx
+            end
+        end
+        maxCFL = max(maxCFL, CFL)
+    end
+
+    return maxCFL
 end
 
 ######################### Gradient Computation #######################
@@ -534,7 +560,7 @@ function unstructured_JSTFlux(mesh, solutionState)
     #### Add JST artificial Diffusion ####
     fDeltas = faceDeltas(mesh, solutionState)
     fDGrads = greenGaussGrad_matrix(mesh, fDeltas, false)
-    eps2, eps4 = unstructured_JSTEps(mesh, solutionState, 0.3, (1/32), 1)
+    eps2, eps4 = unstructured_JSTEps(mesh, solutionState, 0.5, (1/32), 0)
     # nCells = nFaces - 1
     for f in 1:nFaces-nBdryFaces
         ownerCell = faces[f][1]
@@ -633,7 +659,7 @@ function integrateFluxes_unstructured3D(mesh, solutionState)
 
     #### Boundaries ####
     # TODO: Add other boundary treatments as appropriate
-    for b in 1:nBoundaries
+    for b in 1:2
         zeroGradientBoundary(mesh, solutionState, b)
     end
 
@@ -931,14 +957,7 @@ function unstructured3DFVM(mesh, cellPrimitives::Array{Float64, 2}, timeIntegrat
     timeStepCounter = 0
     while currTime < endTime
         ############## Timestep adjustment #############
-        # TODO: Fix CFL
-        maxCFL = 0.0
-        for c in 1:nCells
-            if isnan(cellPrimitives[c,2])
-                println(fluxResiduals)
-            end
-            maxCFL = max(maxCFL, (abs(cellPrimitives[c,3]) + sqrt(gamma * R * cellPrimitives[c,2])) * dt / (1/nCells))
-        end
+        maxCFL = maxCFL3D(mesh, solutionState, dt)
         # Slowly approach target CFL
         dt *= ((targetCFL/maxCFL - 1)/5+1)
         # Adjust timestep to hit endtime if this is the final time step
