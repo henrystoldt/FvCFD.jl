@@ -7,6 +7,19 @@ include("mesh.jl")
 
 __precompile__()
 
+######################### Initialization ########################
+# Returns cellPrimitives matrix
+function initializeUniformSolution3D(mesh, P, T, Ux, Uy, Uz)
+    nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
+
+    cellPrimitives = zeros(nCells, 5)
+    for c in 1:nCells
+        cellPrimitives[c, :] = [ P, T, Ux, Uy, Uz ]
+    end
+
+    return cellPrimitives
+end
+
 ######################### CFL ########################
 # TODO: Generalize cell size
 # TODO: 3D definition of CFL: Sum up in all directions
@@ -663,7 +676,7 @@ function integrateFluxes_unstructured3D(mesh, solutionState)
         zeroGradientBoundary(mesh, solutionState, b)
     end
 
-    #### FLux Integration ####
+    #### Flux Integration ####
     for f in 1:nFaces
         ownerCell = faces[f][1]
         neighbourCell = faces[f][2]
