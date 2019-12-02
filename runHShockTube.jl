@@ -5,7 +5,7 @@ using Profile
 using ProfileView
 using BenchmarkTools
 
-pyplot()
+plotly()
 
 include("shockTube.jl")
 include("finiteDifference.jl")
@@ -13,7 +13,7 @@ include("finiteVolume.jl")
 
 
 ################## Output ##################
-nCells = 500
+nCells = 200
 
 #### FDM or Structured FVM ###
 # P, U, T, rho = macCormack1DFDM(initializeShockTubeFDM(nCells)..., initDt=0.000001, targetCFL=0.95, endTime=0.14267, Cx=0.1)
@@ -22,7 +22,9 @@ nCells = 500
 # @time P, U, T, rho = structured1DFVM(initializeShockTube_StructuredFVM(nCells)..., forwardEuler, initDt=0.00001, endTime=0.14267, targetCFL=0.05, silent=true)
 # @time P, U, T, rho = structured1DFVM(initializeShockTube_StructuredFVM(nCells)..., RK2_Mid, initDt=0.00001, endTime=0.14267, targetCFL=0.5, silent=true)
 # @time P, U, T, rho = structured1DFVM(initializeShockTube_StructuredFVM(nCells)..., RK4, initDt=0.00001, endTime=0.14267, targetCFL=0.25, silent=true)
-P, U, T, rho = structured1DFVM(initializeShockTube_StructuredFVM(nCells)..., ShuOsher, initDt=0.00001, endTime=0.14267, targetCFL=0.99, silent=false)
+# P, U, T, rho = structured1DFVM(initializeShockTube_StructuredFVM(nCells)..., ShuOsher, initDt=0.00001, endTime=0.14267, targetCFL=0.99, silent=false)
+@time P, U, T, rho = unstructured3DFVM(initializeShockTube3DFVM(nCells)..., RK2_Mid, initDt=0.00001, endTime=0.14267, targetCFL=0.5, silent=false)
+@time P, U, T, rho = unstructured3DFVM(initializeShockTube3DFVM(nCells)..., RK2_Mid, initDt=0.00001, endTime=0.14267, targetCFL=0.5, silent=false)
 xVel = U
 
 ### Unstructured FVM ###
@@ -35,4 +37,4 @@ xVel = U
 # end
 
 println("Plotting results")
-plotShockTubeResults_PyPlot(P, xVel, T, rho)
+plotShockTubeResults_Plotly(P, xVel, T, rho)
