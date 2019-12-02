@@ -7,16 +7,17 @@ include("vectorFunctions.jl")
 # TODO: Generalize cell size
 # TODO: 3D definition of CFL: Sum up in all directions
 function CFL(U, T, dt, dx, gamma=1.4, R=287.05)
+    #println(T)
     return (abs(U[1]) + sqrt(gamma * R * T)) * dt / dx
 end
 
 
 # Handles scalar or vector-valued variables
-function linInterp(mesh, values...)    
+function linInterp(mesh, values...)
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
     nFaces = size(faces, 1)
     nBdryFaces = size(boundaryFaces, 1)
-    
+
     fVals = Array{Float64, 1}(undef, nFaces)
 
     result = []
@@ -40,7 +41,7 @@ function linInterp(mesh, values...)
             if i > nFaces-nBdryFaces
                 # Faces on boundaries not treated, must be set externally
                 push!(fVals, defaultVal)
-                
+
             else
                 # Find value at face using linear interpolation
                 c1 = faces[i][1]
@@ -60,7 +61,7 @@ function linInterp(mesh, values...)
 end
 
 
-function musclDifference(mesh, rho, xMom, eV2, dx, gamma=1.4, debug=false)
+function musclDifference(mesh, rho, xMom, eV2, dx, gamma=1.4; debug=false)
     #= Uses MUSCL differencing to get the conserved values at the left and right side of each face
     Then determines the primitive values at the left and right side. BC's are treated as zero grad for now
     =#
@@ -68,9 +69,16 @@ function musclDifference(mesh, rho, xMom, eV2, dx, gamma=1.4, debug=false)
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
     nFaces = size(faces, 1)
     nBdryFaces = size(boundaryFaces, 1)
-    
+
     consLeft = Array{Float64, 2}(undef, nFaces, 3)
     consRight = Array{Float64, 2}(undef, nFaces, 3)
+
+    #consLeft = []
+
+    #consLeft[1,1] = 52
+
+    #println("RHO: ", consLeft[1,1])
+    #println(typeof(consLeft), typeof(xMom), typeof(eV2), typeof(dx))
 
     for i in 1:(nFaces-nBdryFaces)
         #L/R Conserved quantities on non-boundary faces
@@ -78,76 +86,81 @@ function musclDifference(mesh, rho, xMom, eV2, dx, gamma=1.4, debug=false)
         #How do we deal with the 2nd and 2ndlast faces?? Neither are on boundaries, but still can't be differenced
         if i == 1
             #Deal with it as if it were next face for the backwards differences
-            consLeft[i][1] = leftFaceVals(rho[3], rho[2], rho[1], dx) #These are fake news numbers until we treat the boundaries properly
-            consRight[i][1] = rightFaceVals(rho[i+2], rho[i+1], rho[i], dx)
+            consLeft[i,1] = leftFaceVals(rho[3], rho[2], rho[1], dx) #These are fake news numbers until we treat the boundaries properly
+            consRight[i,1] = rightFaceVals(rho[i+2], rho[i+1], rho[i], dx)
 
-            consLeft[i][2] = leftFaceVals(xMom[3], xMom[2], xMom[1],dx)
-            consRight[i][2] = rightFaceVals(xMom[i+2], xMom[i+1], xMom[i],dx)
+            consLeft[i,2] = leftFaceVals(xMom[3], xMom[2], xMom[1],dx)
+            consRight[i,2] = rightFaceVals(xMom[i+2], xMom[i+1], xMom[i],dx)
 
-            consLeft[i][3] = leftFaceVals(eV2[3], eV2[2], eV2[1], dx)
-            consRight[i][3] = rightFaceVals(eV2[i+2], eV2[i+1], eV2[i], dx)
+            consLeft[i,3] = leftFaceVals(eV2[3], eV2[2], eV2[1], dx)
+            consRight[i,3] = rightFaceVals(eV2[i+2], eV2[i+1], eV2[i], dx)
 
         elseif i==(nFaces-nBdryFaces)
             #TODO: Verify it actually trips this block for the last difference
             #Deal with it as if it were previous face
-            consLeft[i][1] = leftFaceVals(rho[i+1], rho[i], rho[i-1], dx)
-            consRight[i][1] = rightFaceVals(rho[nFaces-nBdryFaces], rho[nFaces-(nBdryFaces+1)], rho[nFaces-(nBdryFaces+2)], dx)
+            consLeft[i,1] = leftFaceVals(rho[i+1], rho[i], rho[i-1], dx)
+            consRight[i,1] = rightFaceVals(rho[nFaces-nBdryFaces], rho[nFaces-(nBdryFaces+1)], rho[nFaces-(nBdryFaces+2)], dx)
 
-            consLeft[i][2] = leftFaceVals(xMom[i+1], xMom[i], xMom[i-1],dx)
-            consRight[i][2] = rightFaceVals(xMom[nFaces-nBdryFaces], xMom[nFaces-(nBdryFaces+1)], xMom[nFaces-(nBdryFaces+2)],dx)
+            consLeft[i,2] = leftFaceVals(xMom[i+1], xMom[i], xMom[i-1],dx)
+            consRight[i,2] = rightFaceVals(xMom[nFaces-nBdryFaces], xMom[nFaces-(nBdryFaces+1)], xMom[nFaces-(nBdryFaces+2)],dx)
 
-            consLeft[i][3] = leftFaceVals(eV2[i+1], eV2[i], eV2[i-1], dx)
-            consRight[i][3] = rightFaceVals(eV2[nFaces-nBdryFaces], eV2[nFaces-(nBdryFaces+1)], eV2[nFaces-(nBdryFaces+2)], dx)
+            consLeft[i,3] = leftFaceVals(eV2[i+1], eV2[i], eV2[i-1], dx)
+            consRight[i,3] = rightFaceVals(eV2[nFaces-nBdryFaces], eV2[nFaces-(nBdryFaces+1)], eV2[nFaces-(nBdryFaces+2)], dx)
 
-        else      
+        else
             #rho
-            consLeft[i][1] = leftFaceVals(rho[i+1], rho[i], rho[i-1], dx)
-            consRight[i][1] = rightFaceVals(rho[i+2], rho[i+1], rho[i], dx)
+            consLeft[i,1] = leftFaceVals(rho[i+1], rho[i], rho[i-1], dx)
+            consRight[i,1] = rightFaceVals(rho[i+2], rho[i+1], rho[i], dx)
 
             #xMom
-            consLeft[i][2] = leftFaceVals(xMom[i+1], xMom[i], xMom[i-1],dx)
-            consRight[i][2] = rightFaceVals(xMom[i+2], xMom[i+1], xMom[i],dx)
+            consLeft[i,2] = leftFaceVals(xMom[i+1], xMom[i], xMom[i-1],dx)
+            consRight[i,2] = rightFaceVals(xMom[i+2], xMom[i+1], xMom[i],dx)
 
             #eV2
-            consLeft[i][3] = leftFaceVals(eV2[i+1], eV2[i], eV2[i-1], dx)
-            consRight[i][3] = rightFaceVals(eV2[i+2], eV2[i+1], eV2[i], dx)
+            consLeft[i,3] = leftFaceVals(eV2[i+1], eV2[i], eV2[i-1], dx)
+            consRight[i,3] = rightFaceVals(eV2[i+2], eV2[i+1], eV2[i], dx)
 
         end
 
     end
 
     if debug
-        println("Rho Left: ", consLeft[:][1])
-        println("xMom Left: ", consLeft[:][2])
-        println("E Left: ", consLeft[:][3])
+        println("Rho Left: ", consLeft[:,1])
+        println("xMom Left: ", consLeft[:,2])
+        println("E Left: ", consLeft[:,3])
     end
 
 
     for i in 1:nBdryFaces
         #Treatment of boundary faces
         #Determine what cell it's connected to, then copy values from that
-        neighbourCell = faces[i+nFaces][2]
+        neighbourCell = faces[i+nFaces-nBdryFaces][2]
+        if neighbourCell==-1 #TODO: Fix mesh treatment to not toss -1
+            neighbourCell = nFaces-nBdryFaces
+        end
         for j in 1:3
-            consLeft[i+nFaces][j] = consLeft[neighbourCell][j]
-            consRight[i+nFaces][j] = consRight[neighbourCell][j]
+            consLeft[i+nFaces-nBdryFaces,j] = consLeft[neighbourCell,j]
+            consRight[i+nFaces-nBdryFaces,j] = consRight[neighbourCell,j]
         end
         #And that's why if the world was zero gradient we would definitely be living in a simulation
 
     end
 
+    tracker = consLeft - consRight
+
     primsLeft = Array{Float64, 2}(undef, nFaces, 3) #u, P, H
     primsRight = Array{Float64, 2}(undef, nFaces, 3)
 
     for i in 1:nFaces
-        #Find L/R values of (rho, u, H, P) for each face 
+        #Find L/R values of (rho, u, H, P) for each face
 
-        primsLeft[i][1] = consLeft[i][2] / consLeft[i][1] #u =rhou/rho
-        primsLeft[i][2] = (gamma-1)*( consLeft[i][3] - 0.5*consLeft[i][1]*primsLeft[i][1]^2 ) # P =(gamma-1)*(E-0.5rho(v^2))
-        primsLeft[i][3] = ((consLeft[i][3]/consLeft[i][1])-0.5*primsLeft[i][1]^2  +  primsLeft[i][2])/consLeft[i][1] #H = (e+P)/rho = ( (E/rho - v^2) + P )/rho
+        primsLeft[i,1] = consLeft[i,2] / consLeft[i,1] #u =rhou/rho
+        primsLeft[i,2] = (gamma-1)*( consLeft[i,3] - 0.5*consLeft[i,1]*primsLeft[i,1]^2 ) # P =(gamma-1)*(E-0.5rho(v^2))
+        primsLeft[i,3] = ((consLeft[i,3]/consLeft[i,1])-0.5*primsLeft[i,1]^2  +  primsLeft[i,2])/consLeft[i,1] #H = (e+P)/rho = ( (E/rho - v^2) + P )/rho
 
-        primsRight[i][1] = consRight[i][2] / consRight[i][1]
-        primsRight[i][2] = (gamma-1)*( consRight[i][3] - 0.5*consRight[i][1]*primsRight[i][1]^2 )
-        primsRight[i][3] = ((consRight[i][3]/consRight[i][1])-0.5*primsRight[i][1]^2  +  primsRight[i][2])/consRight[i][1]
+        primsRight[i,1] = consRight[i,2] / consRight[i,1]
+        primsRight[i,2] = (gamma-1)*( consRight[i,3] - 0.5*consRight[i,1]*primsRight[i,1]^2 )
+        primsRight[i,3] = ((consRight[i,3]/consRight[i,1])-0.5*primsRight[i,1]^2  +  primsRight[i,2])/consRight[i,1]
 
     end
 
@@ -164,8 +177,6 @@ function leftFaceVals(q_ip, q_i, q_im, dx)
     Q_L = q_i + 0.25*s*( (1+s)*(q_i-q_im) + (1-s)*(q_ip-q_i) ) * q_i
 
     return Q_L
-
-
 end
 
 function rightFaceVals(q_ip, q_i, q_im, dx)
@@ -176,7 +187,7 @@ function rightFaceVals(q_ip, q_i, q_im, dx)
         q_ip - value at the cell further away from your current face
     =#
     s = vanAlbeda(q_ip, q_i, q_im, dx)
-    Q_R = q_i + 0.25*s*( (1+s)*(q_ip-q_i) + (1-s)*(q_i-q_im) )*q_i
+    Q_R = q_i - 0.25*s*( (1+s)*(q_ip-q_i) + (1-s)*(q_i-q_im) )*q_i
 
     return Q_R
 end
@@ -184,7 +195,7 @@ end
 function vanAlbeda(q_ip, q_i, q_im, dx)
     #=Impplements the vanAlbeda flux limiter, with a delta value of dx^3
     =#
-    delta = dx*dx*dx
+    delta = dx.*dx.*dx
     s = (2 * (q_ip-q_i)*(q_i-q_im) + delta )/( (q_ip-q_i)^2 * (q_i-q_im)^2 + delta )
 
     return s
@@ -193,15 +204,15 @@ end
 function roeAveraged(n, rhoLeft,rhoRight,uLeft,uRight,HLeft,HRight, gamma=1.4)
     #=Takes inputs of left and right primitive quantities, returns roe averaged quantities for each
     =#
-    
+
     roeRho = Array{Float64, 1}(undef, n)
     roeU = Array{Float64, 1}(undef, n)
     roeH = Array{Float64, 1}(undef, n)
     roeA = Array{Float64, 1}(undef, n)
 
-    roeRho = sqrt(rhoLeft .* rhoRight)
-    roeU = ( sqrt(rhoLeft).*uLeft + sqrt(rhoRight).*uRight ) ./ (sqrt(rhoLeft)+sqrt(rhoRight))
-    roeH = ( sqrt(rhoLeft).*HLeft + sqrt(rhoRight).*HRight ) ./ (sqrt(rhoLeft)+sqrt(rhoRight))
+    roeRho = sqrt.(rhoLeft .* rhoRight)
+    roeU = ( sqrt.(rhoLeft).*uLeft + sqrt.(rhoRight).*uRight ) ./ (sqrt.(rhoLeft)+sqrt.(rhoRight))
+    roeH = ( sqrt.(rhoLeft).*HLeft + sqrt.(rhoRight).*HRight ) ./ (sqrt.(rhoLeft)+sqrt.(rhoRight))
 
     roeA = (gamma-1).*(roeH - 0.5 .*roeU)
 
@@ -217,9 +228,9 @@ function fluxVector(cons, prim, fAVec)
 
     #In 2D, would need to multiply each element by the x/y unit vector components of the face, but in 1D that should already be dealt with??
     for i in 1:nFaces
-        fluxVec[i][1] = (cons[i][2]) 
-        fluxVec[i][2] = (cons[i][2]*prim[i][1] + prim[i][2]) 
-        fluxVec[i][3] = (prim[i][1]*(cons[i][3] + prim[i][2]))
+        fluxVec[i,1] = (cons[i,2])
+        fluxVec[i,2] = (cons[i,2]*prim[i,1] + prim[i,2])
+        fluxVec[i,3] = (prim[i,1]*(cons[i,3] + prim[i,2]))
     end
 
 
@@ -251,19 +262,19 @@ function eigenFluxVectors(rhoRoe, uRoe, HRoe, aRoe, deltaRho, deltaU, deltaP, de
     for i in 1:nFaces
         #TODO: All the * 1 in this loop are places where the *1 should be replaced by the unit vector of the face area
         #First vector is easiest
-        f1[i][1] = newEig1[i] * (deltaRho[i] - (deltaP[i]/(aRoe[i]^2))  )
-        f1[i][2] = newEig1[i] * ( uRoe[i]*( deltaRho[i] - (deltaP[i]/(aRoe[i]^2)) ) + rhoRoe[i]*( deltaU[i] - 1 *deltaU[i] ) ) #The last term only matters for 2D/3D
-        f1[i][3] = newEig1[i] * ( 0.5*uRoe[i]*( deltaRho[i] - (deltaP[i]/(aRoe[i]^2)) ) + rhoRoe[i]*( uRoe[i]*deltaU[i] - 1 * newEig1[i]*deltaU[i] ) ) #same as above
+        f1[i,1] = newEig1[i] * (deltaRho[i] - (deltaP[i]/(aRoe[i]^2))  )
+        f1[i,2] = newEig1[i] * ( uRoe[i]*( deltaRho[i] - (deltaP[i]/(aRoe[i]^2)) ) + rhoRoe[i]*( deltaU[i] - 1 *deltaU[i] ) ) #The last term only matters for 2D/3D
+        f1[i,3] = newEig1[i] * ( 0.5*uRoe[i]*( deltaRho[i] - (deltaP[i]/(aRoe[i]^2)) ) + rhoRoe[i]*( uRoe[i]*deltaU[i] - 1 * newEig1[i]*deltaU[i] ) ) #same as above
 
         f2_pre = newEig2[i] * ( deltaP[i]/(2*aRoe[i]^2) + rhoRoe[i]* 1 * deltaU[i]/(2*aRoe[i]) )
-        f2[i][1] = f2_pre
-        f2[i][2] = f2_pre * (uRoe[i] + 1 * aRoe[i])
-        f2[i][3] = f2_pre * (HRoe[i] + 1 * uRoe[i] * aRoe[i])
+        f2[i,1] = f2_pre
+        f2[i,2] = f2_pre * (uRoe[i] + 1 * aRoe[i])
+        f2[i,3] = f2_pre * (HRoe[i] + 1 * uRoe[i] * aRoe[i])
 
         f3_pre = newEig3[i] * ( deltaP[i]/(2*aRoe[i]^2) - rhoRoe[i]* 1 * deltaU[i]/(2*aRoe[i]) )
-        f3[i][1] = f3_pre
-        f3[i][2] = f3_pre * (uRoe[i] - 1 * aRoe[i])
-        f3[i][3] = f3_pre * (HRoe[i] - 1 * uRoe[i] * aRoe[i])
+        f3[i,1] = f3_pre
+        f3[i,2] = f3_pre * (uRoe[i] - 1 * aRoe[i])
+        f3[i,3] = f3_pre * (HRoe[i] - 1 * uRoe[i] * aRoe[i])
     end
     return f1, f2, f3
 end
@@ -300,6 +311,7 @@ function checkEigenvalues(eig1, eig2, eig3, dU, dA, n, K=0.04)
             eps = K * dU[i]
             if eps > abs(eig1[i])
                 new_eig1[i] = (eig1[i]^2 + eps^2)/(2*eps)
+                println("Updated eig1 value!")
             else
                 new_eig1[i] = eig1[i]
             end
@@ -312,6 +324,7 @@ function checkEigenvalues(eig1, eig2, eig3, dU, dA, n, K=0.04)
             eps = K * (dU[i] + dA[i])
             if eps > abs(eig2[i])
                 new_eig2[i] = (eig2[i]^2 + eps^2)/(2*eps)
+                println("Updated eig2 value!")
             else
                 new_eig2[i] = eig2[i]
             end
@@ -324,6 +337,7 @@ function checkEigenvalues(eig1, eig2, eig3, dU, dA, n, K=0.04)
             eps = K * (dU[i] - dA[i])
             if eps > abs(eig3[i])
                 new_eig3[i] = (eig3[i]^2 + eps^2)/(2*eps)
+                println("Updated eig3 value!")
             else
                 new_eig3[i] = eig3[i]
             end
@@ -332,6 +346,8 @@ function checkEigenvalues(eig1, eig2, eig3, dU, dA, n, K=0.04)
         end
 
     end
+
+    println("Done with eigenvalues!")
 
     return new_eig1, new_eig2, new_eig3
 
@@ -346,9 +362,9 @@ function findFluxes(lF, rF, e1F, e2F, e3F, fA)
     xEneFlux = Array{Float64, 1}(undef, n)
 
     for i in 1:n
-        xMassFlux[i] = 0.5 * (lF[i][1] + rF[i][1] - e1F[i][1] - e2F[i][1] - e3F[i][1])
-        xMomFlux[i] = 0.5 * (lF[i][2] + rF[i][2] - e1F[i][2] - e2F[i][2] - e3F[i][2])
-        xEneFlux[i] = 0.5 * (lF[i][3] + rF[i][3] - e1F[i][3] - e2F[i][3] - e3F[i][3])
+        xMassFlux[i] = 0.5 * (lF[i,1] + rF[i,1] - e1F[i,1] - e2F[i,1] - e3F[i,1])
+        xMomFlux[i] = 0.5 * (lF[i,2] + rF[i,2] - e1F[i,2] - e2F[i,2] - e3F[i,2])
+        xEneFlux[i] = 0.5 * (lF[i,3] + rF[i,3] - e1F[i,3] - e2F[i,3] - e3F[i,3])
     end
 
     return xMassFlux, xMomFlux, xEneFlux
@@ -369,9 +385,12 @@ function upwindFVMRoe1D(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=
     nBdryFaces = size(boundaryFaces, 1)
     bdryFaceIndices = Array(nFaces-nBdryFaces:nFaces)
 
+    println("Started function!")
 
-    dx = cCenters[2] - cCenters[1]
-    
+
+    #dx = cCenters[2] - cCenters[1]
+    dx = 1 / nCells
+
     ########### Variable Arrays #############
     # State variables, values are the averages/cell center values
     rho = Array{Float64, 1}(undef, nCells)
@@ -387,7 +406,7 @@ function upwindFVMRoe1D(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=
     for i in 1:nCells
         rho[i], xMom[i], eV2[i], rhoU2p[i], rhoUeV2PU[i] = encodePrimitives3D(P[i], T[i], U[i])
     end
-    
+
     if debug
         println("Rho: $rho")
         println("xMom: $xMom")
@@ -410,7 +429,7 @@ function upwindFVMRoe1D(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=
         if (endTime - currTime) < dt
             dt = endTime - currTime
         end
-        
+
         # Calculate fluxes through each face
         # TODO: y and z momemtum-fluxes + equations
         # xMassFlux, xMomFlux, xeV2Flux = upwindInterp(mesh, U, xMom, rhoU2p, rhoUeV2PU)
@@ -419,17 +438,17 @@ function upwindFVMRoe1D(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=
         #Use MUSCL differencing to get values at left/right of each face. Boundaries are treated inside this function
         consLeft, primsLeft, consRight, primsRight = musclDifference(mesh, rho, xMom, eV2, dx, debug=debug)
 
-        rhoLeft = consLeft[:][1]
-        rhoRight = consRight[:][1]
+        rhoLeft = consLeft[:,1]
+        rhoRight = consRight[:,1]
 
-        uLeft = primsLeft[:][1]
-        uRight = primsRight[:][1]
+        uLeft = primsLeft[:,1]
+        uRight = primsRight[:,1]
 
-        pLeft = primsLeft[:][2]
-        pRight = primsRight[:][2]
+        pLeft = primsLeft[:,2]
+        pRight = primsRight[:,2]
 
-        HLeft = primsLeft[:][3]
-        HRight = primsRight[:][3]
+        HLeft = primsLeft[:,3]
+        HRight = primsRight[:,3]
 
         aLeft = (gamma-1)*(HLeft - 0.5*uLeft.^2)
         aRight = (gamma-1)*(HRight - 0.5*uRight.^2)
@@ -453,10 +472,10 @@ function upwindFVMRoe1D(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=
         #Combines decomposed flux vectors into flux at every step
         xMassFlux, xMomFlux, xeV2Flux = findFluxes(leftFlux, rightFlux, eigen1Flux, eigen2Flux, eigen3Flux, fAVecs )
 
-        
-  
+
+
         fluxVars = [ xMassFlux, xMomFlux, xeV2Flux ]
-        
+
 
         if debug
             println("xMass Flux: $xMassFlux")
@@ -478,7 +497,7 @@ function upwindFVMRoe1D(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=
             end
         end
 
-        
+
         if debug
             println("Rho2: $rho")
             println("xMom2: $xMom")
@@ -490,16 +509,16 @@ function upwindFVMRoe1D(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=
         rho = stateVars[1][:]
         xMom = stateVars[2][:]
         eV2 = stateVars[3][:]
-        
+
         # Boundaries
         ############### Boundaries ################
         # Waves never reach the boundaries, so boundary treatment doesn't need to be good
-        
+
         #= Farfield neumann-BC is dealt with during the MUSCL-difference I hope
         copyValues(3, 2, stateVars)
         copyValues(2, 1, stateVars)
         copyValues(nCells-2, nCells-1, stateVars)
-        copyValues(nCells-1, nCells, stateVars)    
+        copyValues(nCells-1, nCells, stateVars)
         =#
 
         # Decode primitive values
@@ -508,14 +527,16 @@ function upwindFVMRoe1D(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=
         end
 
         if verbose
-            println(" ", currTime, " --- ", dt, " --- ", max(xMassFlux))
-
+            println("\n")
+            println(" ", currTime, " --- ", dt, " --- ", maximum(xMassFlux))
+            println("\n")
         end
 
         currTime += dt
-        
+
         ############## CFL Calculation, timestep adjustment #############
         maxCFL = 0
+        println("Temp is: ", T)
         for i in 1:nCells
             dx = 1/nCells
             maxCFL = max(maxCFL, CFL(U[i], T[i], dt, dx, gamma, R))

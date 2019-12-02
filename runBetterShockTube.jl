@@ -3,7 +3,7 @@
 using PyPlot
 using LaTeXStrings
 using Profile
-using ProfileView
+#using ProfileView
 
 #plotly()
 
@@ -14,6 +14,7 @@ include("finiteVolumeRoe.jl")
 
 ################## Output ##################
 nCells = 500
+nCells = 5
 
 #### FDM or Structured FVM ###
 # P, U, T, rho = macCormack1DFDM(initializeShockTubeFDM(nCells)..., initDt=0.000001, targetCFL=0.95, endTime=0.14267, Cx=0.1)
