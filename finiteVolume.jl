@@ -522,7 +522,6 @@ end
 
 # Requires correct cellState and cellPrimitives as input
 # Classical JST, central differencing + artificial diffusion. Each face treated as 1D
-# TODO
 function unstructured_JSTFlux(mesh, solutionState)
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)

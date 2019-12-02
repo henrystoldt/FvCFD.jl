@@ -24,7 +24,6 @@ nCells = 200
 # @time P, U, T, rho = structured1DFVM(initializeShockTube_StructuredFVM(nCells)..., RK4, initDt=0.00001, endTime=0.14267, targetCFL=0.25, silent=true)
 # P, U, T, rho = structured1DFVM(initializeShockTube_StructuredFVM(nCells)..., ShuOsher, initDt=0.00001, endTime=0.14267, targetCFL=0.99, silent=false)
 @time P, U, T, rho = unstructured3DFVM(initializeShockTube3DFVM(nCells)..., RK2_Mid, initDt=0.00001, endTime=0.14267, targetCFL=0.5, silent=false)
-@time P, U, T, rho = unstructured3DFVM(initializeShockTube3DFVM(nCells)..., RK2_Mid, initDt=0.00001, endTime=0.14267, targetCFL=0.5, silent=false)
 xVel = U
 
 ### Unstructured FVM ###
