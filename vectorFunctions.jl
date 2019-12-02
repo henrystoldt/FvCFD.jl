@@ -1,6 +1,21 @@
 
 ######################### Vector Functions ########################
 # Assumes sizes are equal
+function dot(vec1, vec2)
+    #Returns dot product of two vectors
+    s1 = size(vec1, 1)
+    s2 = size(vec2, 1)
+    if s1 != s2
+        return 0
+    end
+    sum = 0
+    for i in 1:size(vec1, 1)
+        sum += vec1[i]*vec2[i]
+    end
+    return sum
+end
+
+# Assumes sizes are equal
 function dot(vec1::Array{Float64, 1}, vec2::Array{Float64, 1})
     #Returns dot product of two vectors
     s1 = size(vec1, 1)
