@@ -2,7 +2,7 @@ using Plots
 using Plots.PlotMeasures
 using LaTeXStrings
 using Profile
-using ProfileView
+# using ProfileView #Doesn't want to install on my work ubuntu desktop for some reason
 using BenchmarkTools
 
 pyplot()
@@ -10,7 +10,7 @@ pyplot()
 include("shockTube.jl")
 include("finiteDifference.jl")
 include("finiteVolume.jl")
-
+include("mesh.jl")
 
 ################## Output ##################
 nCells = 500
@@ -24,7 +24,14 @@ println("Meshing")
 # @time P, U, T, rho = structured1DFVM(initializeShockTube_StructuredFVM(nCells)..., RK2_Mid, initDt=0.00001, endTime=0.14267, targetCFL=0.5, silent=true)
 # @time P, U, T, rho = structured1DFVM(initializeShockTube_StructuredFVM(nCells)..., RK4, initDt=0.00001, endTime=0.14267, targetCFL=0.25, silent=true)
 # P, U, T, rho = structured1DFVM(initializeShockTube_StructuredFVM(nCells)..., ShuOsher, initDt=0.00001, endTime=0.14267, targetCFL=0.99, silent=false)
-@time P, U, T, rho = unstructured3DFVM(initializeShockTube3DFVM(nCells)..., ShuOsher, initDt=0.00001, endTime=0.14267, targetCFL=0.95, silent=false)
+# @time P, U, T, rho = unstructured3DFVM(initializeShockTube3DFVM(nCells)..., ShuOsher, initDt=0.00001, endTime=0.14267, targetCFL=0.95, silent=false)
+# xVel = U
+
+### UnstructuredFVM from OpenFOAM Meshes ###
+OFmesh = OpenFOAMMesh("OFShockTubeMesh")
+nCells = size(OFmesh[1], 1)
+mesh, cellPrimitives = initializeShockTube3DFVM(nCells...)
+@time P, U, T, rho = unstructured3DFVM(OFmesh, cellPrimitives, ShuOsher, initDt=0.00001, endTime=0.14267, targetCFL=0.95, silent=false)
 xVel = U
 
 ### Unstructured FVM ###

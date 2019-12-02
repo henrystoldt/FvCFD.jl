@@ -376,7 +376,7 @@ function linInterp(mesh, values...)
 end
 
 # Flux interpolation
-function linInterp_3D(mesh::Array{Array{Any, 1},1}, solutionState::Array{Array{Float64, 2}, 1})
+function linInterp_3D(mesh, solutionState::Array{Array{Float64, 2}, 1})
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
@@ -404,7 +404,7 @@ function linInterp_3D(mesh::Array{Array{Any, 1},1}, solutionState::Array{Array{F
 end
 
 # Arbitrary value matrix interpolation
-function linInterp_3D(mesh::Array{Array{Any, 1},1}, matrix::Array{Float64, 2})
+function linInterp_3D(mesh, matrix::Array{Float64, 2})
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     nVars = size(matrix, 2)

@@ -10,7 +10,7 @@ function crossProd(v1::Array{Float64, 1}, v2::Array{Float64, 1})
 end
 
 # Points must be ordered sequentially
-function triangleCentroid(points::Array{Array{Float64, 1}})
+function triangleCentroid(points)
     center = [ 0.0, 0.0, 0.0 ]
     nPts = size(points, 1)
     for pt in 1:nPts
@@ -68,7 +68,7 @@ end
 # Splits cell into polygonal pyramids, each incorporating a single face and the geometric center of the cell
 #   Computes volume and centroid of each sub-pyramid
 #   Resulting volume is sum, centroid is the volume-weighted sum
-function cellVolCentroid(points::Array{Array{Float64, 1}}, fAVecs::Array{Array{Float64, 1}}, faceCentroids::Array{Array{Float64, 1}})
+function cellVolCentroid(points, fAVecs, faceCentroids)
     gC = geometricCenter(points)
     nFaces = size(fAVecs,1)
 
@@ -117,4 +117,222 @@ function unstructuredMeshInfo(mesh)
     end
 
     return nCells, nFaces, nBoundaries, nBdryFaces
+end
+
+function isNumber(str)
+    re = r"^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)$"
+    return occursin(re, str)
+end
+
+function OFFile_FindNItems(fileLines)
+    nLines = size(fileLines, 1)
+    lineCounter = 1
+    itemCount = 0
+    startLine = 0
+    for line in fileLines
+        if isNumber(line)
+            itemCount = parse(Int64, line)
+            startLine = lineCounter+2
+            break
+        end
+        lineCounter += 1
+    end
+    return startLine, itemCount
+end
+
+function readOFPointsFile(filePath)
+    f = open(filePath)
+    pointsLines = readlines(f)
+    startLine, pCount = OFFile_FindNItems(pointsLines)
+
+    points = zeros(pCount, 3)
+    for line in startLine:(startLine+pCount-1)
+        pLine = pointsLines[line]
+
+        bracketsRemoved = pLine[2:end-1]
+        coords = split(bracketsRemoved)
+        for d in 1:3
+            points[line+1-startLine, d] = parse(Float64, coords[d])
+        end
+    end
+
+    return points
+end
+
+function readOFFacesFile(filePath)
+    f = open(filePath)
+    facesLines = readlines(f)
+    startLine, fCount = OFFile_FindNItems(facesLines)
+
+    faces = []
+    for line in startLine:(startLine+fCount-1)
+        fLine = facesLines[line]
+        facePts = []
+
+        bracketIndex = findfirst("(", fLine)[1]
+        bracketsRemoved = fLine[bracketIndex+1:end-1]
+        ptNumbers = split(bracketsRemoved)
+        nPts = size(ptNumbers, 1)
+        for p in 1:nPts
+            # Add one to convert to 1-based indexing
+            push!(facePts, parse(Int64, ptNumbers[p])+1)
+        end
+        push!(faces, facePts)
+    end
+
+    return faces
+end
+
+function readOFOwnerFile(filePath)
+    f = open(filePath)
+    ownerLines = readlines(f)
+    startLine, oCount = OFFile_FindNItems(ownerLines)
+
+    faceOwnerCells = zeros(Int64, oCount)
+    for line in startLine:(startLine+oCount-1)
+        # Add one to convert to 1-based indexing
+        faceOwnerCells[line-startLine+1] = parse(Int64, ownerLines[line])+1
+    end
+
+    return faceOwnerCells
+end
+
+function readOFNeighbourFile(filePath)
+    f = open(filePath)
+    neighbourLines = readlines(f)
+    startLine, nCount = OFFile_FindNItems(neighbourLines)
+
+    faceNeighbourCells = zeros(Int64, nCount)
+    for line in startLine:(startLine+nCount-1)
+        # Add one to convert to 1-based indexing
+        faceNeighbourCells[line-startLine+1] = parse(Int64, neighbourLines[line])+1
+    end
+
+    return faceNeighbourCells
+end
+
+# Returns index of first line containing str
+# Otherwise returns -1
+function findInLines(str, lines, startLine)
+    nLines = size(lines, 1)
+    for i in startLine:nLines
+        if occursin(str, lines[i])
+            return i
+        end
+    end
+    return -1
+end
+
+function readOFBoundaryFile(filePath)
+    f = open(filePath)
+    bLines = readlines(f)
+    startLine, bCount = OFFile_FindNItems(bLines)
+    nLines = size(bLines, 1)
+
+    boundaryNames = Array{String, 1}(undef, bCount)
+    boundaryStartFaces = Array{Int64, 1}(undef, bCount)
+    boundaryNumFaces = Array{Int64, 1}(undef, bCount)
+    for i in 1:bCount
+        bNameLine = findInLines("{", bLines, startLine)-1
+        boundaryNames[i] = strip(bLines[bNameLine])
+
+        bNFacesLine = findInLines("nFaces", bLines, startLine)
+        boundaryNumFaces[i] = parse(Int64, split(bLines[bNFacesLine])[2][1:end-1])
+
+        bStartFaceLine = findInLines("startFace", bLines, startLine)
+        boundaryStartFaces[i] = parse(Int64, split(bLines[bStartFaceLine])[2][1:end-1])
+
+        startLine = findInLines("}", bLines, startLine)+1
+    end
+
+    return boundaryNames, boundaryNumFaces, boundaryStartFaces
+end
+
+# Supply absolute path to folder containing the OpenFOAM points, faces, cells, and boundaries files
+function readOpenFOAMMesh(polyMeshPath)
+    pointsFilePath = "$polyMeshPath/points"
+    points = readOFPointsFile(pointsFilePath)
+    facesFilePath = "$polyMeshPath/faces"
+    faces = readOFFacesFile(facesFilePath)
+    ownerFilePath = "$polyMeshPath/owner"
+    owner = readOFOwnerFile(ownerFilePath)
+    neighbourFilePath = "$polyMeshPath/neighbour"
+    neighbour = readOFNeighbourFile(neighbourFilePath)
+    boundaryFilePath = "$polyMeshPath/boundary"
+    boundaryNames, boundaryNumFaces, boundaryStartFaces = readOFBoundaryFile(boundaryFilePath)
+
+    return points, faces, owner, neighbour, boundaryNames, boundaryNumFaces, boundaryStartFaces
+end
+
+function OpenFOAMMesh(polyMeshPath)
+    points, OFfaces, owner, neighbour, boundaryNames, boundaryNumFaces, boundaryStartFaces = readOpenFOAMMesh(polyMeshPath)
+    nCells = maximum(owner)
+    nFaces = size(OFfaces, 1)
+    nBoundaries = size(boundaryNames, 1)
+
+    cells = Array{Array{Int64, 1}, 1}(undef, nCells)
+    cVols = zeros(nCells)
+    cCenters = Array{Array{Float64, 1}, 1}(undef, nCells)
+    faces = Array{Array{Int64, 1}, 1}(undef, nFaces)
+    fAVecs = Array{Array{Float64, 1}, 1}(undef, nFaces)
+    fCenters = Array{Array{Float64, 1}, 1}(undef, nFaces)
+    boundaryFaces = Array{Array{Int64, 1}, 1}(undef, nBoundaries)
+
+    for f in 1:nFaces
+        fPts = [ points[pt,:] for pt in OFfaces[f] ]
+        fAVecs[f], fCenters[f] = faceAreaCentroid(fPts)
+    end
+    #fAVecs and fCenters now complete
+
+    nOwners = size(owner, 1)
+    for f in 1:nOwners
+        ownerCell = owner[f]
+        if isassigned(cells, ownerCell)
+            push!(cells[ownerCell], f)
+        else
+            cells[ownerCell] = [f,]
+        end
+
+        faces[f] = [ownerCell, -1]
+    end
+
+    nNeighbours = size(neighbour, 1)
+    for f in 1:nNeighbours
+        neighbourCell = neighbour[f]
+        if isassigned(cells, neighbourCell)
+            push!(cells[neighbourCell], f)
+        else
+            cells[neighbourCell] = [f,]
+        end
+
+        faces[f][2] = neighbourCell
+    end
+    # fAVecs, fCenters, faces, cells now complete
+
+    for c in 1:nCells
+        pts = []
+        for f in cells[c]
+            for pt in OFfaces[f]
+                if !(points[pt,:] in pts)
+                    push!(pts, points[pt,:])
+                end
+            end
+        end
+        fCs = [ fCenters[f] for f in cells[c] ]
+        cell_fAVecs = [ fAVecs[f] for f in cells[c] ]
+
+        cVols[c], cCenters[c] = cellVolCentroid(pts, cell_fAVecs, fCs)
+    end
+    # fAVecs, fCenters, faces, cells, cVols, cCenters now complete
+
+    # Add boundaries
+    for b in 1:nBoundaries
+        startF = boundaryStartFaces[b]
+        endF = startF + boundaryNumFaces[b] - 1
+        boundaryFaces[b] = Array(startF:endF)
+    end
+
+    mesh = [ cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces ]
+
+    return mesh
 end
