@@ -15,6 +15,39 @@ function dot(vec1, vec2)
     return sum
 end
 
+# Assumes sizes are equal
+function dot(vec1::Array{Float64, 1}, vec2::Array{Float64, 1})
+    #Returns dot product of two vectors
+    s1 = size(vec1, 1)
+    s2 = size(vec2, 1)
+    if s1 != s2
+        return 0
+    end
+    sum = 0
+    for i in 1:size(vec1, 1)
+        sum += vec1[i]*vec2[i]
+    end
+    return sum
+end
+
+function dot(vec::Array{Float64, 1}, matrix::Array{Array{Float64, 1}, 1})
+    nRows = size(matrix, 1)
+    result = Array{Float64, 1}(undef, nRows)
+    for i in 1:nRows
+        result[i] = dot(vec, matrix[i])
+    end
+    return result
+end
+
+function dot(vec::Array{Float64, 1}, matrix::Array{Float64, 2})
+    nRows = size(matrix, 1)
+    result = Array{Float64, 1}(undef, nRows)
+    for i in 1:nRows
+        result[i] = dot(vec, matrix[i, :])
+    end
+    return result
+end
+
 function mag(vec)
     #Returns 2-norm of vector
     sqrSum = 0

@@ -112,6 +112,93 @@ function initializeShockTubeFVM(nCells=100; domainLength=1, Pratio=10, silent=tr
     return mesh, P, T, U
 end
 
+# Wrapper for FDM initialization function, adding a mesh definition suitable for FVM and vector-format velocity
+function initializeShockTube3DFVM(nCells=100; domainLength=1, Pratio=10, silent=true)
+    if !silent
+        println("Meshing shock tube, $nCells cells")
+    end
+    dx, P, T, U = initializeShockTubeFDM(nCells, domainLength=domainLength, Pratio=Pratio)
+
+    cellPrimitives = Array{Float64, 2}(undef, nCells, 5)
+    for c in 1:nCells
+        cellPrimitives[c,:] = [ P[c], T[c], 0.0, 0.0, 0.0 ]
+    end
+
+    #Shock tube dimensions
+    h = 0.1
+    w = 0.1
+
+    cells = []
+    faces = []
+    fAVecs = []
+    fCenters = []
+    boundaryFaces = [ [nCells,], [nCells+1,], [] ]
+    cVols = []
+    cCenters = []
+
+    fAVec = [h*w, 0, 0]
+    cV = h*w*domainLength/nCells
+    dx = dx[1]
+    for i in 1:nCells
+        # Modify natural face numbering to have boundary faces numbered last
+        if i == 1
+            push!(cells, [nCells, 1])
+            push!(faces, [i, i+1])
+        elseif i == nCells
+            push!(cells, [nCells-1, nCells+1])
+        else
+            push!(cells, [i-1, i])
+            push!(faces, [i, i+1])
+        end
+
+        push!(cVols, cV)
+        push!(fAVecs, fAVec)
+        push!(cCenters, [ (i-0.5)*dx, 0.0, 0.0 ])
+
+        # Face centers also adjusted to have boundaries last
+        if i != nCells
+            push!(fCenters, [ i*dx, 0.0, 0.0 ])
+        else
+            # Left boundary face
+            push!(fCenters, [ 0.0, 0.0, 0.0 ])
+        end
+    end
+
+    # Last face
+    push!(fAVecs, fAVec)
+    # Boundary faces
+    push!(faces, [-1,1])
+    push!(faces, [nCells, -1])
+    push!(fCenters, [ nCells*dx, 0.0, 0.0 ])
+
+    for c in 1:nCells
+        push!(faces, [c, -1])
+        push!(faces, [c, -1])
+        push!(faces, [c, -1])
+        push!(faces, [c, -1])
+        push!(fCenters, [ (c-0.5)*dx, 0.05, 0.0 ])
+        push!(fCenters, [ (c-0.5)*dx, -0.05, 0.0 ])
+        push!(fCenters, [ (c-0.5)*dx, 0.0, 0.05 ])
+        push!(fCenters, [ (c-0.5)*dx, 0.0, -0.05 ])
+        push!(boundaryFaces[3], nCells+1+c)
+        push!(boundaryFaces[3], nCells+2+c)
+        push!(boundaryFaces[3], nCells+3+c)
+        push!(boundaryFaces[3], nCells+4+c)
+        push!(cells[c], nCells+1+c)
+        push!(cells[c], nCells+2+c)
+        push!(cells[c], nCells+3+c)
+        push!(cells[c], nCells+4+c)
+        push!(fAVecs, [0, h*w, 0])
+        push!(fAVecs, [0, -h*w, 0])
+        push!(fAVecs, [0, 0, h*w])
+        push!(fAVecs, [0, 0, -h*w])
+    end
+
+    # Returns in mesh format
+    mesh = [ cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces ]
+    return mesh, cellPrimitives
+end
+
 ############################ Plotting ############################
 function plotShockTubeResults_Plotly(P, U, T, rho)
     plots = []

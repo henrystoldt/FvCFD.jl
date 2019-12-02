@@ -1,5 +1,6 @@
 # Unstructured FVM Mesh Format Definition
 Passed to nearly all FVM functions  
+TODO: Convert these to matrices instead of arrays of arrays  
 Defined as follows:  
 ```julia
 mesh =
@@ -10,7 +11,7 @@ mesh =
    faces,           #(list of lists, each sublist containing two cell indices: the owner cell and the neighbour cell)  
    fAVectors,       #(list of face area vectors)  
    fCenters,        #(list of position vectors of face centers)  
-   boundaryFaces    #(list of lists, each containing the indices of cells on the ith boundary)  
+   boundaryFaces    #(list of lists, each containing the indices of faces on the ith boundary)  
 ]
 ```
 

@@ -40,7 +40,7 @@ end
 function faceAreaCentroid(points::Array{Array{Float64, 1}})
     gC = geometricCenter(points)
     nPts = size(points, 1)
-    
+
     fAVec = [ 0.0, 0.0, 0.0 ]
     centroid = [ 0.0, 0.0, 0.0 ]
 
@@ -102,4 +102,19 @@ function cellCentroidToFaceVec(points::Array{Array{Float64, 1}}, faceCentroids::
     end
 
     return cellToFaceVec
+end
+
+function unstructuredMeshInfo(mesh)
+    cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
+    nCells = size(cells, 1)
+    nFaces = size(faces, 1)
+    nBoundaries = size(boundaryFaces, 1)
+
+    # Count boundary faces
+    nBdryFaces = 0
+    for bdry in 1:nBoundaries
+        nBdryFaces += size(boundaryFaces[bdry], 1)
+    end
+
+    return nCells, nFaces, nBoundaries, nBdryFaces
 end
