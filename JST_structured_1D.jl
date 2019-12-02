@@ -156,7 +156,7 @@ function structured_1D_JST_Eps(dx, k2, k4, c4, cellPrimitives::Array{Float64,2},
     return eps2, eps4
 end
 
-# Requires correct cellState and cellPrimitives as input
+# Requires correct cellState, cellFluxes and cellPrimitives as input
 function structured_JSTFlux1D(dx, solutionState)
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
     nCells = size(cellState, 1)
