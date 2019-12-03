@@ -409,11 +409,6 @@ function linInterp_3D(mesh, solutionState::Array{Array{Float64, 2}, 1})
             faceFluxes[f, v] = cellFluxes[c1, v].*(c2Dist/totalDist) .+ cellFluxes[c2, v].*(c1Dist/totalDist)
         end
     end
-
-    #TODO: Proper boundary treatment
-    for f in nFaces-nBdryFaces+1:nFaces
-        faceFluxes[f,:] .= 0
-    end
 end
 
 # Arbitrary value matrix interpolation
@@ -561,7 +556,7 @@ end
 
 # Requires correct cellState and cellPrimitives as input
 # Classical JST, central differencing + artificial diffusion. Each face treated as 1D
-function unstructured_JSTFlux(mesh, solutionState)
+function unstructured_JSTFlux(mesh, solutionState, boundaryConditions)
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
@@ -594,7 +589,7 @@ function unstructured_JSTFlux(mesh, solutionState)
         end
     end
 
-    return integrateFluxes_unstructured3D(mesh, solutionState)
+    return integrateFluxes_unstructured3D(mesh, solutionState, boundaryConditions)
 end
 
 ######################### TimeStepping #######################
@@ -661,7 +656,7 @@ function integrateFluxes_structured1D(dx, solutionState)
     return fluxResiduals
 end
 
-function integrateFluxes_unstructured3D(mesh, solutionState)
+function integrateFluxes_unstructured3D(mesh, solutionState, boundaryConditions)
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
@@ -671,9 +666,9 @@ function integrateFluxes_unstructured3D(mesh, solutionState)
     nVars = size(fluxResiduals, 2)
 
     #### Boundaries ####
-    # TODO: Add other boundary treatments as appropriate
-    for b in 1:2
-        zeroGradientBoundary(mesh, solutionState, b)
+    for b in 1:nBoundaries
+        bFunctionIndex = 2*b-1
+        boundaryConditions[bFunctionIndex](mesh, solutionState, b, boundaryConditions[bFunctionIndex+1])
     end
 
     #### Flux Integration ####
@@ -707,19 +702,24 @@ end
 
 ######################### Boundary Conditions #######################
 # Can work as a supersonic inlet if initial conditions are set to the inlet conditions
-function constValueBoundary(mesh, solutionState, boundaryNumber)
+function supersonicInletBoundary(mesh, solutionState, boundaryNumber, inletConditions)
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
 
+    P, T, Ux, Uy, Uz = inletConditions[1]
+    rho = idealGasRho(T, P)
+    xMom, yMom, zMom = [Ux, Uy, Uz] .* rho
+    e = calPerfectEnergy(T, Cp)
+    eV2 = rho*(e + (mag(U)^2)/2)
+
+    boundaryFluxes = calculateFluxes3D(P, T, Ux, Uy, Uz, rho, xMom, yMom, zMom, eV2)
     currentBoundary = boundaryFaces[boundaryNumber]
     for face in currentBoundary
-        # Find associated cell
-        ownerCell = max(faces[face][1], faces[face][2]) #One of these will be -1 (no cell), the other is the boundary cell we want
-        fluxResiduals[ownerCell] = 0
+        faceFluxes[face,:] = boundaryFluxes
     end
 end
 
-function zeroGradientBoundary(mesh, solutionState, boundaryNumber)
+function zeroGradientBoundary(mesh, solutionState, boundaryNumber, _)
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
 
@@ -729,6 +729,32 @@ function zeroGradientBoundary(mesh, solutionState, boundaryNumber)
         ownerCell = max(faces[face][1], faces[face][2]) #One of these will be -1 (no cell), the other is the boundary cell we want
         faceFluxes[face, :] = cellFluxes[ownerCell, :]
     end
+end
+
+function wallBoundary(mesh, solutionState, boundaryNumber, _)
+    cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
+    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
+
+    currentBoundary = boundaryFaces[boundaryNumber]
+    for f in currentBoundary
+        ownerCell = max(faces[face][1], faces[face][2]) #One of these will be -1 (no cell), the other is the boundary cell we want
+
+        faceP = cellPrimitives[ownerCell, 1]
+        # Momentum flux is Pressure in each of the normal directions (dot product)
+        faceFluxes[f, 4] = faceP * fAVecs[f,1]
+        faceFluxes[f, 7] = faceP * fAVecs[f,2]
+        faceFluxes[f, 10] = faceP * fAVecs[f,3]
+
+        # Mass Flux is zero
+        faceFluxes[f, 1:3] .= 0.0
+        # Energy Flux is zero
+        faceFluxes[f, 13:15] .= 0.0
+    end
+end
+symmetryBoundary = wallBoundary
+
+function emptyBoundary(mesh, solutionState, boundaryNumber, _)
+    return
 end
 
 # Slip wall boundary condition does not require treatment, flux is simply zero across the boundary
@@ -938,7 +964,7 @@ function structured1DFVM(dx::Array{Float64, 1}, cellPrimitives::Array{Float64, 2
     return cellPrimitives[:,1], cellPrimitives[:,3], cellPrimitives[:,2], cellState[:,1]
 end
 
-function unstructured3DFVM(mesh, cellPrimitives::Array{Float64, 2}, timeIntegrationFn=forwardEuler, fluxFunction=unstructured_JSTFlux; initDt=0.001, endTime=0.14267, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, silent=true)
+function unstructured3DFVM(mesh, cellPrimitives::Array{Float64, 2}, boundaryConditions, timeIntegrationFn=forwardEuler, fluxFunction=unstructured_JSTFlux; initDt=0.001, endTime=0.14267, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, silent=true)
     if !silent
         println("Initializing Simulation")
     end
@@ -979,7 +1005,7 @@ function unstructured3DFVM(mesh, cellPrimitives::Array{Float64, 2}, timeIntegrat
         end
 
         ############## Take a timestep #############
-        solutionState = timeIntegrationFn(mesh, fluxFunction, solutionState, dt)
+        solutionState = timeIntegrationFn(mesh, fluxFunction, solutionState, boundaryConditions, dt)
         currTime += dt
         timeStepCounter += 1
 

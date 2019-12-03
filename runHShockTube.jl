@@ -2,7 +2,7 @@ using Plots
 using Plots.PlotMeasures
 using LaTeXStrings
 using Profile
-# using ProfileView #Doesn't want to install on my work ubuntu desktop for some reason
+using ProfileView #Doesn't want to install on my work ubuntu desktop for some reason
 using BenchmarkTools
 
 pyplot()
@@ -31,7 +31,9 @@ println("Meshing")
 OFmesh = OpenFOAMMesh("OFShockTubeMesh")
 nCells = size(OFmesh[1], 1)
 mesh, cellPrimitives = initializeShockTube3DFVM(nCells...)
-@time P, U, T, rho = unstructured3DFVM(OFmesh, cellPrimitives, ShuOsher, initDt=0.00001, endTime=0.14267, targetCFL=0.95, silent=false)
+# Boundaries 1 and 2 are the ends, 3 is all the sides
+boundaryConditions = [ zeroGradientBoundary, [], zeroGradientBoundary, [], emptyBoundary, [] ]
+@time P, U, T, rho = unstructured3DFVM(OFmesh, cellPrimitives, boundaryConditions, ShuOsher, initDt=0.00001, endTime=0.14267, targetCFL=0.95, silent=false)
 xVel = U
 
 ### Unstructured FVM ###
