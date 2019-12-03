@@ -130,7 +130,7 @@ function OFFile_FindNItems(fileLines)
     itemCount = 0
     startLine = 0
     for line in fileLines
-        if isNumber(line)
+        if isNumber(strip(line))
             itemCount = parse(Int64, line)
             startLine = lineCounter+2
             break
