@@ -13,53 +13,6 @@ end
 
 
 # Handles scalar or vector-valued variables
-function linInterp(mesh, values...)
-    cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
-    nFaces = size(faces, 1)
-    nBdryFaces = size(boundaryFaces, 1)
-
-    fVals = Array{Float64, 1}(undef, nFaces)
-
-    result = []
-    for vals in values
-        fVals = []
-
-        ############ Default Value ############
-        # Construct a default value of the appropriate dimensionality
-        # defaultVal = 0.0 for 1D, [ 0.0, 0.0 ] for 2D etc...
-        defaultVal = []
-        if size(vals[1], 1) ==1
-            defaultVal = 0
-        else
-            for a in vals[1]
-                push!(defaultVal, 0.0)
-            end
-        end
-
-        ########### Do Interpolations ###########
-        for i in 1:nFaces
-            if i > nFaces-nBdryFaces
-                # Faces on boundaries not treated, must be set externally
-                push!(fVals, defaultVal)
-
-            else
-                # Find value at face using linear interpolation
-                c1 = faces[i][1]
-                c2 = faces[i][2]
-
-                #TODO: Precompute these distances
-                c1Dist = mag(cCenters[c1] .- fCenters[i])
-                c2Dist = mag(cCenters[c2] .- fCenters[i])
-                totalDist = c1Dist + c2Dist
-                push!(fVals, vals[c1].*(c2Dist/totalDist) .+ vals[c2].*(c1Dist/totalDist))
-            end
-        end
-
-        push!(result, fVals)
-    end
-    return result
-end
-
 
 function musclDifference(mesh, rho, xMom, eV2, dx, gamma=1.4; debug=false)
     #= Uses MUSCL differencing to get the conserved values at the left and right side of each face
@@ -173,7 +126,8 @@ function leftFaceVals(q_ip, q_i, q_im, dx)
     q_ip - value at the cell opposite the face you're interpolating TODO
     q_im - value at the cell further away from the current face
     =#
-    s = vanAlbeda(q_ip, q_i, q_im, dx)
+    #s = vanAlbeda(q_ip, q_i, q_im, dx)
+    s = vanLeer(q_ip, q_i, q_im)
     Q_L = q_i + 0.25*s*( (1+s)*(q_i-q_im) + (1-s)*(q_ip-q_i) ) * q_i
 
     return Q_L
@@ -186,7 +140,8 @@ function rightFaceVals(q_ip, q_i, q_im, dx)
         q_im - value at the cell on the other side of your face
         q_ip - value at the cell further away from your current face
     =#
-    s = vanAlbeda(q_ip, q_i, q_im, dx)
+    #s = vanAlbeda(q_ip, q_i, q_im, dx)
+    s = vanLeer(q_ip, q_i, q_im, direc=1)  #1/vanLeer because it should be fwd/backwards
     Q_R = q_i - 0.25*s*( (1+s)*(q_ip-q_i) + (1-s)*(q_i-q_im) )*q_i
 
     return Q_R
@@ -195,8 +150,29 @@ end
 function vanAlbeda(q_ip, q_i, q_im, dx)
     #=Impplements the vanAlbeda flux limiter, with a delta value of dx^3
     =#
-    delta = dx.*dx.*dx
+    #delta = dx.*dx.*dx
+    #delta = dx
+    delta = 1.0
     s = (2 * (q_ip-q_i)*(q_i-q_im) + delta )/( (q_ip-q_i)^2 * (q_i-q_im)^2 + delta )
+
+    return s
+end
+
+function vanLeer(q_ip, q_i, q_im; direc=0, dx=0.05)
+    #=Van Leer slope limiter
+    No Delta value required
+    =#
+    if direc ==0
+        r = (q_i - q_im)/(q_ip - q_i + dx)
+    else
+        r = (q_ip-q_i)/(q_i-q_im + dx)
+    end
+
+    s = 0
+
+    if r > 0
+        s = 2*r/(r+1)
+    end
 
     return s
 end
@@ -246,12 +222,20 @@ function eigenFluxVectors(rhoRoe, uRoe, HRoe, aRoe, deltaRho, deltaU, deltaP, de
     =#
     nFaces = size(fAVecs,1)
 
+    mach = uRoe ./ aRoe
+
+    if maximum(mach) > 1
+        println("Passed sonic point!!!!")
+    end
+
     #First step is to find the eigenvalues at each face
     eig1, eig2, eig3 = findEigenvalues(uRoe, aRoe, fAVecs)
 
     #Check, and if required correct them
     #This is the step I'm least sure about in the whole process
-    newEig1, newEig2, newEig3 = checkEigenvalues(eig1, eig2, eig3, deltaU, deltaA, nFaces)
+    #newEig1, newEig2, newEig3 = checkEigenvalues(eig1, eig2, eig3, deltaU, deltaA, nFaces)
+    newEig1, newEig2, newEig3 = checkEigenvaluesUpdate(eig1, eig2, eig3, aRoe, nFaces)
+
 
     #Construct vectors
 
@@ -262,16 +246,16 @@ function eigenFluxVectors(rhoRoe, uRoe, HRoe, aRoe, deltaRho, deltaU, deltaP, de
     for i in 1:nFaces
         #TODO: All the * 1 in this loop are places where the *1 should be replaced by the unit vector of the face area
         #First vector is easiest
-        f1[i,1] = newEig1[i] * (deltaRho[i] - (deltaP[i]/(aRoe[i]^2))  )
-        f1[i,2] = newEig1[i] * ( uRoe[i]*( deltaRho[i] - (deltaP[i]/(aRoe[i]^2)) ) + rhoRoe[i]*( deltaU[i] - 1 *deltaU[i] ) ) #The last term only matters for 2D/3D
-        f1[i,3] = newEig1[i] * ( 0.5*uRoe[i]*( deltaRho[i] - (deltaP[i]/(aRoe[i]^2)) ) + rhoRoe[i]*( uRoe[i]*deltaU[i] - 1 * newEig1[i]*deltaU[i] ) ) #same as above
+        f1[i,1] = abs(newEig1[i]) * (deltaRho[i] - (deltaP[i]/(aRoe[i]^2))  )
+        f1[i,2] = abs(newEig1[i]) * ( uRoe[i]*( deltaRho[i] - (deltaP[i]/(aRoe[i]^2)) ) + rhoRoe[i]*( deltaU[i] - 1 *deltaU[i] ) ) #The last term only matters for 2D/3D
+        f1[i,3] = abs(newEig1[i]) * ( 0.5*uRoe[i]*( deltaRho[i] - (deltaP[i]/(aRoe[i]^2)) ) + rhoRoe[i]*( uRoe[i]*deltaU[i] - 1 * newEig1[i]*deltaU[i] ) ) #same as above
 
-        f2_pre = newEig2[i] * ( deltaP[i]/(2*aRoe[i]^2) + rhoRoe[i]* 1 * deltaU[i]/(2*aRoe[i]) )
+        f2_pre = abs(newEig2[i]) * ( deltaP[i]/(2*aRoe[i]^2) + rhoRoe[i]* 1 * deltaU[i]/(2*aRoe[i]) )
         f2[i,1] = f2_pre
         f2[i,2] = f2_pre * (uRoe[i] + 1 * aRoe[i])
         f2[i,3] = f2_pre * (HRoe[i] + 1 * uRoe[i] * aRoe[i])
 
-        f3_pre = newEig3[i] * ( deltaP[i]/(2*aRoe[i]^2) - rhoRoe[i]* 1 * deltaU[i]/(2*aRoe[i]) )
+        f3_pre = abs(newEig3[i]) * ( deltaP[i]/(2*aRoe[i]^2) - rhoRoe[i]* 1 * deltaU[i]/(2*aRoe[i]) )
         f3[i,1] = f3_pre
         f3[i,2] = f3_pre * (uRoe[i] - 1 * aRoe[i])
         f3[i,3] = f3_pre * (HRoe[i] - 1 * uRoe[i] * aRoe[i])
@@ -301,6 +285,7 @@ function checkEigenvalues(eig1, eig2, eig3, dU, dA, n, K=0.04)
 
         And using that to replace the U value???
     =#
+
     new_eig1 = Array{Float64, 1}(undef, n)
     new_eig2 = Array{Float64, 1}(undef, n)
     new_eig3 = Array{Float64, 1}(undef, n)
@@ -322,6 +307,7 @@ function checkEigenvalues(eig1, eig2, eig3, dU, dA, n, K=0.04)
         if (dU[i]+dA[i])>0
             #replace
             eps = K * (dU[i] + dA[i])
+            #eps = K * c
             if eps > abs(eig2[i])
                 new_eig2[i] = (eig2[i]^2 + eps^2)/(2*eps)
                 println("Updated eig2 value!")
@@ -335,12 +321,63 @@ function checkEigenvalues(eig1, eig2, eig3, dU, dA, n, K=0.04)
         if (dU[i]-dA[i])>0
             #replace
             eps = K * (dU[i] - dA[i])
+            #eps = K * c
             if eps > abs(eig3[i])
                 new_eig3[i] = (eig3[i]^2 + eps^2)/(2*eps)
                 println("Updated eig3 value!")
             else
                 new_eig3[i] = eig3[i]
             end
+        else
+            new_eig3[i] = eig3[i]
+        end
+
+    end
+
+    println("Done with eigenvalues!")
+
+    return new_eig1, new_eig2, new_eig3
+
+end
+
+function checkEigenvaluesUpdate(eig1, eig2, eig3, sound, n, K=0.1)
+    #=Really not sure if this is the way to do it, but
+        taking max of (U_r-U_l or 0)
+
+        And using that to replace the U value???
+    =#
+    #c = maximum(sound)
+
+    new_eig1 = Array{Float64, 1}(undef, n)
+    new_eig2 = Array{Float64, 1}(undef, n)
+    new_eig3 = Array{Float64, 1}(undef, n)
+
+    for i in 1:n #Entropy fix I hope??
+        if K*sound[i] > abs(eig1[i])
+            #replace
+            #eps = K * sound[i]
+            #new_eig1[i] = (eig1[i]^2 + eps^2)/(2*eps)
+            new_eig1[i] = eig1[i]
+            #println("Updated eig1 value!")
+        else
+            new_eig1[i] = eig1[i]
+        end
+
+        if K*sound[i] > abs(eig2[i])
+            eps = K * sound[i]
+            new_eig2[i] = (eig2[i]^2 + eps^2)/(2*eps)
+            println("Updated eig2 value!")
+
+        else
+            new_eig2[i] = eig2[i]
+        end
+
+        if (K*sound[i]) > abs(eig3[i])
+            #replace
+            eps = K * sound[i]
+            new_eig3[i] = (eig3[i]^2 + eps^2)/(2*eps)
+            println("Updated eig3 value!")
+
         else
             new_eig3[i] = eig3[i]
         end
@@ -435,6 +472,8 @@ function upwindFVMRoe1D(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=
         # xMassFlux, xMomFlux, xeV2Flux = upwindInterp(mesh, U, xMom, rhoU2p, rhoUeV2PU)
         #xMassFlux, xMomFlux, xeV2Flux, faceP = linInterp(mesh, xMom, rhoU2p, rhoUeV2PU, P)
 
+        println("Checkpoint 1!\n")
+
         #Use MUSCL differencing to get values at left/right of each face. Boundaries are treated inside this function
         consLeft, primsLeft, consRight, primsRight = musclDifference(mesh, rho, xMom, eV2, dx, debug=debug)
 
@@ -453,6 +492,8 @@ function upwindFVMRoe1D(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=
         aLeft = (gamma-1)*(HLeft - 0.5*uLeft.^2)
         aRight = (gamma-1)*(HRight - 0.5*uRight.^2)
 
+        println("Checkpoint 2!\n")
+
 
         #Find ROE averaged quantities at each face
         rhoRoe, uRoe, HRoe, aRoe = roeAveraged(nFaces, rhoLeft, rhoRight, uLeft, uRight, HLeft, HRight)
@@ -466,11 +507,15 @@ function upwindFVMRoe1D(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=
         deltaP = pRight - pLeft
         deltaA = aRight - aLeft
 
+        println("Checkpoint 3!\n")
+
         eigen1Flux, eigen2Flux, eigen3Flux = eigenFluxVectors(rhoRoe, uRoe, HRoe, aRoe, deltaRho, deltaU, deltaP, deltaA, fAVecs) #Eigenvalue check and correction for entropy happens in this step
 
 
         #Combines decomposed flux vectors into flux at every step
         xMassFlux, xMomFlux, xeV2Flux = findFluxes(leftFlux, rightFlux, eigen1Flux, eigen2Flux, eigen3Flux, fAVecs )
+
+        println("Checkpoint 4!\n")
 
 
 
@@ -504,6 +549,11 @@ function upwindFVMRoe1D(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=
             println("eV22: $eV2")
         end
 
+        #BC fix
+
+        stateVars[2][1] = stateVars[2][2]
+        stateVars[2][nCells] = stateVars[2][nCells-1]
+
         #Unpack state variables
         #Not sure if this step is required??
         rho = stateVars[1][:]
@@ -521,6 +571,8 @@ function upwindFVMRoe1D(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=
         copyValues(nCells-1, nCells, stateVars)
         =#
 
+        println("Checkpoint 5!\n")
+
         # Decode primitive values
         for i in 1:nCells
             P[i], T[i], U[i], rhoU2p[i], rhoUeV2PU[i] = decodePrimitives3D(rho[i], xMom[i], eV2[i])
@@ -534,6 +586,17 @@ function upwindFVMRoe1D(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=
 
         currTime += dt
 
+        println("Checkpoint 6!\n")
+
+        #Catch negative temps for now - until can find cause
+        #=
+        for z in 1:nCells
+            if T[z]< 0
+                T[z] = 0.0001
+            end
+        end
+        =#
+
         ############## CFL Calculation, timestep adjustment #############
         maxCFL = 0
         println("Temp is: ", T)
@@ -545,6 +608,12 @@ function upwindFVMRoe1D(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=
         dt *= ((targetCFL/maxCFL - 1)/5+1)
 
     end
+
+    println("P is: ", P)
+    println("U is: ", U)
+    println("Temp is: ", T)
+    
+
 
     return P, U, T, rho
 end

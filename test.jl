@@ -1,5 +1,5 @@
 # For numbers of a magnitude less than ~1000
-function almostEqual(iterable1, iterable2, allowedError=0.0000000000001)    
+function almostEqual(iterable1, iterable2, allowedError=0.0000000000001)
     if size(iterable1, 1) != size(iterable2, 1)
         s1 = size(iterable1, 1)
         s2  = size(iterable2, 1)
@@ -34,7 +34,7 @@ function matrixAlmostEqual(m1, m2, allowedError=0.0000000000001)
     end
 
     for i in 1:s1
-        if almostEqual(m1[i], m2[i], allowedError) != true
+        if almostEqual(m1[i,:], m2[i,:], allowedError) != true
             return false
         end
     end
