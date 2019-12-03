@@ -1,9 +1,11 @@
-#using Plots
-#using Plots.PlotMeasures
-using PyPlot
+using Plots
+using Plots.PlotMeasures
+#using PyPlot
 using LaTeXStrings
 using Profile
 #using ProfileView
+
+pyplot()
 
 #plotly()
 
@@ -14,14 +16,28 @@ include("finiteVolumeRoe.jl")
 
 ################## Output ##################
 nCells = 500
-nCells = 5
+nCells = 15
 
 #### FDM or Structured FVM ###
 # P, U, T, rho = macCormack1DFDM(initializeShockTubeFDM(nCells)..., initDt=0.000001, targetCFL=0.95, endTime=0.14267, Cx=0.1)
 # P, U, T, rho = macCormack1DConservativeFDM(initializeShockTubeFDM(nCells)..., initDt=0.00001, targetCFL=0.95, endTime=0.14267, Cx=0.3)
 # P, U, T, rho = upwind1DConservativeFDM(initializeShockTubeFDM(nCells)..., initDt=0.00001, endTime=0.14267, targetCFL=0.01, Cx=0.3)
-@time P, U, T, rho = upwindFVMRoe1D(initializeShockTubeFVM(nCells)..., initDt=0.00001, endTime=0.14267, targetCFL=0.2, verbose=true)
+#@time P, U, T, rho = upwindFVMRoe1D(initializeShockTubeFVM(nCells)..., initDt=0.00001, endTime=0.14267, targetCFL=0.2, verbose=true)
+@time P, U, T, rho = upwindFVMRoe1D(initializeShockTubeFVM(nCells)..., initDt=0.00001, endTime=0.01603, targetCFL=0.2, verbose=true)
+
 #@time P, U, T, rho = JST_Structured1DFVM(initializeShockTube_StructuredFVM(nCells)..., forwardEuler, initDt=0.00001, endTime=0.14267, targetCFL=0.5, silent=true)
+#=
+xVel = U[:][4]
+println(xVel)
+println(typeof(U))
+
+for i in 1:nCells
+    xVel[i] = U[i][1]
+    #println(xVel[i])
+end
+=#
+
+#print(size(U))
 
 xVel = U
 #xVel2 = U2
@@ -36,6 +52,8 @@ xVel = U
 # for i in 1:nCells
 #     xVel[i] = U[i][1]
 # end
+
+println("Vel = ", xVel)
 
 println("Plotting results")
 plotShockTubeResults_PyPlot(P, xVel, T, rho)
