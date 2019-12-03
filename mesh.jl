@@ -272,12 +272,6 @@ function OpenFOAMMesh_findCellPts(polyMeshPath)
 
     cellPtIndices = Array{Array{Int64, 1}, 1}(undef, nCells)
     cells = Array{Array{Int64, 1}, 1}(undef, nCells)
-    # cVols = zeros(nCells)
-    # cCenters = Array{Array{Float64, 1}, 1}(undef, nCells)
-    # faces = Array{Array{Int64, 1}, 1}(undef, nFaces)
-    # fAVecs = Array{Array{Float64, 1}, 1}(undef, nFaces)
-    # fCenters = Array{Array{Float64, 1}, 1}(undef, nFaces)
-    # boundaryFaces = Array{Array{Int64, 1}, 1}(undef, nBoundaries)
 
     nOwners = size(owner, 1)
     for f in 1:nOwners

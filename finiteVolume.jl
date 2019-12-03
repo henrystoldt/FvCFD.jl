@@ -153,7 +153,7 @@ function greenGaussGrad_matrix(mesh, matrix, valuesAtFaces=false)
 
     # Integrate fluxes from each face
     faceIntegral = zeros(nVars, 3)
-    for f in 1:nFaces-nBdryFaces
+    for f in 1:nFaces
         for v in 1:nVars
             faceIntegral[v,:] = fAVecs[f] .* faceVals[f, v]
         end
@@ -161,23 +161,17 @@ function greenGaussGrad_matrix(mesh, matrix, valuesAtFaces=false)
         ownerCell = faces[f][1]
         neighbourCell = faces[f][2]
 
-        grad[ownerCell, :, :] += faceIntegral
-        grad[neighbourCell, :, :] -= faceIntegral
+        if ownerCell > -1
+            grad[ownerCell, :, :] += faceIntegral
+        end
+        if neighbourCell > -1
+            grad[neighbourCell, :, :] -= faceIntegral
+        end
     end
 
     # Divide integral by cell volume to obtain gradients
     for c in 1:nCells
         grad[c,:,:] ./= cVols[c]
-    end
-
-    # Set boundary gradients to zero
-    #TODO: This may be unnecessary
-    for f in nFaces-nBdryFaces+1:nFaces
-        for cell in faces[f]
-            if cell != -1
-                grad[cell, :, :] .= 0
-            end
-        end
     end
 
     return grad
@@ -483,7 +477,7 @@ function faceDeltas(mesh, solutionState)
 
     faceDeltas = zeros(nFaces, nVars)
 
-    # Boundary face fluxes must be set separately
+    # Boundary face fluxes must be set separately (faceDelta is zero at all possible boundary conditions right now)
     for f in 1:nFaces-nBdryFaces
         ownerCell = faces[f][1]
         neighbourCell = faces[f][2]
@@ -524,6 +518,7 @@ function unstructured_JSTEps(mesh, solutionState, k2=0.5, k4=(1/32), c4=1, gamma
 
     sj = zeros(nCells)
     rj = zeros(nCells)
+    sjCount = zeros(nCells)
     for f in 1:nFaces-nBdryFaces
         # Calculate sj, rj, eps2, eps4
         ownerCell = faces[f][1]
@@ -535,18 +530,20 @@ function unstructured_JSTEps(mesh, solutionState, k2=0.5, k4=(1/32), c4=1, gamma
         farOwnerP = nP - 2*dot(d, gradP[ownerCell])
         farNeighbourP = oP + 2*dot(d, gradP[neighbourCell])
         sj[ownerCell] += (abs( nP - 2*oP + farOwnerP )/ max( abs(nP - oP) + abs(oP - farOwnerP), 0.0000000001))^2
+        sjCount[ownerCell] += 1
         sj[neighbourCell] += (abs( oP - 2*nP + farNeighbourP )/ max( abs(farNeighbourP - nP) + abs(nP - oP), 0.0000000001))^2
+        sjCount[neighbourCell] += 1
     end
 
     for c in 1:nCells
         rj[c] = mag(cellPrimitives[c,3:5]) +  sqrt(gamma * R * cellPrimitives[c,2]) # Velocity magnitude + speed of sound
-        sj[c] /= size(cells[c], 1) # Average the sj's computed by each face for each cell
+        sj[c] /= sjCount[c] # Average the sj's computed by each face for each cell
     end
 
     rjsjF = maxInterp(mesh, rj, sj) # column one is rj, column two is sj, both at face centers
 
-    eps2 = Array{Float64, 1}(undef, nFaces)
-    eps4 = Array{Float64, 1}(undef, nFaces)
+    eps2 = zeros(nFaces)
+    eps4 = zeros(nFaces)
     for f in 1:nFaces-nBdryFaces
         eps2[f] = k2 * rjsjF[f,2] * rjsjF[f,1]
         eps4[f] = max(0, k4*rjsjF[f,1] - c4*eps2[f])
@@ -562,6 +559,12 @@ function unstructured_JSTFlux(mesh, solutionState, boundaryConditions)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
     nVars = size(cellState, 2)
+
+    #### Boundaries Prediction ####
+    for b in 1:nBoundaries
+        bFunctionIndex = 2*b-1
+        boundaryConditions[bFunctionIndex](mesh, solutionState, b, boundaryConditions[bFunctionIndex+1])
+    end
 
     # Centrally differenced fluxes
     linInterp_3D(mesh, solutionState)
@@ -666,7 +669,7 @@ function integrateFluxes_unstructured3D(mesh, solutionState, boundaryConditions)
     fill!(fluxResiduals, 0)
     nVars = size(fluxResiduals, 2)
 
-    #### Boundaries ####
+    #### Boundaries Correction ####
     for b in 1:nBoundaries
         bFunctionIndex = 2*b-1
         boundaryConditions[bFunctionIndex](mesh, solutionState, b, boundaryConditions[bFunctionIndex+1])
@@ -743,9 +746,9 @@ function wallBoundary(mesh, solutionState, boundaryNumber, _)
 
         faceP = cellPrimitives[ownerCell, 1]
         # Momentum flux is Pressure in each of the normal directions (dot product)
-        faceFluxes[f, 4] = faceP * fAVecs[f][1]
-        faceFluxes[f, 7] = faceP * fAVecs[f][2]
-        faceFluxes[f, 10] = faceP * fAVecs[f][3]
+        faceFluxes[f, 4] = faceP
+        faceFluxes[f, 8] = faceP
+        faceFluxes[f, 12] = faceP
 
         # Mass Flux is zero
         faceFluxes[f, 1:3] .= 0.0

@@ -72,11 +72,20 @@ function outputVTK(meshPath, cellPrimitives, fileName="solution.vtk")
 
         #### Output SCALARS, VECTORS ####
         write(f, "\nCELL_DATA $nCells\n")
-        write(f, "SCALARS P float 1\n") # Name=P dataType=float, 1 component
-        write(f, "LOOKUP_TABLE default\n") # No custom color lookup table
+        dataNames = [ "P", "T" ]
+        for d in 1:2
+            dataName = dataNames[d]
+            write(f, "SCALARS $dataName float 1\n") # Name=P dataType=float, 1 component
+            write(f, "LOOKUP_TABLE default\n") # No custom color lookup table
+            for c in 1:nCells
+                P = cellPrimitives[c, d]
+                write(f, "$P\n")
+            end
+        end
+        write(f, "VECTORS U float\n")
         for c in 1:nCells
-            P = cellPrimitives[c, 1]
-            write(f, "$P\n")
+            Ux, Uy, Uz = cellPrimitives[c, 3:5]
+            write(f, "$Ux $Uy $Uz\n")
         end
     end
 end
