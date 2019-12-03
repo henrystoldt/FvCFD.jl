@@ -25,12 +25,8 @@ boundaryConditions = [ emptyBoundary, [], supersonicInletBoundary, [P, T, U...],
 
 # Solve
 mesh = OpenFOAMMesh(meshPath)
-cellPrimitives = unstructured3DFVM(mesh, initializeUniformSolution3D(mesh, P, T, U...), boundaryConditions, ShuOsher, initDt=0.0000001, endTime=0.0002, targetCFL=0.5, silent=false, restart=true)
+unstructured3DFVM(mesh, meshPath, initializeUniformSolution3D(mesh, P, T, U...), boundaryConditions, ShuOsher, initDt=0.0000001, endTime=0.01, outputInterval=0.0002, targetCFL=0.5, silent=false, restart=false)
 
-outputVTK(meshPath, cellPrimitives)
-P = cellPrimitives[:,1]
-println("Plotting results")
-plot2DResult(mesh, P)
 
 #### Simple convection ####
 # mesh, cellPrimitives = initializeShockTube3DFVM(10)

@@ -969,7 +969,7 @@ function structured1DFVM(dx::Array{Float64, 1}, cellPrimitives::Array{Float64, 2
     return cellPrimitives[:,1], cellPrimitives[:,3], cellPrimitives[:,2], cellState[:,1]
 end
 
-function unstructured3DFVM(mesh, cellPrimitives::Array{Float64, 2}, boundaryConditions, timeIntegrationFn=forwardEuler, fluxFunction=unstructured_JSTFlux; initDt=0.001, endTime=0.14267, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, silent=true, restart=false, createRestartFile=true, restartFile="JuliaCFDRestart.txt")
+function unstructured3DFVM(mesh, meshPath, cellPrimitives::Array{Float64, 2}, boundaryConditions, timeIntegrationFn=forwardEuler, fluxFunction=unstructured_JSTFlux; initDt=0.001, endTime=0.14267, outputInterval=0.01, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, silent=true, restart=false, createRestartFile=true, restartFile="JuliaCFDRestart.txt")
     if !silent
         println("Initializing Simulation")
     end
@@ -1003,6 +1003,9 @@ function unstructured3DFVM(mesh, cellPrimitives::Array{Float64, 2}, boundaryCond
     dt = initDt
     currTime = 0
     timeStepCounter = 0
+    nextOutputTime = outputInterval
+    writeOutputThisIteration = false
+    vtkCounter = 1
     while currTime < endTime
         ############## Timestep adjustment #############
         maxCFL = maxCFL3D(mesh, solutionState, dt)
@@ -1011,6 +1014,9 @@ function unstructured3DFVM(mesh, cellPrimitives::Array{Float64, 2}, boundaryCond
         # Adjust timestep to hit endtime if this is the final time step
         if (endTime - currTime) < dt
             dt = endTime - currTime
+        elseif (nextOutputTime - currTime) < dt
+            dt = nextOutputTime - currTime
+            writeOutputThisIteration = true
         end
 
         ############## Take a timestep #############
@@ -1021,13 +1027,14 @@ function unstructured3DFVM(mesh, cellPrimitives::Array{Float64, 2}, boundaryCond
         if !silent
             @printf("Timestep: %5.0f, simTime: %8.4g, Max CFL: %8.4g \n", timeStepCounter, currTime, maxCFL)
         end
+
+        if writeOutputThisIteration
+            updateSolutionOutput(cellPrimitives, restartFile, meshPath, vtkCounter, createRestartFile)
+            vtkCounter += 1
+            writeOutputThisIteration = false
+            nextOutputTime = nextOutputTime + outputInterval
+        end
     end
 
-    if createRestartFile
-        writeRestartFile(cellPrimitives, restartFile)
-    end
-
-    # P, T, U
-    return cellPrimitives
+    updateSolutionOutput(cellPrimitives, restartFile, meshPath, vtkCounter, createRestartFile)
 end
-#TODO: Proper boundary treatment

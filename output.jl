@@ -89,3 +89,14 @@ function outputVTK(meshPath, cellPrimitives, fileName="solution.vtk")
         end
     end
 end
+
+function updateSolutionOutput(cellPrimitives, restartFile, meshPath, vtkCounter, createRestartFile)
+    if createRestartFile
+        println("Writing Restart File: $restartFile")
+        writeRestartFile(cellPrimitives, restartFile)
+    end
+    solnName = "solution.$vtkCounter.vtk"
+    println("Writing $solnName")
+    outputVTK(meshPath, cellPrimitives, solnName)
+
+end
