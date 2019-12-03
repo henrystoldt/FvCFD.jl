@@ -4,6 +4,7 @@ include("vectorFunctions.jl")
 include("timeDiscretizations.jl")
 include("JST_structured_1D.jl")
 include("mesh.jl")
+include("output.jl")
 
 __precompile__()
 
@@ -568,7 +569,7 @@ function unstructured_JSTFlux(mesh, solutionState, boundaryConditions)
     #### Add JST artificial Diffusion ####
     fDeltas = faceDeltas(mesh, solutionState)
     fDGrads = greenGaussGrad_matrix(mesh, fDeltas, false)
-    eps2, eps4 = unstructured_JSTEps(mesh, solutionState, 0.5, (1/32), 0)
+    eps2, eps4 = unstructured_JSTEps(mesh, solutionState, 1, (1/32), 1)
     # nCells = nFaces - 1
     for f in 1:nFaces-nBdryFaces
         ownerCell = faces[f][1]
@@ -706,7 +707,8 @@ function supersonicInletBoundary(mesh, solutionState, boundaryNumber, inletCondi
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
 
-    P, T, Ux, Uy, Uz = inletConditions[1]
+    Cp = 1005
+    P, T, Ux, Uy, Uz = inletConditions
     rho = idealGasRho(T, P)
     xMom, yMom, zMom = [Ux, Uy, Uz] .* rho
     e = calPerfectEnergy(T, Cp)
@@ -737,13 +739,13 @@ function wallBoundary(mesh, solutionState, boundaryNumber, _)
 
     currentBoundary = boundaryFaces[boundaryNumber]
     for f in currentBoundary
-        ownerCell = max(faces[face][1], faces[face][2]) #One of these will be -1 (no cell), the other is the boundary cell we want
+        ownerCell = max(faces[f][1], faces[f][2]) #One of these will be -1 (no cell), the other is the boundary cell we want
 
         faceP = cellPrimitives[ownerCell, 1]
         # Momentum flux is Pressure in each of the normal directions (dot product)
-        faceFluxes[f, 4] = faceP * fAVecs[f,1]
-        faceFluxes[f, 7] = faceP * fAVecs[f,2]
-        faceFluxes[f, 10] = faceP * fAVecs[f,3]
+        faceFluxes[f, 4] = faceP * fAVecs[f][1]
+        faceFluxes[f, 7] = faceP * fAVecs[f][2]
+        faceFluxes[f, 10] = faceP * fAVecs[f][3]
 
         # Mass Flux is zero
         faceFluxes[f, 1:3] .= 0.0
@@ -964,7 +966,7 @@ function structured1DFVM(dx::Array{Float64, 1}, cellPrimitives::Array{Float64, 2
     return cellPrimitives[:,1], cellPrimitives[:,3], cellPrimitives[:,2], cellState[:,1]
 end
 
-function unstructured3DFVM(mesh, cellPrimitives::Array{Float64, 2}, boundaryConditions, timeIntegrationFn=forwardEuler, fluxFunction=unstructured_JSTFlux; initDt=0.001, endTime=0.14267, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, silent=true)
+function unstructured3DFVM(mesh, cellPrimitives::Array{Float64, 2}, boundaryConditions, timeIntegrationFn=forwardEuler, fluxFunction=unstructured_JSTFlux; initDt=0.001, endTime=0.14267, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, silent=true, restart=false, createRestartFile=true, restartFile="JuliaCFDRestart.txt")
     if !silent
         println("Initializing Simulation")
     end
@@ -977,11 +979,15 @@ function unstructured3DFVM(mesh, cellPrimitives::Array{Float64, 2}, boundaryCond
     # Each dimension adds a flux for each conserved quantity
     nFluxes = nVars*nDims
 
+    if restart
+        cellPrimitives = readRestartFile(restartFile)
+    end
+
     # rho, xMom, total energy from P, T, Ux, Uy, Uz
     cellState = encodePrimitives3D(cellPrimitives, R, Cp)
-    cellFluxes = Array{Float64, 2}(undef, nCells, nFluxes)
-    fluxResiduals = Array{Float64, 2}(undef, nCells, nVars)
-    faceFluxes = Array{Float64, 2}(undef, nFaces, nFluxes)
+    cellFluxes = zeros(nCells, nFluxes)
+    fluxResiduals = zeros(nCells, nVars)
+    faceFluxes = zeros(nFaces, nFluxes)
     solutionState = [ cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes ]
 
     # Calculates cell fluxes, primitives from cell state
@@ -1014,7 +1020,11 @@ function unstructured3DFVM(mesh, cellPrimitives::Array{Float64, 2}, boundaryCond
         end
     end
 
-    # P, U, T, rho
-    return cellPrimitives[:,1], cellPrimitives[:,3], cellPrimitives[:,2], cellState[:,1]
+    if createRestartFile
+        writeRestartFile(cellPrimitives, restartFile)
+    end
+
+    # P, T, U
+    return cellPrimitives
 end
 #TODO: Proper boundary treatment
