@@ -12,20 +12,22 @@ println("Reading mesh")
 
 ### UnstructuredFVM from OpenFOAM Meshes ###
 
-### Supersonic Wedge ###
+### Airfoil ###
 # Freestream Conditions
 P = 100000
 T = 300
 U = [ 277.7091, 6.059633, 0 ]
 
 # Choose a mesh
-meshPath = "OFairfoilMesh"
+# meshPath = "OFairfoilMesh"
+# boundaryConditions = [ wallBoundary, [], emptyBoundary, [], supersonicInletBoundary, [P, T, U...], zeroGradientBoundary, [] ]
+meshPath = "OFmemesAirfoilMesh"
 boundaryConditions = [ wallBoundary, [], emptyBoundary, [], supersonicInletBoundary, [P, T, U...], zeroGradientBoundary, [] ]
 
 # Solve
 mesh = OpenFOAMMesh(meshPath)
 cellPrimitives = initializeUniformSolution3D(mesh, P, T, U...)
-unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.0000001, endTime=0.0075, outputInterval=0.0002, targetCFL=0.5, silent=false, restart=false)
+unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.0000001, endTime=0.00002, outputInterval=0.00002, targetCFL=0.5, silent=false, restart=true)
 # @time unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.0000001, endTime=0.0002, outputInterval=0.0002, targetCFL=0.5, silent=false, restart=false)
 
 

@@ -31,7 +31,7 @@ boundaryConditions = [ emptyBoundary, [], supersonicInletBoundary, [P, T, U...],
 # Solve
 mesh = OpenFOAMMesh(meshPath)
 cellPrimitives = initializeUniformSolution3D(mesh, P, T, U...)
-unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.0000001, endTime=0.0075, outputInterval=0.0002, targetCFL=0.5, silent=false, restart=false)
+unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, RK4, initDt=0.0000001, endTime=0.0065, outputInterval=0.0005, targetCFL=2.5, silent=false, restart=false)
 # @time unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.0000001, endTime=0.0002, outputInterval=0.0002, targetCFL=0.5, silent=false, restart=false)
 
 
