@@ -551,7 +551,7 @@ end
 
 # Requires correct cellState and cellPrimitives as input
 # Classical JST, central differencing + artificial diffusion. Each face treated as 1D
-function unstructured_JSTFlux(mesh, solutionState, boundaryConditions)
+function unstructured_JSTFlux(mesh, solutionState, boundaryConditions, gamma, R)
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
@@ -569,7 +569,7 @@ function unstructured_JSTFlux(mesh, solutionState, boundaryConditions)
     #### Add JST artificial Diffusion ####
     fDeltas = faceDeltas(mesh, solutionState)
     fDGrads = greenGaussGrad_matrix(mesh, fDeltas, false)
-    eps2, eps4 = unstructured_JSTEps(mesh, solutionState, 0.12, (0.12/32), 1)
+    eps2, eps4 = unstructured_JSTEps(mesh, solutionState, 0.23, (0.1/32), 1, gamma, R)
     # nCells = nFaces - 1
     for f in 1:nFaces-nBdryFaces
         ownerCell = faces[f][1]
@@ -595,31 +595,31 @@ end
 
 ######################### TimeStepping #######################
 
-function decodeSolution(solutionState)
+function decodeSolution(solutionState, R=287.05, Cp=1005)
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
     nVars = size(cellState, 2)
     if nVars == 3
-        return decodeSolution_1D(solutionState)
+        return decodeSolution_1D(solutionState, R, Cp)
     else
-        return decodeSolution_3D(solutionState)
+        return decodeSolution_3D(solutionState, R, Cp)
     end
 end
 
-function decodeSolution_1D(solutionState)
+function decodeSolution_1D(solutionState, R=287.05, Cp=1005)
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
     nCells = size(cellState, 1)
     for c in 1:nCells
-        cellPrimitives[c,:] = decodePrimitives(cellState[c,1], cellState[c,2], cellState[c,3])
+        cellPrimitives[c,:] = decodePrimitives(cellState[c,1], cellState[c,2], cellState[c,3], R, Cp)
         # mass, xMom, eV2 x-direction fluxes
         cellFluxes[c, :] = calculateFluxes1D(cellPrimitives[c,1], cellPrimitives[c,3], cellState[c,2], cellState[c,3])
     end
 end
 
-function decodeSolution_3D(solutionState)
+function decodeSolution_3D(solutionState, R=287.05, Cp=1005)
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
     nCells = size(cellState, 1)
     for c in 1:nCells
-        cellPrimitives[c,:] = decodePrimitives3D(cellState[c,:]...)
+        cellPrimitives[c,:] = decodePrimitives3D(cellState[c,:]..., R, Cp)
         # mass, xMom, eV2 x,y,z-direction fluxes
         cellFluxes[c, :] = calculateFluxes3D(cellPrimitives[c,:]..., cellState[c,:]...)
     end
@@ -703,13 +703,12 @@ end
 
 ######################### Boundary Conditions #######################
 # Can work as a supersonic inlet if initial conditions are set to the inlet conditions
-# Input: [ Static Pressure, Static Temperture, Ux, Uy, Uz ]
+# Input: [ Static Pressure, Static Temperture, Ux, Uy, Uz, Cp ]
 function supersonicInletBoundary(mesh, solutionState, boundaryNumber, inletConditions)
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
 
-    Cp = 1005
-    P, T, Ux, Uy, Uz = inletConditions
+    P, T, Ux, Uy, Uz, Cp = inletConditions
     rho = idealGasRho(T, P)
     xMom, yMom, zMom = [Ux, Uy, Uz] .* rho
     e = calPerfectEnergy(T, Cp)
@@ -1004,7 +1003,7 @@ function unstructured3DFVM(mesh, meshPath, cellPrimitives::Array{Float64, 2}, bo
     solutionState = [ cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes ]
 
     # Calculates cell fluxes, primitives from cell state
-    decodeSolution(solutionState)
+    decodeSolution(solutionState, R, Cp)
 
     if !silent
         println("Starting iterations")
@@ -1018,9 +1017,13 @@ function unstructured3DFVM(mesh, meshPath, cellPrimitives::Array{Float64, 2}, bo
     vtkCounter = 1
     while currTime < endTime
         ############## Timestep adjustment #############
-        maxCFL = maxCFL3D(mesh, solutionState, dt)
+        maxCFL = maxCFL3D(mesh, solutionState, dt, gamma, R)
         # Slowly approach target CFL
-        dt *= ((targetCFL/maxCFL - 1)/5+1)
+        if maxCFL > targetCFL*1.01
+            dt *= targetCFL/(2*maxCFL)
+        else
+            dt *= ((targetCFL/maxCFL - 1)/10+1)
+        end
         # Adjust timestep to hit endtime if this is the final time step
         if (endTime - currTime) < dt
             dt = endTime - currTime
@@ -1030,7 +1033,7 @@ function unstructured3DFVM(mesh, meshPath, cellPrimitives::Array{Float64, 2}, bo
         end
 
         ############## Take a timestep #############
-        solutionState = timeIntegrationFn(mesh, fluxFunction, solutionState, boundaryConditions, dt)
+        solutionState = timeIntegrationFn(mesh, fluxFunction, solutionState, boundaryConditions, gamma, R, Cp, dt)
         currTime += dt
         timeStepCounter += 1
 
