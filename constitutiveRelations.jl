@@ -20,7 +20,7 @@ end
 function decodePrimitives(rho, xMom, eV2, R=287.05, Cp=1005)
     U = xMom / rho
     e = (eV2/rho) - U*U/2
-    T = calPerfectT(e, Cp)
+    T = calPerfectT(e, Cp, R)
     P = idealGasP(rho, T, R)
     return [ P, T, U ]
 end
@@ -29,7 +29,7 @@ end
 function decodePrimitives3D(rho::Float64, xMom::Float64, eV2::Float64, R=287.05, Cp=1005)
     U = [ xMom/rho, 0.0, 0.0 ]
     e = (eV2/rho) - (mag(U)^2)/2
-    T = calPerfectT(e, Cp)
+    T = calPerfectT(e, Cp, R)
     P = idealGasP(rho, T, R)
 
     Ux = U[1]
@@ -46,7 +46,7 @@ function decodePrimitives3D(rho::Float64, xMom::Float64, yMom::Float64, zMom::Fl
     Uy = yMom/rho
     Uz = zMom/rho
     e = (eV2/rho) - (mag((Ux, Uy, Uz))^2)/2
-    T = calPerfectT(e, Cp)
+    T = calPerfectT(e, Cp, R)
     P = idealGasP(rho, T, R)
 
     return [ P, T, Ux, Uy, Uz ]
@@ -56,16 +56,16 @@ end
 function encodePrimitives(P, T, U, R=287.05, Cp=1005)
     rho = idealGasRho(T, P)
     xMom = U*rho
-    e = calPerfectEnergy(T)
+    e = calPerfectEnergy(T, Cp, R)
     eV2 = rho*(e + U*U/2)
     return [rho, xMom, eV2]
 end
 
 function encodePrimitives3D(P::Float64, T::Float64, U::Array{Float64, 1}, R=287.05, Cp=1005)
     # State Variables
-    rho = idealGasRho(T, P)
+    rho = idealGasRho(T, P, R)
     xMom = U[1]*rho
-    e = calPerfectEnergy(T, Cp)
+    e = calPerfectEnergy(T, Cp, R)
     eV2 = rho*(e + (mag(U)^2)/2)
 
     Ux = U[1]
@@ -82,9 +82,9 @@ function encodePrimitives3D(cellPrimitives::Array{Float64, 2}, R=287.05, Cp=1005
 
     cellState = zeros(nCells, 5)
     for c in 1:nCells
-        cellState[c,1] = idealGasRho(cellPrimitives[c,2], cellPrimitives[c,1])
+        cellState[c,1] = idealGasRho(cellPrimitives[c,2], cellPrimitives[c,1], R)
         cellState[c,2:4] .= cellPrimitives[c,3:5] .* cellState[c,1]
-        e = calPerfectEnergy(cellPrimitives[c,2], Cp)
+        e = calPerfectEnergy(cellPrimitives[c,2], Cp, R)
         cellState[c,5] = cellState[c,1]*(e + (mag(cellPrimitives[c,3:5])^2)/2 )
     end
     return cellState

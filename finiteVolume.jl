@@ -569,7 +569,7 @@ function unstructured_JSTFlux(mesh, solutionState, boundaryConditions, gamma, R)
     #### Add JST artificial Diffusion ####
     fDeltas = faceDeltas(mesh, solutionState)
     fDGrads = greenGaussGrad_matrix(mesh, fDeltas, false)
-    eps2, eps4 = unstructured_JSTEps(mesh, solutionState, 0.23, (0.1/32), 1, gamma, R)
+    eps2, eps4 = unstructured_JSTEps(mesh, solutionState, 0.5, (0.1/32), 1, gamma, R)
     # nCells = nFaces - 1
     for f in 1:nFaces-nBdryFaces
         ownerCell = faces[f][1]
