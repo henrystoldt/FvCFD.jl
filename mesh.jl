@@ -240,7 +240,7 @@ function readOFBoundaryFile(filePath)
         boundaryNumFaces[i] = parse(Int64, split(bLines[bNFacesLine])[2][1:end-1])
 
         bStartFaceLine = findInLines("startFace", bLines, startLine)
-        boundaryStartFaces[i] = parse(Int64, split(bLines[bStartFaceLine])[2][1:end-1])
+        boundaryStartFaces[i] = parse(Int64, split(bLines[bStartFaceLine])[2][1:end-1])+1
 
         startLine = findInLines("}", bLines, startLine)+1
     end
@@ -262,6 +262,51 @@ function readOpenFOAMMesh(polyMeshPath)
     boundaryNames, boundaryNumFaces, boundaryStartFaces = readOFBoundaryFile(boundaryFilePath)
 
     return points, faces, owner, neighbour, boundaryNames, boundaryNumFaces, boundaryStartFaces
+end
+
+function OpenFOAMMesh_findCellPts(polyMeshPath)
+    points, OFfaces, owner, neighbour, boundaryNames, boundaryNumFaces, boundaryStartFaces = readOpenFOAMMesh(polyMeshPath)
+    nCells = maximum(owner)
+    nFaces = size(OFfaces, 1)
+    nBoundaries = size(boundaryNames, 1)
+
+    cellPtIndices = Array{Array{Int64, 1}, 1}(undef, nCells)
+    cells = Array{Array{Int64, 1}, 1}(undef, nCells)
+
+    nOwners = size(owner, 1)
+    for f in 1:nOwners
+        ownerCell = owner[f]
+        if isassigned(cells, ownerCell)
+            push!(cells[ownerCell], f)
+        else
+            cells[ownerCell] = [f,]
+        end
+    end
+
+    nNeighbours = size(neighbour, 1)
+    for f in 1:nNeighbours
+        neighbourCell = neighbour[f]
+        if isassigned(cells, neighbourCell)
+            push!(cells[neighbourCell], f)
+        else
+            cells[neighbourCell] = [f,]
+        end
+    end
+    # fAVecs, fCenters, faces, cells now complete
+
+    for c in 1:nCells
+        pts = []
+        for f in cells[c]
+            for pt in OFfaces[f]
+                if !(pt in pts)
+                    push!(pts, pt)
+                end
+            end
+        end
+        cellPtIndices[c] = pts
+    end
+
+    return points, cellPtIndices
 end
 
 function OpenFOAMMesh(polyMeshPath)
