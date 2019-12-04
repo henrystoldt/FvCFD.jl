@@ -400,9 +400,8 @@ function linInterp_3D(mesh, solutionState::Array{Array{Float64, 2}, 1})
         c1Dist = mag(cCenters[c1] .- fCenters[f])
         c2Dist = mag(cCenters[c2] .- fCenters[f])
         totalDist = c1Dist + c2Dist
-        for v in 1:nFluxes
-            faceFluxes[f, v] = cellFluxes[c1, v].*(c2Dist/totalDist) .+ cellFluxes[c2, v].*(c1Dist/totalDist)
-        end
+
+        faceFluxes[f, :] .= cellFluxes[c1, :].*(c2Dist/totalDist) .+ cellFluxes[c2, :].*(c1Dist/totalDist)
     end
 end
 
@@ -482,9 +481,7 @@ function faceDeltas(mesh, solutionState)
         ownerCell = faces[f][1]
         neighbourCell = faces[f][2]
 
-        for v in 1:nVars
-            faceDeltas[f, v] = cellState[neighbourCell, v] - cellState[ownerCell, v]
-        end
+        faceDeltas[f, :] = cellState[neighbourCell, :] .- cellState[ownerCell, :]
     end
 
     return faceDeltas
@@ -572,7 +569,7 @@ function unstructured_JSTFlux(mesh, solutionState, boundaryConditions)
     #### Add JST artificial Diffusion ####
     fDeltas = faceDeltas(mesh, solutionState)
     fDGrads = greenGaussGrad_matrix(mesh, fDeltas, false)
-    eps2, eps4 = unstructured_JSTEps(mesh, solutionState, 1, (1/32), 1)
+    eps2, eps4 = unstructured_JSTEps(mesh, solutionState, 0.2, (0.5/32), 1)
     # nCells = nFaces - 1
     for f in 1:nFaces-nBdryFaces
         ownerCell = faces[f][1]
