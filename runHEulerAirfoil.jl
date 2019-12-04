@@ -16,17 +16,11 @@ println("Reading mesh")
 # Freestream Conditions
 P = 100000
 T = 300
-U = [ 694.26, 0, 0 ]
+U = [ 277.7091, 6.059633, 0 ]
 
 # Choose a mesh
-meshPath = "OFunstructuredWedgeMesh"
-boundaryConditions = [ emptyBoundary, [], supersonicInletBoundary, [P, T, U...], zeroGradientBoundary, [], symmetryBoundary, [], zeroGradientBoundary, [], wallBoundary, [] ]
-# meshPath = "OFwedgeMesh"
-# boundaryConditions = [ supersonicInletBoundary, [P, T, U...], zeroGradientBoundary, [], symmetryBoundary, [], zeroGradientBoundary, [], wallBoundary, [], emptyBoundary, [] ]
-# meshPath = "OFcoarseWedgeMesh"
-# boundaryConditions = [ emptyBoundary, [], supersonicInletBoundary, [P, T, U...], zeroGradientBoundary, [], symmetryBoundary, [], zeroGradientBoundary, [], wallBoundary, [] ]
-# meshPath = "OFmemesWedgeMesh"
-# boundaryConditions = [ symmetryBoundary, [], emptyBoundary, [], supersonicInletBoundary, [P, T, U...], wallBoundary, [], zeroGradientBoundary, [], zeroGradientBoundary, [] ]
+meshPath = "OFairfoilMesh"
+boundaryConditions = [ wallBoundary, [], emptyBoundary, [], supersonicInletBoundary, [P, T, U...], zeroGradientBoundary, [] ]
 
 # Solve
 mesh = OpenFOAMMesh(meshPath)
