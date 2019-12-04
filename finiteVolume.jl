@@ -703,6 +703,7 @@ end
 
 ######################### Boundary Conditions #######################
 # Can work as a supersonic inlet if initial conditions are set to the inlet conditions
+# Input: [ Static Pressure, Static Temperture, Ux, Uy, Uz ]
 function supersonicInletBoundary(mesh, solutionState, boundaryNumber, inletConditions)
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
@@ -719,6 +720,18 @@ function supersonicInletBoundary(mesh, solutionState, boundaryNumber, inletCondi
     for face in currentBoundary
         faceFluxes[face,:] = boundaryFluxes
     end
+end
+
+# Input: [ totalPressure, totalTemp, nx, ny, nz ]
+# Where n is the unit vector representing the direction of inlet velocity
+# Using method from FUN3D solver
+# TODO: Allow for variation of R and gamma
+function subsonicInletBoundary(mesh, solutionState, boundaryNumber, inletConditions)
+    Pt, Tt, n = inletConditions
+    gamma = 1.4
+    R = 287.05
+    a = 1 + 2/(gamma + 1)
+    # b = 
 end
 
 function zeroGradientBoundary(mesh, solutionState, boundaryNumber, _)
