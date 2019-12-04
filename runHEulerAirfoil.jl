@@ -30,17 +30,27 @@ println("Reading mesh")
 # unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.0000001, endTime=0.00002, outputInterval=0.00002, targetCFL=0.5, silent=false, restart=true)
 
 
-### Delta Wing ###
+# ### Delta Wing ###
+# # Freestream Conditions
+# P = 7669
+# T = 180
+# U = [ 539, 0, 0 ]
+#
+# # Choose a mesh
+# meshPath = "OFmemesDeltaMesh"
+# boundaryConditions = [ supersonicInletBoundary, [P, T, U...], zeroGradientBoundary, [], symmetryBoundary, [], wallBoundary, [] ]
+
+### Cone Flare ###
 # Freestream Conditions
-P = 7669
-T = 180
-U = [ 539, 0, 0 ]
+P = 100000
+T = 300
+U = [ 694.26, 0, 0 ]
 
 # Choose a mesh
-meshPath = "OFmemesDeltaMesh"
-boundaryConditions = [ supersonicInletBoundary, [P, T, U...], zeroGradientBoundary, [], symmetryBoundary, [], wallBoundary, [] ]
+meshPath = "OFflaredConeMesh"
+boundaryConditions = [ supersonicInletBoundary, [P, T, U...], zeroGradientBoundary, [], wallBoundary, [] ]
 
 # Solve
 mesh = OpenFOAMMesh(meshPath)
 cellPrimitives = initializeUniformSolution3D(mesh, P, T, U...)
-unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00000001, endTime=0.001, outputInterval=0.00002, targetCFL=0.5, silent=false, restart=false)
+unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00000001, endTime=0.0065, outputInterval=0.0002, targetCFL=0.5, silent=false, restart=false)
