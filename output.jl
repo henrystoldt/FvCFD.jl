@@ -52,7 +52,7 @@ function outputVTK(meshPath, cellPrimitives, fileName="solution.vtk")
             totalCellListSize += size(cellPtIndices[c], 1)
         end
 
-        write(f, "\nPOLYGONS $nCells $totalCellListSize\n")
+        write(f, "\nCELLS $nCells $totalCellListSize\n")
         for c in 1:nCells
             ptCount = size(cellPtIndices[c], 1)
             str = "$ptCount"
@@ -63,12 +63,12 @@ function outputVTK(meshPath, cellPrimitives, fileName="solution.vtk")
             write(f, str)
         end
 
-        # write(f, "CELL_TYPES $nCells\n")
-        # for c in 1:nCells
-        #     nPts = size(cellPtIndices[c], 1)
-        #     cT = cellType[nPts]
-        #     write(f, "$cT\n")
-        # end
+        write(f, "CELL_TYPES $nCells\n")
+        for c in 1:nCells
+            nPts = size(cellPtIndices[c], 1)
+            cT = cellType[nPts]
+            write(f, "$cT\n")
+        end
 
         #### Output SCALARS, VECTORS ####
         write(f, "\nCELL_DATA $nCells\n")

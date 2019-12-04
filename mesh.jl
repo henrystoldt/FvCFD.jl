@@ -297,34 +297,33 @@ function OpenFOAMMesh_findCellPts(polyMeshPath)
     for c in 1:nCells
         pts = Array{Int64,1}(undef, 0)
 
-        # function addFace(f)
-        #     for pt in OFfaces[f]
-        #         push!(pts, pt)
-        #     end
-        # end
-        # function disjoint(f)
-        #     for pt in OFfaces[f]
-        #         if any(x->x==pt, pts)
-        #             return false
-        #         end
-        #     end
-        #     return true
-        # end
+        function addFace(f)
+            for pt in OFfaces[f]
+                push!(pts, pt)
+            end
+        end
+        function disjoint(f)
+            for pt in OFfaces[f]
+                if any(x->x==pt, pts)
+                    return false
+                end
+            end
+            return true
+        end
+        addFace(cells[c][1])
 
-        # # Add any faces with no points in common with existing faces
-        # for f in cells[c]
-        #     if disjoint(f)
-        #         addFace(f)
-        #     end
-        # end
+        # Add any faces with no points in common with existing faces
+        for f in cells[c]
+            if disjoint(f)
+                addFace(f)
+            end
+        end
 
         # Add any remaining points
         for f in cells[c]
             for pt in OFfaces[f]
-                if points[pt, 3] > -0.1
-                    if !any(x->x==pt, pts)
-                        push!(pts, pt)
-                    end
+                if !any(x->x==pt, pts)
+                    push!(pts, pt)
                 end
             end
         end
