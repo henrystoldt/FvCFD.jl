@@ -569,7 +569,7 @@ function unstructured_JSTFlux(mesh, solutionState, boundaryConditions)
     #### Add JST artificial Diffusion ####
     fDeltas = faceDeltas(mesh, solutionState)
     fDGrads = greenGaussGrad_matrix(mesh, fDeltas, false)
-    eps2, eps4 = unstructured_JSTEps(mesh, solutionState, 0.5, (0.5/32), 1)
+    eps2, eps4 = unstructured_JSTEps(mesh, solutionState, 0.12, (0.12/32), 1)
     # nCells = nFaces - 1
     for f in 1:nFaces-nBdryFaces
         ownerCell = faces[f][1]
@@ -731,7 +731,7 @@ function subsonicInletBoundary(mesh, solutionState, boundaryNumber, inletConditi
     gamma = 1.4
     R = 287.05
     a = 1 + 2/(gamma + 1)
-    # b = 
+    # b =
 end
 
 function zeroGradientBoundary(mesh, solutionState, boundaryNumber, _)
