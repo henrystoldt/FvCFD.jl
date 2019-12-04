@@ -30,7 +30,7 @@ function outputVTK(meshPath, cellPrimitives, fileName="solution.vtk")
         write(f, "# vtk DataFile Version 2.0\n")
         write(f, "JuliaCFD\n")
         write(f, "ASCII\n")
-        write(f, "DATASET POLYDATA\n")
+        write(f, "DATASET UNSTRUCTURED_GRID\n")
 
         #### Output POINTS ####
         points, cellPtIndices = OpenFOAMMesh_findCellPts(meshPath)
