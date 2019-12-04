@@ -35,7 +35,7 @@ function maxCFL3D(mesh, solutionState, dt, gamma=1.4, R=287.05)
 
     maxCFL = 0
     for c in 1:nCells
-        cDeltaT = (abs(cellPrimitives[c,3]) + sqrt(gamma * R * cellPrimitives[c,2])) * dt
+        cDeltaT = ([ abs(cellPrimitives[c,i]) for i in 3:5 ] .+ sqrt(gamma * R * cellPrimitives[c,2])) .* dt
         #TODO: Precompute
         maxCoords = [ -1000000.0, -1000000.0, -1000000.0 ]
         minCoords = [ 1000000.0, 1000000.0, 1000000.0 ]
@@ -49,7 +49,7 @@ function maxCFL3D(mesh, solutionState, dt, gamma=1.4, R=287.05)
         for d in 1:3
             dx = (maxCoords[d] - minCoords[d])
             if dx > 0
-                CFL += cDeltaT / dx
+                CFL += cDeltaT[d] / dx
             end
         end
         maxCFL = max(maxCFL, CFL)
