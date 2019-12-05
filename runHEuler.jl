@@ -14,9 +14,9 @@ println("Reading mesh")
 
 ### Supersonic Wedge ###
 # Freestream Conditions
-P = 100000
-T = 300
-U = [ 1041.66, 0, 0 ]
+P = 1
+T = 1
+U = [ 3, 0, 0 ]
 
 # Choose a mesh
 # meshPath = "OFunstructuredWedgeMesh"
@@ -28,13 +28,13 @@ U = [ 1041.66, 0, 0 ]
 # meshPath = "OFmemesWedgeMesh"
 # boundaryConditions = [ symmetryBoundary, [], emptyBoundary, [], supersonicInletBoundary, [P, T, U...], wallBoundary, [], zeroGradientBoundary, [], zeroGradientBoundary, [] ]
 
-meshPath = "OFforwardStepFineMesh"
-boundaryConditions = [ supersonicInletBoundary, [P, T, U...], zeroGradientBoundary, [], symmetryBoundary, [], symmetryBoundary, [], wallBoundary, [], emptyBoundary, [] ]
+meshPath = "OFforwardStepMesh"
+boundaryConditions = [ supersonicInletBoundary, [P, T, U..., 2.5], zeroGradientBoundary, [], symmetryBoundary, [], symmetryBoundary, [], wallBoundary, [], emptyBoundary, [] ]
 
 # Solve
 mesh = OpenFOAMMesh(meshPath)
 cellPrimitives = initializeUniformSolution3D(mesh, P, T, U...)
-unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, ShuOsher, initDt=0.0000001, endTime=0.01152, outputInterval=0.000288, targetCFL=0.95, silent=false, restart=false)
+unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, ShuOsher, initDt=0.0000001, endTime=4, outputInterval=0.5, targetCFL=0.95, silent=false, restart=false, gamma=1.4, R=0.714286, Cp=2.5)
 # @time unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.0000001, endTime=0.0002, outputInterval=0.0002, targetCFL=0.5, silent=false, restart=false)
 
 
