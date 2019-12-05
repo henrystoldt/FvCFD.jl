@@ -1,4 +1,3 @@
-
 function checkInputs_structured1DInterp(dx, faceValues::Array{Float64,2}, cellValues::Array{Float64, 2})
     nCells = size(cellValues, 1)
     nFaces = size(faceValues, 1)
@@ -13,6 +12,50 @@ function checkInputs_structured1DInterp(dx, faceValues::Array{Float64,2}, cellVa
     end
 end
 
+### Unused ###
+function structured_1DlinInterp(dx, faceValues::Array{Float64,2}, cellValues::Array{Float64, 2})
+    nFaces = size(faceValues, 1)
+    nVars = size(faceValues, 2)
+    checkInputs_structured1DInterp(dx, faceValues, cellValues)
+
+    # Do interpolation
+    for f in 2:nFaces-1
+        for v in 1:nVars
+            c1Dist = dx[f-1]/2
+            c2Dist = dx[f]/2
+            totalDist = c1Dist + c2Dist
+            faceValues[f, v] = cellValues[f-1, v].*(c2Dist/totalDist) .+ cellValues[f, v].*(c1Dist/totalDist)
+        end
+    end
+end
+
+function structured_1DMaxInterp(dx, faceValues::Array{Float64,2}, cellValues::Array{Float64, 2})
+    nFaces = size(faceValues, 1)
+    nVars = size(faceValues, 2)
+    checkInputs_structured1DInterp(dx, faceValues, cellValues)
+
+    # Do interpolation
+    for f in 2:nFaces-1
+        for v in 1:nVars
+            faceValues[f, v] = max(cellValues[f-1,v],  cellValues[f,v])
+        end
+    end
+end
+
+function structured_1DFaceDelta(dx, faceValues::Array{Float64,2}, cellValues::Array{Float64, 2})
+    nFaces = size(faceValues, 1)
+    nVars = size(faceValues, 2)
+    checkInputs_structured1DInterp(dx, faceValues, cellValues)
+
+    # Do interpolation
+    for f in 2:nFaces-1
+        for v in 1:nVars
+            faceValues[f, v] = cellValues[f, v] - cellValues[f-1, v]
+        end
+    end
+end
+
+### Used ###
 function structured_1DlinInterp(dx, values...)
     result = []
     nFaces = size(dx, 1) + 1
@@ -113,7 +156,7 @@ end
 # Density-based version detects contact discontinuities
 function structured_1D_JST_sj2(dvar)
     nCells = size(dvar, 1)
-    sj = zeros(nCells)
+    sj = Array{Float64, 1}(undef, nCells)
 
     # Boundary values unset
     sj[1] = 0.0
@@ -128,7 +171,7 @@ end
 
 function structured_1D_JST_rj(T::Array{Float64, 1}, U::Array{Float64, 1}, gamma=1.4, R=287.05)
     nCells = size(T, 1)
-    rj = zeros(nCells)
+    rj = Array{Float64, 1}(undef, nCells)
 
     for c in 1:nCells
         rj[c] = abs(U[c]) + sqrt(gamma * R * T[c])
@@ -146,8 +189,8 @@ function structured_1D_JST_Eps(dx, k2, k4, c4, cellPrimitives::Array{Float64,2},
     rj = structured_1D_JST_rj(cellPrimitives[:,2], cellPrimitives[:,3], gamma, R)
     sjF, rjF = structured_1DMaxInterp(dx, sj, rj)
 
-    eps2 = zeros(nFaces)
-    eps4 = zeros(nFaces)
+    eps2 = Array{Float64, 1}(undef, nFaces)
+    eps4 = Array{Float64, 1}(undef, nFaces)
     for f in 2:nFaces-1
         eps2[f] = k2 * sjF[f] * rjF[f]
         eps4[f] = max(0, k4*rjF[f] - c4*eps2[f])
@@ -156,19 +199,19 @@ function structured_1D_JST_Eps(dx, k2, k4, c4, cellPrimitives::Array{Float64,2},
     return eps2, eps4
 end
 
-# Requires correct cellState, cellFluxes and cellPrimitives as input
+# Requires correct cellState and cellPrimitives as input
 function structured_JSTFlux1D(dx, solutionState, boundaryConditions, gamma, R)
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
     nCells = size(cellState, 1)
     nFaces = nCells + 1
-    faceDeltas = zeros(nFaces, 3)
+    faceDeltas = Array{Float64, 2}(undef, nFaces, 3)
 
     # Centrally differenced fluxes
     structured_1DlinInterp(dx, faceFluxes, cellFluxes)
 
     #### Add JST artificial Diffusion ####
     structured_1DFaceDelta(dx, faceDeltas, cellState)
-    eps2, eps4 = structured_1D_JST_Eps(dx, 0.5, (1/32), 0, cellPrimitives)
+    eps2, eps4 = structured_1D_JST_Eps(dx, 0.5, (1.2/32), 0.9, cellPrimitives)
     # nCells = nFaces - 1
     for f in 2:(nCells)
         for v in 1:3

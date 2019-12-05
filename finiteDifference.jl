@@ -65,7 +65,7 @@ function upwindGradient(dx, U, values...)
         if U[n] <= 0
             grad[n] = 0
         end
-        
+
         for i in 1:n
             if U[i] > 0 && i > 1
                 grad[i] = (vals[i] - vals[i-1])/dx[i-1]
@@ -193,7 +193,7 @@ function macCormack1DFDM(dx, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0
         copyValues(2, 1, allVars)
         copyValues(nCells-2, nCells-1, allVars)
         copyValues(nCells, nCells, allVars)
-        
+
         ############## CFL Calculation, timestep adjustment #############
         for i in 1:nCells
             CFL[i] = (abs(U[i]) + sqrt(gamma * R * T[i])) * dt / dx[i]
@@ -202,7 +202,7 @@ function macCormack1DFDM(dx, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0
 
         # Adjust time step to slowly approach target CFL
         dt *= ((targetCFL/maxCFL - 1)/5+1)
-        
+
         currTime += dt
     end
 
@@ -223,7 +223,7 @@ function macCormack1DConservativeFDM(dx, P, T, U; initDt=0.001, endTime=0.14267,
         rhoU2p[i] = xMom[i]*U[i] + P[i]
         rhoUeV2PU[i] = U[i]*eV2[i] + P[i]*U[i]
     end
-    
+
     drhoP = Array{Float64, 1}(undef, nCells)
     dxMP = Array{Float64, 1}(undef, nCells)
     deV2P = Array{Float64, 1}(undef, nCells)
@@ -243,7 +243,7 @@ function macCormack1DConservativeFDM(dx, P, T, U; initDt=0.001, endTime=0.14267,
         if (endTime - currTime) < dt
             dt = endTime - currTime
         end
-        
+
         ############## Predictor #############
         dxMomdx, drhoU2pdx, drhoUeV2PU = forwardGradient(dx, xMom, rhoU2p, rhoUeV2PU)
         pCentralGrad, rhoCG, xMomCG, eV2CG = central2GradNum(dx, P, rho, xMom, eV2)
@@ -297,7 +297,7 @@ function macCormack1DConservativeFDM(dx, P, T, U; initDt=0.001, endTime=0.14267,
         copyValues(2, 1, allVars)
         copyValues(nCells-2, nCells-1, allVars)
         copyValues(nCells-1, nCells, allVars)
-        
+
         ############## CFL Calculation, timestep adjustment #############
         for i in 1:nCells
             CFL[i] = (abs(U[i]) + sqrt(gamma * R * T[i])) * dt / dx[i]
@@ -336,7 +336,7 @@ function upwind1DConservativeFDM(dx, P, T, U; initDt=0.001, endTime=0.14267, tar
         if (endTime - currTime) < dt
             dt = endTime - currTime
         end
-        
+
         ############## Predictor #############
         dxMomdx, drhoU2pdx, drhoUeV2PU = upwindGradient(dx, U, xMom, rhoU2p, rhoUeV2PU)
         pCentralGrad, rhoCG, xMomCG, eV2CG = central2GradNum(dx, P, rho, xMom, eV2)
@@ -361,7 +361,7 @@ function upwind1DConservativeFDM(dx, P, T, U; initDt=0.001, endTime=0.14267, tar
         copyValues(2, 1, allVars)
         copyValues(nCells-2, nCells-1, allVars)
         copyValues(nCells, nCells, allVars)
-        
+
         ############## CFL Calculation, timestep adjustment #############
         for i in 1:nCells
             CFL[i] = (abs(U[i]) + sqrt(gamma * R * T[i])) * dt / dx[i]
