@@ -52,13 +52,13 @@ function musclDifference(mesh, rho, xMom, eV2, dx, gamma=1.4; debug=false)
             #TODO: Verify it actually trips this block for the last difference
             #Deal with it as if it were previous face
             consLeft[i,1] = leftFaceVals(rho[i+1], rho[i], rho[i-1], dx)
-            consRight[i,1] = rightFaceVals(rho[nFaces-nBdryFaces], rho[nFaces-(nBdryFaces+1)], rho[nFaces-(nBdryFaces+2)], dx)
+            consRight[i,1] = rightFaceVals(rho[nFaces-nBdryFaces+1], rho[nFaces-(nBdryFaces)], rho[nFaces-(nBdryFaces-1)], dx)
 
             consLeft[i,2] = leftFaceVals(xMom[i+1], xMom[i], xMom[i-1],dx)
-            consRight[i,2] = rightFaceVals(xMom[nFaces-nBdryFaces], xMom[nFaces-(nBdryFaces+1)], xMom[nFaces-(nBdryFaces+2)],dx)
+            consRight[i,2] = rightFaceVals(xMom[nFaces-nBdryFaces+1], xMom[nFaces-(nBdryFaces)], xMom[nFaces-(nBdryFaces-1)],dx)
 
             consLeft[i,3] = leftFaceVals(eV2[i+1], eV2[i], eV2[i-1], dx)
-            consRight[i,3] = rightFaceVals(eV2[nFaces-nBdryFaces], eV2[nFaces-(nBdryFaces+1)], eV2[nFaces-(nBdryFaces+2)], dx)
+            consRight[i,3] = rightFaceVals(eV2[nFaces-nBdryFaces+1], eV2[nFaces-(nBdryFaces)], eV2[nFaces-(nBdryFaces-1)], dx)
 
         else
             #rho
@@ -109,7 +109,7 @@ function musclDifference(mesh, rho, xMom, eV2, dx, gamma=1.4; debug=false)
 
         primsLeft[i,1] = consLeft[i,2] / consLeft[i,1] #u =rhou/rho
         primsLeft[i,2] = (gamma-1)*( consLeft[i,3] - 0.5*consLeft[i,1]*primsLeft[i,1]^2 ) # P =(gamma-1)*(E-0.5rho(v^2))
-        primsLeft[i,3] = ((consLeft[i,3]/consLeft[i,1])-0.5*primsLeft[i,1]^2  +  primsLeft[i,2])/consLeft[i,1] #H = (e+P)/rho = ( (E/rho - v^2) + P )/rho
+        primsLeft[i,3] = ((consLeft[i,3]/consLeft[i,1])-0.5*primsLeft[i,1]^2  +  primsLeft[i,2])/consLeft[i,1] #H = (e+P)/rho = ( (E/rho -0.5v^2) + P )/rho
 
         primsRight[i,1] = consRight[i,2] / consRight[i,1]
         primsRight[i,2] = (gamma-1)*( consRight[i,3] - 0.5*consRight[i,1]*primsRight[i,1]^2 )
@@ -120,40 +120,54 @@ function musclDifference(mesh, rho, xMom, eV2, dx, gamma=1.4; debug=false)
     return consLeft, primsLeft, consRight, primsRight
 end
 
-function leftFaceVals(q_ip, q_i, q_im, dx)
+function leftFaceVals(q_ip, q_i, q_im, dx; sig=1/3)
     #=MUSCL difference interpolates values to the left face
     q_i - value at your cell
     q_ip - value at the cell opposite the face you're interpolating TODO
     q_im - value at the cell further away from the current face
     =#
-    #s = vanAlbeda(q_ip, q_i, q_im, dx)
-    s = vanLeer(q_ip, q_i, q_im)
-    Q_L = q_i + 0.25*s*( (1+s)*(q_i-q_im) + (1-s)*(q_ip-q_i) ) * q_i
+    s = vanAlbeda(q_ip, q_i, q_im, dx)
+    #s = vanLeer(q_ip, q_i, q_im, dx=dx)
+    Q_L = q_i + 0.25*s*( (1-(sig)*s)*(q_i-q_im) + (1+(sig)*s)*(q_ip-q_i) ) * q_i
 
     return Q_L
 end
 
-function rightFaceVals(q_ip, q_i, q_im, dx)
+function rightFaceVals(q_ip, q_i, q_im, dx; sig=1/3)
     #=MUSCL difference to the right face
     Slightly different than left face function
         q_i - value at the cell
         q_im - value at the cell on the other side of your face
         q_ip - value at the cell further away from your current face
     =#
-    #s = vanAlbeda(q_ip, q_i, q_im, dx)
-    s = vanLeer(q_ip, q_i, q_im, direc=1)  #1/vanLeer because it should be fwd/backwards
-    Q_R = q_i - 0.25*s*( (1+s)*(q_ip-q_i) + (1-s)*(q_i-q_im) )*q_i
+    s = vanAlbeda(q_ip, q_i, q_im, dx, direc=1)
+    #s = vanLeer(q_ip, q_i, q_im, direc=1, dx=dx)  #1/vanLeer because it should be fwd/backwards
+    Q_R = q_i - 0.25*s*( (1-(sig)*s)*(q_ip-q_i) + (1+(sig)*s)*(q_i-q_im) )*q_i
 
     return Q_R
 end
 
-function vanAlbeda(q_ip, q_i, q_im, dx)
+function vanAlbeda(q_ip, q_i, q_im, dx; direc=0)
     #=Impplements the vanAlbeda flux limiter, with a delta value of dx^3
     =#
-    #delta = dx.*dx.*dx
+    delta = dx.*dx.*dx
     #delta = dx
-    delta = 1.0
-    s = (2 * (q_ip-q_i)*(q_i-q_im) + delta )/( (q_ip-q_i)^2 * (q_i-q_im)^2 + delta )
+    #delta = 1.0
+    if direc ==0
+        r = (q_i - q_im)/(q_ip - q_i + delta)
+    else
+        #r = (q_ip - q_i)/(q_i - q_im + delta)
+        r = (q_i - q_im)/(q_ip - q_i + delta)
+    end
+
+    if r > 0
+        s = 2*r / (r^2 + 1)
+        #s = (r^2 + r)/(r^2 + 1)
+    else
+        s = 0
+    end
+
+    #s = (2 * (q_ip-q_i)*(q_i-q_im) + delta )/( (q_ip-q_i)^2 * (q_i-q_im)^2 + delta )
 
     return s
 end
@@ -166,6 +180,12 @@ function vanLeer(q_ip, q_i, q_im; direc=0, dx=0.05)
         r = (q_i - q_im)/(q_ip - q_i + dx)
     else
         r = (q_ip-q_i)/(q_i-q_im + dx)
+        #r = (q_i - q_im)/(q_ip - q_i + dx)
+    end
+
+    if r > 5
+        r = 0.7
+        #println("Did some fucky shit with limiter")
     end
 
     s = 0
@@ -190,7 +210,13 @@ function roeAveraged(n, rhoLeft,rhoRight,uLeft,uRight,HLeft,HRight, gamma=1.4)
     roeU = ( sqrt.(rhoLeft).*uLeft + sqrt.(rhoRight).*uRight ) ./ (sqrt.(rhoLeft)+sqrt.(rhoRight))
     roeH = ( sqrt.(rhoLeft).*HLeft + sqrt.(rhoRight).*HRight ) ./ (sqrt.(rhoLeft)+sqrt.(rhoRight))
 
-    roeA = (gamma-1).*(roeH - 0.5 .*roeU)
+    #println(roeH)
+
+    #println("\n")
+    #println(roeU)
+
+
+    roeA = sqrt.( (gamma-1).*(roeH - 0.5 .*roeU.^2) )
 
     return roeRho, roeU, roeH, roeA
 end
@@ -296,6 +322,7 @@ function checkEigenvalues(eig1, eig2, eig3, dU, dA, n, K=0.04)
             eps = K * dU[i]
             if eps > abs(eig1[i])
                 new_eig1[i] = (eig1[i]^2 + eps^2)/(2*eps)
+
                 println("Updated eig1 value!")
             else
                 new_eig1[i] = eig1[i]
@@ -334,7 +361,7 @@ function checkEigenvalues(eig1, eig2, eig3, dU, dA, n, K=0.04)
 
     end
 
-    println("Done with eigenvalues!")
+    #println("Done with eigenvalues!")
 
     return new_eig1, new_eig2, new_eig3
 
@@ -422,7 +449,7 @@ function upwindFVMRoe1D(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=
     nBdryFaces = size(boundaryFaces, 1)
     bdryFaceIndices = Array(nFaces-nBdryFaces:nFaces)
 
-    println("Started function!")
+
 
 
     #dx = cCenters[2] - cCenters[1]
@@ -472,7 +499,7 @@ function upwindFVMRoe1D(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=
         # xMassFlux, xMomFlux, xeV2Flux = upwindInterp(mesh, U, xMom, rhoU2p, rhoUeV2PU)
         #xMassFlux, xMomFlux, xeV2Flux, faceP = linInterp(mesh, xMom, rhoU2p, rhoUeV2PU, P)
 
-        println("Checkpoint 1!\n")
+        #println("Checkpoint 1!\n")
 
         #Use MUSCL differencing to get values at left/right of each face. Boundaries are treated inside this function
         consLeft, primsLeft, consRight, primsRight = musclDifference(mesh, rho, xMom, eV2, dx, debug=debug)
@@ -492,7 +519,7 @@ function upwindFVMRoe1D(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=
         aLeft = (gamma-1)*(HLeft - 0.5*uLeft.^2)
         aRight = (gamma-1)*(HRight - 0.5*uRight.^2)
 
-        println("Checkpoint 2!\n")
+        #println("Checkpoint 2!\n")
 
 
         #Find ROE averaged quantities at each face
@@ -507,15 +534,14 @@ function upwindFVMRoe1D(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=
         deltaP = pRight - pLeft
         deltaA = aRight - aLeft
 
-        println("Checkpoint 3!\n")
+        #println("Checkpoint 3!\n")
 
         eigen1Flux, eigen2Flux, eigen3Flux = eigenFluxVectors(rhoRoe, uRoe, HRoe, aRoe, deltaRho, deltaU, deltaP, deltaA, fAVecs) #Eigenvalue check and correction for entropy happens in this step
-
 
         #Combines decomposed flux vectors into flux at every step
         xMassFlux, xMomFlux, xeV2Flux = findFluxes(leftFlux, rightFlux, eigen1Flux, eigen2Flux, eigen3Flux, fAVecs )
 
-        println("Checkpoint 4!\n")
+        #println("Checkpoint 4!\n")
 
 
 
@@ -541,6 +567,9 @@ function upwindFVMRoe1D(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=
                 stateVars[v][neighbourCell] += fluxVars[v][i]*fA*dt/cVols[neighbourCell]
             end
         end
+
+        #println("Flux vars: ", fluxVars)
+
 
 
         if debug
@@ -571,12 +600,22 @@ function upwindFVMRoe1D(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=
         copyValues(nCells-1, nCells, stateVars)
         =#
 
-        println("Checkpoint 5!\n")
+        #println("Checkpoint 5!\n")
 
         # Decode primitive values
         for i in 1:nCells
             P[i], T[i], U[i], rhoU2p[i], rhoUeV2PU[i] = decodePrimitives3D(rho[i], xMom[i], eV2[i])
         end
+        #println("Prims are: ", rho, xMom, eV2)
+
+        #println("\n")
+
+        #println("U is early: ", U)
+
+        #println("\n")
+
+        #println("T is early: ", T)
+
 
         if verbose
             println("\n")
@@ -586,20 +625,20 @@ function upwindFVMRoe1D(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=
 
         currTime += dt
 
-        println("Checkpoint 6!\n")
+        #println("Checkpoint 6!\n")
 
         #Catch negative temps for now - until can find cause
-        #=
+
         for z in 1:nCells
             if T[z]< 0
-                T[z] = 0.0001
+                T[z] = 0.0001222
             end
         end
-        =#
+
 
         ############## CFL Calculation, timestep adjustment #############
         maxCFL = 0
-        println("Temp is: ", T)
+        #println("Temp is: ", T)
         for i in 1:nCells
             dx = 1/nCells
             maxCFL = max(maxCFL, CFL(U[i], T[i], dt, dx, gamma, R))
@@ -612,7 +651,7 @@ function upwindFVMRoe1D(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=
     println("P is: ", P)
     println("U is: ", U)
     println("Temp is: ", T)
-    
+
 
 
     return P, U, T, rho
