@@ -28,13 +28,13 @@ U = [ 1041.66, 0, 0 ]
 # meshPath = "OFmemesWedgeMesh"
 # boundaryConditions = [ symmetryBoundary, [], emptyBoundary, [], supersonicInletBoundary, [P, T, U...], wallBoundary, [], zeroGradientBoundary, [], zeroGradientBoundary, [] ]
 
-meshPath = "OFforwardStepMesh"
+meshPath = "OFforwardStepFineMesh"
 boundaryConditions = [ supersonicInletBoundary, [P, T, U...], zeroGradientBoundary, [], symmetryBoundary, [], symmetryBoundary, [], wallBoundary, [], emptyBoundary, [] ]
 
 # Solve
 mesh = OpenFOAMMesh(meshPath)
 cellPrimitives = initializeUniformSolution3D(mesh, P, T, U...)
-unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, ShuOsher, initDt=0.0000001, endTime=0.01152, outputInterval=0.00024, targetCFL=0.95, silent=false, restart=true)
+unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, ShuOsher, initDt=0.0000001, endTime=0.01152, outputInterval=0.000288, targetCFL=0.95, silent=false, restart=false)
 # @time unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.0000001, endTime=0.0002, outputInterval=0.0002, targetCFL=0.5, silent=false, restart=false)
 
 
