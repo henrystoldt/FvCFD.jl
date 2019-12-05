@@ -1,6 +1,5 @@
 # Unstructured FVM Mesh Format Definition
 Passed to nearly all FVM functions  
-TODO: Convert these to matrices instead of arrays of arrays  
 Defined as follows:  
 ```julia
 mesh =
@@ -20,11 +19,15 @@ mesh =
 - Faces are numbered such that boundary faces come last
 - Face area vector point outward from the owner cells, into the neighbour cell
 - Cells must be convex, composed of planar faces
-- "List" above, in the context of Julia, means a 1-D Array
+- "List" above, in the context of Julia, means a 1-D Array  
+
+OpenFOAM meshes can be parsed into the format above using the "OpenFOAMMesh" function in "mesh.jl".
+The current parse is slightly less flexible than OpenFOAM in terms of formatting, so if problems occur, try running the OpenFOAM utility "renumberMesh -overwrite" to ensure the mesh format is exactly as expected for mesh.jl.
 
 # Solution State Definition
 Passed around FVM functions, intended to contain all universally-applicable info for FVM computations  
-Examples offered are all for 1D. In a multidimensional computation, the states/residuals will include an additional momentum term for each additional dimension, and the cell/face flux matrices will include one flux per coordinate direction per conserved variable.
+Examples offered are all for 1D. In a multidimensional computation, the states/residuals include an additional momentum term for each additional dimension, and the cell/face flux matrices will include one flux per coordinate direction per conserved variable.
+For multidimensional computations, fluxes are ordered first by flux type, then by flux direction (ex: x-dirMassFlux, y-dirMassFlux, z-dirMassFlux, x-dirXMomentumFlux, y-dirXMomentumFlux, etc...)
 ```julia
 solutionState =  
 [  
