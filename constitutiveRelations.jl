@@ -54,7 +54,7 @@ end
 
 # Returns rho, xMom, and eV2
 function encodePrimitives(P, T, U, R=287.05, Cp=1005)
-    rho = idealGasRho(T, P)
+    rho = idealGasRho(T, P, R)
     xMom = U*rho
     e = calPerfectEnergy(T, Cp, R)
     eV2 = rho*(e + U*U/2)
