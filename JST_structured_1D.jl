@@ -113,7 +113,7 @@ end
 # Density-based version detects contact discontinuities
 function structured_1D_JST_sj2(dvar)
     nCells = size(dvar, 1)
-    sj = Array{Float64, 1}(undef, nCells)
+    sj = zeros(nCells)
 
     # Boundary values unset
     sj[1] = 0.0
@@ -128,7 +128,7 @@ end
 
 function structured_1D_JST_rj(T::Array{Float64, 1}, U::Array{Float64, 1}, gamma=1.4, R=287.05)
     nCells = size(T, 1)
-    rj = Array{Float64, 1}(undef, nCells)
+    rj = zeros(nCells)
 
     for c in 1:nCells
         rj[c] = abs(U[c]) + sqrt(gamma * R * T[c])
@@ -146,8 +146,8 @@ function structured_1D_JST_Eps(dx, k2, k4, c4, cellPrimitives::Array{Float64,2},
     rj = structured_1D_JST_rj(cellPrimitives[:,2], cellPrimitives[:,3], gamma, R)
     sjF, rjF = structured_1DMaxInterp(dx, sj, rj)
 
-    eps2 = Array{Float64, 1}(undef, nFaces)
-    eps4 = Array{Float64, 1}(undef, nFaces)
+    eps2 = zeros(nFaces)
+    eps4 = zeros(nFaces)
     for f in 2:nFaces-1
         eps2[f] = k2 * sjF[f] * rjF[f]
         eps4[f] = max(0, k4*rjF[f] - c4*eps2[f])
@@ -157,11 +157,11 @@ function structured_1D_JST_Eps(dx, k2, k4, c4, cellPrimitives::Array{Float64,2},
 end
 
 # Requires correct cellState, cellFluxes and cellPrimitives as input
-function structured_JSTFlux1D(dx, solutionState)
+function structured_JSTFlux1D(dx, solutionState, boundaryConditions, gamma, R)
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
     nCells = size(cellState, 1)
     nFaces = nCells + 1
-    faceDeltas = Array{Float64, 2}(undef, nFaces, 3)
+    faceDeltas = zeros(nFaces, 3)
 
     # Centrally differenced fluxes
     structured_1DlinInterp(dx, faceFluxes, cellFluxes)

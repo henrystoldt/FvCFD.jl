@@ -903,6 +903,9 @@ function structured1DFVM(dx::Array{Float64, 1}, cellPrimitives::Array{Float64, 2
     if !silent
         println("Initializing Simulation")
     end
+
+    boundaryConditions = 0
+
     nCells = size(dx, 1)
     nFaces = nCells+1
     nDims = 1
@@ -911,10 +914,10 @@ function structured1DFVM(dx::Array{Float64, 1}, cellPrimitives::Array{Float64, 2
     # Each dimension adds a flux for each conserved quantity
     nFluxes = nVars*nDims
 
-    cellState = Array{Float64, 2}(undef, nCells, nVars)
-    cellFluxes = Array{Float64, 2}(undef, nCells, nFluxes)
-    fluxResiduals = Array{Float64, 2}(undef, nCells, nVars)
-    faceFluxes = Array{Float64, 2}(undef, nFaces, nFluxes)
+    cellState = zeros(nCells, nVars)
+    cellFluxes = zeros(nCells, nFluxes)
+    fluxResiduals = zeros(nCells, nVars)
+    faceFluxes = zeros(nFaces, nFluxes)
     solutionState = [ cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes ]
 
     # Easy access functions
@@ -957,7 +960,7 @@ function structured1DFVM(dx::Array{Float64, 1}, cellPrimitives::Array{Float64, 2
         end
 
         ############## Take a timestep #############
-        solutionState = timeIntegrationFn(dx, fluxFunction, solutionState, dt)
+        solutionState = timeIntegrationFn(dx, fluxFunction, solutionState, boundaryConditions, gamma, R, Cp, dt)
         currTime += dt
         timeStepCounter += 1
 
