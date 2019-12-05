@@ -78,6 +78,19 @@ end;
     for i in 1:3
         @test almostEqual(res1[i], res2[i])
     end
+
+    rho = 0.999825974
+    xMom = 0
+    eV2 = 2.501132206
+    U = 0.0
+    T = 0.00348432
+    P = 1
+
+    res1 = [rho, xMom, eV2]
+    res2 = encodePrimitives(P, T, U, 287.05, 1005)
+    for i in 1:3
+        @test almostEqual(res1[i], res2[i], 1e-8)
+    end
 end;
 
 #=
@@ -112,8 +125,10 @@ end;
     grad = greenGaussGrad(mesh, true, phiFaceVals)[1]
     @test almostEqual(grad[1], [ 20.63111, 17.31454, 0.0 ], 5)
 end;
-=#
+=# #Green Gauss
 
+
+#TODO: Add tests with velo not = 0
 @testset "Limiters" begin
     nCells = 4
     Q1 = [1.0, 0.8, 0.6] #Linear
@@ -160,7 +175,7 @@ end
     @test almostEqual(rightFaceVals(rho2[4], rho2[3], rho2[2], 0.05), QR_2)
 
 end
-#=
+
 @testset "MUSCL Difference" begin
 
     mesh, P, T, U = initializeShockTubeFVM(4)
@@ -171,29 +186,124 @@ end
     xMom = Array{Float64, 1}(undef, nCells)
     eV2 = Array{Float64, 1}(undef, nCells)
 
-    for i in 1:nCells
-        rho[i], xMom[i], eV2[i] = encodePrimitives(P[i], T[i], U[i], 287.05, 1005)
-    end
+    #for i in 1:nCells
+    #    rho[i], xMom[i], eV2[i] = encodePrimitives(P[i], T[i], U[i], 287.05, 1005)
+    #end
+
+    rho = [0.999825974, 0.999825974, 0.124978067, 0.124978067]
+    xMom = [0.0, 0.0, 0.0, 0.0]
+    eV2  = [2.501132206, 2.501132206, 0.25011322, 0.25011322]
 
 
-    println(rho, xMom, eV2)
+    #println(rho, xMom, eV2)
+
+    CONS_L3 = [0.999825974, 0.0, 2.501132206]
+    CONS_R3 = [0.124978067, 0.0, 0.25011322]
+
+    PRIMS_L3 = [0.0, 1.000452882, 3.502629974]
+    PRIMS_R3 = [0.0, 0.100045288, 16.81336771]
 
 
+    cl, pl, cr, pr = musclDifference(mesh, rho, xMom, eV2, 0.05)
 
+    #print(cl[:,3], typeof(cl))
 
-    #cl, pl, cr, pr = musclDifference()
-
-
+    @test almostEqual(cl[2,:], CONS_L3, 1e-6)
+    @test almostEqual(cr[2,:], CONS_R3)
+    @test almostEqual(pl[2,:], PRIMS_L3, 1e-6)
+    @test almostEqual(pr[2,:], PRIMS_R3, 1e-6)
 
 end
-=#
+
+@testset "Roe Averaging" begin
+
+    res = [0.353491609, 0.0, 6.979444402, 1.670861382]
+
+    rho_l = 0.999825974
+    rho_r = 0.124978067
+    u_l = 0.0
+    u_r = 0.0
+    H_l = 3.502629974
+    H_r = 16.81336771
+
+    n = 1
 
 
-@testset "Central + AD FVM" begin
+    res2 = roeAveraged(n, rho_l, rho_r, u_l, u_r, H_l, H_r)
+
+    @test almostEqual(res, res2, 1e-6)
+
+    #Add a test with velo??
+end
+
+@testset "Flux Vectors" begin
+    #Hand calcs results
+    FL = [0.0 1.000452882 0.0]
+    FR = [0.0 0.100045288 0.0]
+    F1 = [0.0 0.0 0.0]
+    F2 = [-0.269427976 -0.450203797 -1.880683125]
+    F3 = [-0.269427976 0.450203797 -1.880683125]
+
+    F_tot = [0.269427976, 0.550249085, 1.880683125]
+
+    #Declare variables for inputs
+    nFaces = Array{Float64, 1}(undef, 1)
+
+    CONS_L3 = Array{Float64,2}(undef, 1, 3)
+    CONS_R3 = Array{Float64,2}(undef, 1, 3)
+
+    PRIMS_L3 = Array{Float64,2}(undef, 1, 3)
+    PRIMS_R3 = Array{Float64,2}(undef, 1, 3)
+
+    CONS_L3 = [[0.999825974 0.0 2.501132206]; [0.0 0.0 0.0]]
+    CONS_R3 = [[0.124978067 0.0 0.25011322]; [0.0 0.0 0.0]]
+
+    #println(CONS_L3[1,3])
+    #println(typeof(CONS_R3))
+
+    PRIMS_L3 = [[0.0 1.000452882 3.502629974]; [0.0 0.0 0.0]]
+    PRIMS_R3 = [[0.0 0.100045288 16.81336771]; [0.0 0.0 0.0]]
+
+    f_l = fluxVector(CONS_L3, PRIMS_L3, nFaces)
+    f_r = fluxVector(CONS_R3, PRIMS_R3, nFaces)
+
+    @test almostEqual(f_l, FL, 1e-6)
+    @test almostEqual(f_r, FR, 1e-6)
+
+    rhoR = 0.353491609
+    uR = 0.0
+    HR = 6.980281542
+    aR = 1.670961585
+    deltaRho = -0.874847907
+    deltaU = 0.0
+    deltaP = -0.900407594
+    deltaA = 1.409475552
+
+    f_1, f_2, f_3 = eigenFluxVectors(rhoR, uR, HR, aR, deltaRho, deltaU, deltaP, deltaA, nFaces)
+
+
+    res = findFluxes(f_l, f_r, f_1, f_2, f_3, nFaces)
+
+
+    @test almostEqual(f_1, F1, 1e-6)
+    @test almostEqual(f_2, F2, 1e-6)
+    @test almostEqual(f_3, F3, 1e-6)
+
+    for i in 1:3
+        @test almostEqual(res[i], F_tot[i], 1e-6)
+    end
+    #println("Res: ", res, "\n")
+    #println("F_tot: ", F_tot)
+
+end
+
+
+
+@testset "Roe FVM" begin
     nCells = 4
-    P = [ 1, 0.99855553, 0.087046989, 0.1 ]
-    U = [ 0, 0.090015665, 0.720126353, 0 ]
-    T = [ 0.00348432, 0.00347929, 0.0024263, 0.00278746 ]
+    P = [ 1, 0.848275045, 0.241434252, 0.1 ]
+    U = [ 0, 0.095689296, 0.503421285, 0 ]
+    T = [ 0.00348432, 0.003140533, 0.004702554, 0.00278746 ]
 
     #P2, U2, T2, rho2 = central_UnstructuredADFVM(initializeShockTubeFVM(nCells, Pratio=0.1)..., initDt=0.051, endTime=0.05, Cx=0)
     P2, U2, T2, rho2 = upwindFVMRoe1D(initializeShockTubeFVM(nCells)..., initDt=0.051, endTime=0.05)
