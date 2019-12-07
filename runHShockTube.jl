@@ -13,7 +13,6 @@ include("finiteVolume.jl")
 include("mesh.jl")
 
 ################## Output ##################
-nCells = 500
 
 println("Meshing")
 #### FDM or Structured FVM ###
@@ -34,8 +33,11 @@ nCells = size(OFmesh.cells, 1)
 mesh, cellPrimitives = initializeShockTube3DFVM(nCells...)
 # # Boundaries 1 and 2 are the ends, 3 is all the sides
 boundaryConditions = [ zeroGradientBoundary, [], zeroGradientBoundary, [], emptyBoundary, [] ]
-@time unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00001, endTime=0.0001, outputInterval=0.14267, targetCFL=0.05, silent=false)
-@profview unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00001, endTime=0.14267, outputInterval=0.14267, targetCFL=0.1, silent=true)
+# @time unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00001, endTime=0.0001, outputInterval=0.14267, targetCFL=0.05, silent=false)
+# @profview unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00001, endTime=0.14267, outputInterval=0.14267, targetCFL=0.1, silent=true)
+unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00001, endTime=0.00001, outputInterval=0.14267, targetCFL=0.1, silent=false)
+# @btime unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00001, endTime=0.05, outputInterval=0.14267, targetCFL=0.1, silent=true)
+
 @btime unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00001, endTime=0.05, outputInterval=0.14267, targetCFL=0.1, silent=true)
 
 ### Unstructured FVM ##
@@ -47,11 +49,13 @@ boundaryConditions = [ zeroGradientBoundary, [], zeroGradientBoundary, [], empty
 #     xVel[i] = U[i][1]
 # end
 
-# P, T, Ux, Uy, Uz = cellPrimitives
+# P = cellPrimitives[:,1]
+# T = cellPrimitives[:,2]
+# xVel = cellPrimitives[:,3]
 # rho = zeros(nCells)
 # for i in 1:nCells
-    # rho[i] = idealGasRho(T[i], P[i])
+#     rho[i] = idealGasRho(T[i], P[i])
 # end
-
-println("Plotting results")
-plotShockTubeResults_PyPlot(P, xVel, T, rho)
+#
+# println("Plotting results")
+# plotShockTubeResults_PyPlot(P, xVel, T, rho)

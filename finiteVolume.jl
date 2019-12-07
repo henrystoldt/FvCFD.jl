@@ -75,19 +75,18 @@ end
 # Returns array of 3-D vectors
 function greenGaussGrad(mesh::Mesh, valuesAtFaces=false, values...)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
-    bdryFaceIndices = Array(nFaces-nBdryFaces:nFaces)
 
-    result = []
+    result = Vector{Vector{Vector{Float64}}}(undef, 0)
     for vals in values
         #Interpolate values to faces
         if valuesAtFaces != true
-            faceVals = linInterp(mesh, vals)[1]
+            faceVals = linInterp(mesh, vals)[1]::Vector{Float64}
         else
-            faceVals = vals
+            faceVals = vals::Vector{Float64}
         end
 
         # Initialize gradients to zero
-        grad = Array{Array{Float64, 1}, 1}(undef, nCells)
+        grad = Vector{Vector{Float64}}(undef, nCells)
         for c in 1:nCells
             grad[c] = [0, 0, 0]
         end
@@ -103,19 +102,29 @@ function greenGaussGrad(mesh::Mesh, valuesAtFaces=false, values...)
             grad[neighbourCell] -= faceIntegral
         end
 
-        # Divide integral by cell volume to obtain gradients
-        for c in 1:nCells
-            grad[c] = grad[c] / mesh.cVols[c]
-        end
-
-        # Set boundary gradients to zero
-        for f in nFaces-nBdryFaces+1:nFaces
-            for cell in mesh.faces[f]
-                if cell != -1
-                    grad[cell] = [0, 0, 0]
+        # Boundary Faces
+        zeroFlux = zeros(nFluxes)
+        for b in 1:nBoundaries
+            if boundaryConditions[2*b-1] != emptyBoundary
+                for f in mesh.boundaryFaces[b]
+                    grad[mesh.faces[f][1]] .+= mesh.fAVecs[f] .* faceVals[f]
                 end
             end
         end
+
+        # Divide integral by cell volume to obtain gradients
+        for c in 1:nCells
+            grad[c] /= mesh.cVols[c]
+        end
+
+        # # Set boundary gradients to zero
+        # for f in nFaces-nBdryFaces+1:nFaces
+        #     for cell in mesh.faces[f]
+        #         if cell != -1
+        #             grad[cell] = [0, 0, 0]
+        #         end
+        #     end
+        # end
 
         push!(result, grad)
     end
@@ -341,7 +350,7 @@ function linInterp(mesh::Mesh, values...)
 
     result = []
     for vals in values
-        fVals = []
+        fVals = similar(vals)
 
         ############ Default Value ############
         # Construct a default value of the appropriate dimensionality
@@ -1039,4 +1048,5 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Array{Float64, 
     end
 
     updateSolutionOutput(cellPrimitives, restartFile, meshPath, vtkCounter, createRestartFile)
+    return cellPrimitives
 end

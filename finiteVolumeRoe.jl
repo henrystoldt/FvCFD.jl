@@ -4,8 +4,6 @@ include("constitutiveRelations.jl")
 include("vectorFunctions.jl")
 
 ######################### CFL ########################
-# TODO: Generalize cell size
-# TODO: 3D definition of CFL: Sum up in all directions
 function CFL(U, T, dt, dx, gamma=1.4, R=287.05)
     #println(T)
     return (abs(U[1]) + sqrt(gamma * R * T)) * dt / dx
@@ -656,5 +654,3 @@ function upwindFVMRoe1D(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=
 
     return P, U, T, rho
 end
-
-#TODO: Proper boundary treatment
