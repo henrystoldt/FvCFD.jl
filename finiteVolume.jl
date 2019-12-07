@@ -135,7 +135,6 @@ end
 # Where each grad(xa)_b is made up of three elements for the (x,y,z) directions
 function greenGaussGrad_matrix(mesh::Mesh, matrix::Array{Float64,2}, valuesAtFaces=false)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
-    bdryFaceIndices = Array(nFaces-nBdryFaces:nFaces)
     nVars = size(matrix, 2)
 
     #Interpolate values to faces if necessary

@@ -34,4 +34,5 @@ function run1000()
         greenGaussGrad_matrix(OFmesh, fDeltas, false)
     end
 end
-@benchmark greenGaussGrad_matrix(OFmesh, fDeltas, false)
+@profview run1000()
+# @benchmark greenGaussGrad_matrix(OFmesh, fDeltas, false)
