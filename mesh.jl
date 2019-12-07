@@ -1,6 +1,16 @@
 # Methods from Moukalled et al. FVM - OpenFOAM, Matlab
 include("vectorFunctions.jl")
 
+struct Mesh
+    cells::Vector{Vector{Int64}}
+    cVols::Vector{Float64}
+    cCenters::Vector{Vector{Float64}}
+    faces::Vector{Vector{Int64}}
+    fAVecs::Vector{Vector{Float64}}
+    fCenters::Vector{Vector{Float64}}
+    boundaryFaces::Vector{Vector{Int64}}
+end
+
 #3D only
 function crossProd(v1::Array{Float64, 1}, v2::Array{Float64, 1})
     x = v1[2]*v2[3] - v1[3]*v2[2]
@@ -114,6 +124,20 @@ function unstructuredMeshInfo(mesh)
     nBdryFaces = 0
     for bdry in 1:nBoundaries
         nBdryFaces += size(boundaryFaces[bdry], 1)
+    end
+
+    return nCells, nFaces, nBoundaries, nBdryFaces
+end
+
+function unstructuredMeshInfo(mesh::Mesh)
+    nCells = size(mesh.cells, 1)
+    nFaces = size(mesh.faces, 1)
+    nBoundaries = size(mesh.boundaryFaces, 1)
+
+    # Count boundary faces
+    nBdryFaces = 0
+    for bdry in 1:nBoundaries
+        nBdryFaces += size(mesh.boundaryFaces[bdry], 1)
     end
 
     return nCells, nFaces, nBoundaries, nBdryFaces
@@ -402,7 +426,7 @@ function OpenFOAMMesh(polyMeshPath)
         boundaryFaces[b] = Array(startF:endF)
     end
 
-    mesh = [ cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces ]
+    mesh = Mesh(cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces)
 
     return mesh
 end
