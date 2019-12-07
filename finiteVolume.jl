@@ -141,15 +141,15 @@ function greenGaussGrad_matrix(mesh, matrix, valuesAtFaces=false)
     bdryFaceIndices = Array(nFaces-nBdryFaces:nFaces)
     nVars = size(matrix, 2)
 
-    # Create matrix to hold gradients
-    grad = zeros(nCells, nVars, 3)
-
-    #Interpolate values to faces
+    #Interpolate values to faces if necessary
     if valuesAtFaces != true
         faceVals = linInterp_3D(mesh, matrix)
     else
         faceVals = matrix
     end
+
+    # Create matrix to hold gradients
+    grad = zeros(nCells, nVars, 3)
 
     # Integrate fluxes from each face
     faceIntegral = zeros(nVars, 3)

@@ -25,17 +25,21 @@ println("Meshing")
 # P, U, T, rho = structured1DFVM(initializeShockTube_StructuredFVM(nCells)..., RK4, initDt=0.00001, endTime=0.14267, targetCFL=0.5, silent=true)
 # P, U, T, rho = structured1DFVM(initializeShockTube_StructuredFVM(nCells)..., ShuOsher, initDt=0.00001, endTime=0.14267, targetCFL=0.5, silent=false)
 # cellPrimitives = unstructured3DFVM(initializeShockTube3DFVM(nCells)..., ShuOsher, initDt=0.00001, endTime=0.14267, targetCFL=0.05, silent=false)
-xVel = U
+# xVel = U
 
 ### UnstructuredFVM from OpenFOAM Meshes ###
-# OFmesh = OpenFOAMMesh("OFShockTubeMesh")
-# nCells = size(OFmesh[1], 1)
-# mesh, cellPrimitives = initializeShockTube3DFVM(nCells...)
+meshPath = "OFShockTubeMesh"
+OFmesh = OpenFOAMMesh(meshPath)
+nCells = size(OFmesh[1], 1)
+mesh, cellPrimitives = initializeShockTube3DFVM(nCells...)
 # # Boundaries 1 and 2 are the ends, 3 is all the sides
-# boundaryConditions = [ zeroGradientBoundary, [], zeroGradientBoundary, [], emptyBoundary, [] ]
-# @time cellPrimitives unstructured3DFVM(OFmesh, cellPrimitives, boundaryConditions, ShuOsher, initDt=0.00001, endTime=0.14267, targetCFL=0.95, silent=false)
+boundaryConditions = [ zeroGradientBoundary, [], zeroGradientBoundary, [], emptyBoundary, [] ]
+@time unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00001, endTime=0.0001, outputInterval=0.14267, targetCFL=0.05, silent=false)
+Profile.init(10000)
+@profview unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00001, endTime=0.14267, outputInterval=0.14267, targetCFL=0.1, silent=false)
+@btime unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00001, endTime=0.05, outputInterval=0.14267, targetCFL=0.1, silent=false)
 
-### Unstructured FVM ###
+### Unstructured FVM ##
 # @time cellPrimitives central_UnstructuredADFVM(initializeShockTubeFVM(nCells, silent=false)..., initDt=0.0000001, endTime=0.14267, targetCFL=0.1, Cx=0.5, silent=false)
 # println("Formatting results")
 
