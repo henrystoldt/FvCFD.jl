@@ -41,15 +41,19 @@ function decodePrimitives3D(rho::Float64, xMom::Float64, eV2::Float64, R=287.05,
     return P, T, U, rhoU2p, rhoUeV2PU
 end
 
-function decodePrimitives3D(rho::Float64, xMom::Float64, yMom::Float64, zMom::Float64, eV2::Float64, R=287.05, Cp=1005)
-    Ux = xMom/rho
-    Uy = yMom/rho
-    Uz = zMom/rho
-    e = (eV2/rho) - (mag((Ux, Uy, Uz))^2)/2
-    T = calPerfectT(e, Cp, R)
-    P = idealGasP(rho, T, R)
-
-    return [ P, T, Ux, Uy, Uz ]
+function decodePrimitives3D!(primitives, cellState, R=287.05, Cp=1005)
+    # Ux = xMom/rho
+    primitives[3] = cellState[2]/cellState[1]
+    # Uy = yMom/rho
+    primitives[4] = cellState[3]/cellState[1]
+    # Uz = zMom/rho
+    primitives[5] = cellState[4]/cellState[1]
+    # e = (eV2/rho) - (mag((Ux, Uy, Uz))^2)/2
+    @views e = (cellState[5]/cellState[1]) - (mag(primitives[3:5])^2)/2
+    #T
+    primitives[2] = calPerfectT(e, Cp, R)
+    #P = idealGasP(rho, P, R)
+    primitives[1] = idealGasP(cellState[1], primitives[2], R)
 end
 
 # Returns rho, xMom, and eV2

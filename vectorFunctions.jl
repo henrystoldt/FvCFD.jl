@@ -2,35 +2,23 @@
 ######################### Vector Functions ########################
 # Assumes sizes are equal
 function dot(vec1, vec2)
-    #Returns dot product of two vectors
-    s1 = size(vec1, 1)
-    s2 = size(vec2, 1)
-    if s1 != s2
-        return 0
-    end
-    sum = 0
-    for i in 1:size(vec1, 1)
+    sum = 0.0
+    for i in eachindex(vec1)
         sum += vec1[i]*vec2[i]
     end
     return sum
 end
 
 # Assumes sizes are equal
-function dot(vec1::Array{Float64, 1}, vec2::Array{Float64, 1})
-    #Returns dot product of two vectors
-    s1 = size(vec1, 1)
-    s2 = size(vec2, 1)
-    if s1 != s2
-        return 0
-    end
-    sum = 0
-    for i in 1:size(vec1, 1)
+function dot(vec1::Vector{Float64}, vec2::Vector{Float64})
+    sum = 0.0
+    for i in eachindex(vec1)
         sum += vec1[i]*vec2[i]
     end
     return sum
 end
 
-function dot(vec::Array{Float64, 1}, matrix::Array{Array{Float64, 1}, 1})
+function dot(vec::Vector{Float64}, matrix::Vector{Vector{Float64}})
     nRows = size(matrix, 1)
     result = Array{Float64, 1}(undef, nRows)
     for i in 1:nRows
@@ -39,18 +27,18 @@ function dot(vec::Array{Float64, 1}, matrix::Array{Array{Float64, 1}, 1})
     return result
 end
 
-function dot(vec::Array{Float64, 1}, matrix::Array{Float64, 2})
+function dot(vec::Vector{Float64}, matrix::Matrix{Float64})
     nRows = size(matrix, 1)
-    result = Array{Float64, 1}(undef, nRows)
+    result = Vector{Float64}(undef, nRows)
     for i in 1:nRows
-        result[i] = dot(vec, matrix[i, :])
+        @views result[i] = dot(vec, matrix[i, :])
     end
     return result
 end
 
 function mag(vec)
     #Returns 2-norm of vector
-    sqrSum = 0
+    sqrSum = 0.0
     for i = 1:size(vec,1)
         sqrSum += vec[i]*vec[i]
     end
@@ -71,7 +59,7 @@ end
 # From and to indices are assumed to be the first index
 function copyValues(fromIndex, toIndex, varArrays::Array{Array{Float64, 2},1})
     for varArray in varArrays
-        varArray[toIndex, :] .= varArray[fromIndex, :]
+        @views varArray[toIndex, :] .= varArray[fromIndex, :]
     end
 end
 

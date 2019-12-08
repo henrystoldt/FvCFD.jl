@@ -13,20 +13,31 @@ println("Reading mesh")
 ### UnstructuredFVM from OpenFOAM Meshes ###
 
 ### Supersonic Wedge ###
-# Freestream Conditions
-P = 100000
-T = 300
-U = [ 1041.66, 0, 0 ]
+# Freestream Conditions (Mach 2)
+# P = 100000
+# T = 300
+# U = [ 694.44, 0, 0 ]
 
 # Choose a mesh
 # meshPath = "OFunstructuredWedgeMesh"
 # boundaryConditions = [ emptyBoundary, [], supersonicInletBoundary, [P, T, U...], zeroGradientBoundary, [], symmetryBoundary, [], zeroGradientBoundary, [], wallBoundary, [] ]
 # meshPath = "OFwedgeMesh"
-# boundaryConditions = [ supersonicInletBoundary, [P, T, U...], zeroGradientBoundary, [], symmetryBoundary, [], zeroGradientBoundary, [], wallBoundary, [], emptyBoundary, [] ]
+# boundaryConditions = [ supersonicInletBoundary, [P, T, U..., 1005], zeroGradientBoundary, [], symmetryBoundary, [], zeroGradientBoundary, [], wallBoundary, [], emptyBoundary, [] ]
 # meshPath = "OFcoarseWedgeMesh"
 # boundaryConditions = [ emptyBoundary, [], supersonicInletBoundary, [P, T, U...], zeroGradientBoundary, [], symmetryBoundary, [], zeroGradientBoundary, [], wallBoundary, [] ]
 # meshPath = "OFmemesWedgeMesh"
 # boundaryConditions = [ symmetryBoundary, [], emptyBoundary, [], supersonicInletBoundary, [P, T, U...], wallBoundary, [], zeroGradientBoundary, [], zeroGradientBoundary, [] ]
+
+# mesh = OpenFOAMMesh(meshPath)
+# cellPrimitives = initializeUniformSolution3D(mesh, P, T, U...)
+# unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00000001, endTime=0.0000001, outputInterval=0.005, targetCFL=0.5, silent=true, restart=false)
+# @time unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00000001, endTime=0.005, outputInterval=0.005, targetCFL=0.5, silent=false, restart=false)
+
+### Forward Step ###
+# Freestream Conditions (Mach 3)
+P = 100000
+T = 300
+U = [ 1041.66, 0, 0 ]
 
 meshPath = "OFforwardStepMesh"
 boundaryConditions = [ supersonicInletBoundary, [P, T, U..., 1005], zeroGradientBoundary, [], symmetryBoundary, [], symmetryBoundary, [], wallBoundary, [], emptyBoundary, [] ]
@@ -34,9 +45,7 @@ boundaryConditions = [ supersonicInletBoundary, [P, T, U..., 1005], zeroGradient
 # Solve
 mesh = OpenFOAMMesh(meshPath)
 cellPrimitives = initializeUniformSolution3D(mesh, P, T, U...)
-unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, RK4, initDt=0.00000001, endTime=0.01152, outputInterval=0.000288, targetCFL=2.0, silent=false, restart=true)
-# @time unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.0000001, endTime=0.0002, outputInterval=0.0002, targetCFL=0.5, silent=false, restart=false)
-
+unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, RK4, initDt=0.00000001, endTime=0.01152, outputInterval=0.000288, targetCFL=2.0, silent=false, restart=false)
 
 #### Simple convection ####
 # mesh, cellPrimitives = initializeShockTube3DFVM(10)

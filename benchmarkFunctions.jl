@@ -50,11 +50,12 @@ end
 
 #### greenGaussGrad ####
 P = cellPrimitives[:,1]
-greenGaussGrad(OFmesh, false, P)[1]
+P = reshape(P, nCells, :)
+# greenGaussGrad(OFmesh, false, P)[1]
 function run1000()
     for i in 1:1000
         greenGaussGrad(OFmesh, false, P)
     end
 end
 # @profview run1000()
-@benchmark greenGaussGrad(OFmesh, false, P)
+@benchmark greenGaussGrad_matrix(OFmesh, P, false)

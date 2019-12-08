@@ -32,13 +32,10 @@ OFmesh = OpenFOAMMesh(meshPath)
 nCells = size(OFmesh.cells, 1)
 mesh, cellPrimitives = initializeShockTube3DFVM(nCells...)
 # # Boundaries 1 and 2 are the ends, 3 is all the sides
-boundaryConditions = [ zeroGradientBoundary, [], zeroGradientBoundary, [], emptyBoundary, [] ]
-# @time unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00001, endTime=0.0001, outputInterval=0.14267, targetCFL=0.05, silent=false)
+boundaryConditions = [ zeroGradientBoundary, [], emptyBoundary, [] ]
+cellPrimitives = unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, RK2_Mid, initDt=0.00001, endTime=0.14267, outputInterval=0.14267, targetCFL=0.3, silent=false)
 # @profview unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00001, endTime=0.14267, outputInterval=0.14267, targetCFL=0.1, silent=true)
-unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00001, endTime=0.00001, outputInterval=0.14267, targetCFL=0.1, silent=false)
 # @btime unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00001, endTime=0.05, outputInterval=0.14267, targetCFL=0.1, silent=true)
-
-@btime unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00001, endTime=0.05, outputInterval=0.14267, targetCFL=0.1, silent=true)
 
 ### Unstructured FVM ##
 # @time cellPrimitives central_UnstructuredADFVM(initializeShockTubeFVM(nCells, silent=false)..., initDt=0.0000001, endTime=0.14267, targetCFL=0.1, Cx=0.5, silent=false)
@@ -49,13 +46,13 @@ unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0
 #     xVel[i] = U[i][1]
 # end
 
-# P = cellPrimitives[:,1]
-# T = cellPrimitives[:,2]
-# xVel = cellPrimitives[:,3]
-# rho = zeros(nCells)
-# for i in 1:nCells
-#     rho[i] = idealGasRho(T[i], P[i])
-# end
-#
-# println("Plotting results")
-# plotShockTubeResults_PyPlot(P, xVel, T, rho)
+P = cellPrimitives[:,1]
+T = cellPrimitives[:,2]
+xVel = cellPrimitives[:,3]
+rho = zeros(nCells)
+for i in 1:nCells
+    rho[i] = idealGasRho(T[i], P[i])
+end
+
+println("Plotting results")
+plotShockTubeResults_PyPlot(P, xVel, T, rho)

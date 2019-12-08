@@ -32,12 +32,14 @@ function maxCFL3D(mesh::Mesh, solutionState, dt, gamma=1.4, R=287.05)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
 
-    maxCFL = 0
+    maxCoords = [ -1000000.0, -1000000.0, -1000000.0 ]
+    minCoords = [ 1000000.0, 1000000.0, 1000000.0 ]
+    maxCFL = 0.0
     for c in 1:nCells
-        cDeltaT = ([ abs(cellPrimitives[c,i]) for i in 3:5 ] .+ sqrt(gamma * R * cellPrimitives[c,2])) .* dt
+        a = sqrt(gamma * R * cellPrimitives[c,2])
         #TODO: Precompute
-        maxCoords = [ -1000000.0, -1000000.0, -1000000.0 ]
-        minCoords = [ 1000000.0, 1000000.0, 1000000.0 ]
+        fill!(maxCoords, -10000000)
+        fill!(minCoords, 10000000)
         for f in mesh.cells[c]
             for d in 1:3
                 maxCoords[d] = max(maxCoords[d], mesh.fCenters[f][d])
@@ -48,7 +50,8 @@ function maxCFL3D(mesh::Mesh, solutionState, dt, gamma=1.4, R=287.05)
         for d in 1:3
             dx = (maxCoords[d] - minCoords[d])
             if dx > 0
-                CFL += cDeltaT[d] / dx
+                cDeltaT = (abs(cellPrimitives[c,d+2]) + a)*dt
+                CFL += cDeltaT / dx
             end
         end
         maxCFL = max(maxCFL, CFL)
@@ -103,11 +106,10 @@ function greenGaussGrad(mesh::Mesh, valuesAtFaces=false, values...)
         end
 
         # Boundary Faces
-        zeroFlux = zeros(nFluxes)
         for b in 1:nBoundaries
             if boundaryConditions[2*b-1] != emptyBoundary
                 for f in mesh.boundaryFaces[b]
-                    grad[mesh.faces[f][1]] .+= mesh.fAVecs[f] .* faceVals[f]
+                    grad[mesh.faces[f][1]] += mesh.fAVecs[f] * faceVals[f]
                 end
             end
         end
@@ -511,7 +513,9 @@ function unstructured_JSTEps(mesh::Mesh, solutionState, k2=0.5, k4=(1/32), c4=1,
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
 
     P = cellPrimitives[:,1]
-    gradP = greenGaussGrad(mesh, false, P)[1]
+    P = reshape(P, nCells, :)
+    gradP = greenGaussGrad_matrix(mesh, P, false)
+    gradP = reshape(gradP, nCells, 3)
 
     sj = zeros(nCells)
     rj = zeros(nCells)
@@ -524,8 +528,8 @@ function unstructured_JSTEps(mesh::Mesh, solutionState, k2=0.5, k4=(1/32), c4=1,
 
         oP = P[ownerCell]
         nP = P[neighbourCell]
-        farOwnerP = nP - 2*dot(d, gradP[ownerCell])
-        farNeighbourP = oP + 2*dot(d, gradP[neighbourCell])
+        @views farOwnerP = nP - 2*dot(d, gradP[ownerCell, :])
+        @views farNeighbourP = oP + 2*dot(d, gradP[neighbourCell, :])
         sj[ownerCell] += (abs( nP - 2*oP + farOwnerP )/ max( abs(nP - oP) + abs(oP - farOwnerP), 0.0000000001))^2
         sjCount[ownerCell] += 1
         sj[neighbourCell] += (abs( oP - 2*nP + farNeighbourP )/ max( abs(farNeighbourP - nP) + abs(nP - oP), 0.0000000001))^2
@@ -533,7 +537,7 @@ function unstructured_JSTEps(mesh::Mesh, solutionState, k2=0.5, k4=(1/32), c4=1,
     end
 
     for c in 1:nCells
-        rj[c] = mag(cellPrimitives[c,3:5]) +  sqrt(gamma * R * cellPrimitives[c,2]) # Velocity magnitude + speed of sound
+        @views rj[c] = mag(cellPrimitives[c,3:5]) +  sqrt(gamma * R * cellPrimitives[c,2]) # Velocity magnitude + speed of sound
         sj[c] /= sjCount[c] # Average the sj's computed by each face for each cell
     end
 
@@ -568,16 +572,16 @@ function unstructured_JSTFlux(mesh::Mesh, solutionState, boundaryConditions, gam
     #### Add JST artificial Diffusion ####
     fDeltas = faceDeltas(mesh, solutionState)
     fDGrads = greenGaussGrad_matrix(mesh, fDeltas, false)
-    eps2, eps4 = unstructured_JSTEps(mesh, solutionState, 0.12, (0/32), 1, gamma, R)
+    eps2, eps4 = unstructured_JSTEps(mesh, solutionState, 0.2, (0/32), 1, gamma, R)
     # nCells = nFaces - 1
     for f in 1:nFaces-nBdryFaces
         ownerCell = mesh.faces[f][1]
         neighbourCell = mesh.faces[f][2]
         d = mesh.cCenters[neighbourCell] .- mesh.cCenters[ownerCell]
 
-        fD = fDeltas[f,:]
-        farOwnerfD = fD .- dot(d, fDGrads[ownerCell,:,:])
-        farNeighbourfD = fD .+ dot(d, fDGrads[ownerCell,:,:])
+        @views fD = fDeltas[f,:]
+        @views farOwnerfD = fD .- dot(d, fDGrads[ownerCell,:,:])
+        @views farNeighbourfD = fD .+ dot(d, fDGrads[ownerCell,:,:])
 
         diffusionFlux = eps2[f]*fD - eps4[f]*(farNeighbourfD - 2*fD + farOwnerfD)
         # Add diffusion flux in component form
@@ -618,7 +622,7 @@ function decodeSolution_3D(solutionState, R=287.05, Cp=1005)
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
     nCells = size(cellState, 1)
     for c in 1:nCells
-        cellPrimitives[c,:] = decodePrimitives3D(cellState[c,:]..., R, Cp)
+        @views decodePrimitives3D!(cellPrimitives[c,:], cellState[c,:], R, Cp)
         # mass, xMom, eV2 x,y,z-direction fluxes
         cellFluxes[c, :] = calculateFluxes3D(cellPrimitives[c,:]..., cellState[c,:]...)
     end
@@ -671,19 +675,17 @@ function integrateFluxes_unstructured3D(mesh::Mesh, solutionState, boundaryCondi
     end
 
     #### Flux Integration ####
-    for f in 1:nFaces
+    for f in eachindex(mesh.faces)
         ownerCell = mesh.faces[f][1]
         neighbourCell = mesh.faces[f][2]
 
         for v in 1:nVars
             i1 = (v-1)*3 + 1
             i2 = i1+2
-            flow = dot(faceFluxes[f, i1:i2], mesh.fAVecs[f])
+            @views flow = dot(faceFluxes[f, i1:i2], mesh.fAVecs[f])
 
-            if ownerCell > -1
-                # Subtract from owner cell
-                fluxResiduals[ownerCell, v] -= flow
-            end
+            # Subtract from owner cell
+            fluxResiduals[ownerCell, v] -= flow
             if neighbourCell > -1
                 # Add to neighbour cell
                 fluxResiduals[neighbourCell, v] += flow
@@ -733,12 +735,15 @@ end
 
 function zeroGradientBoundary(mesh::Mesh, solutionState, boundaryNumber, _)
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
+    nFluxes = size(cellFluxes, 2)
 
     # Directly extrapolate cell center flux to boundary (zero gradient between the cell center and the boundary)
     currentBoundary = mesh.boundaryFaces[boundaryNumber]
     for face in currentBoundary
-        ownerCell = max(mesh.faces[face][1], mesh.faces[face][2]) #One of these will be -1 (no cell), the other is the boundary cell we want
-        faceFluxes[face, :] = cellFluxes[ownerCell, :]
+        ownerCell = mesh.faces[face][1] #One of these will be -1 (no cell), the other is the boundary cell we want
+        for flux in 1:nFluxes
+            faceFluxes[face, flux] = cellFluxes[ownerCell, flux]
+        end
     end
 end
 
