@@ -101,25 +101,44 @@ function calculateFluxes1D(P, Ux, xMom, eV2)
     return [ massFlux, xMomxFlux, eV2xFlux ]
 end
 
-function calculateFluxes3D(P, T, Ux, Uy, Uz, rho, xMom, yMom, zMom, eV2)
+#Fluxes, prim, state are each assumed to be in the same order as cellFluxes, cellPrimitives and cellState
+#Now directly modified the flux vector instead of returning values
+function calculateFluxes3D!(fluxes, prim, state)
+    # Mass Fluxes
+    fluxes[1] = state[2]
+    fluxes[2] = state[3]
+    fluxes[3] = state[4]
+
     # x-direction fluxes
-    xMomxFlux = xMom*Ux + P
-    yMomxFlux = xMom*Uy
-    zMomxFlux = xMom*Uz
+    # xMomxFlux = xMom*Ux + P
+    fluxes[4] = state[2]*prim[3] + prim[1]
+    # yMomxFlux = xMom*Uy
+    fluxes[7] = state[2]*prim[4]
+    # zMomxFlux = xMom*Uz
+    fluxes[10] = state[2]*prim[5]
 
     #y-direction fluxes
-    xMomyFlux = yMomxFlux
-    yMomyFlux = yMom*Uy + P
-    zMomyFlux = yMom*Uz
+    # xMomyFlux = yMomxFlux
+    fluxes[5] = fluxes[7]
+    # yMomyFlux = yMom*Uy + P
+    fluxes[8] = state[3]*prim[4] + prim[1]
+    # zMomyFlux = yMom*Uz
+    fluxes[11] = state[3]*prim[5]
 
     #z-direction fluxes
-    xMomzFlux = zMomxFlux
-    yMomzFlux = zMomyFlux
-    zMomzFlux = zMom*Uz + P
+    # xMomzFlux = zMomxFlux
+    fluxes[6] = fluxes[10]
+    # yMomzFlux = zMomyFlux
+    fluxes[9] = fluxes[11]
+    # zMomzFlux = zMom*Uz + P
+    fluxes[12] = state[4]*prim[5] + prim[1]
 
-    eV2xFlux = Ux*eV2 + P*Ux
-    eV2yFlux = Uy*eV2 + P*Uy
-    eV2zFlux = Uz*eV2 + P*Uz
+    # eV2xFlux = Ux*eV2 + P*Ux
+    fluxes[13] = prim[3]*state[5] + prim[1]*prim[3]
+    # eV2yFlux = Uy*eV2 + P*Uy
+    fluxes[14] = prim[4]*state[5] + prim[1]*prim[4]
+    # eV2zFlux = Uz*eV2 + P*Uz
+    fluxes[15] = prim[5]*state[5] + prim[1]*prim[5]
 
-    return [ xMom, yMom, zMom, xMomxFlux, xMomyFlux, xMomzFlux, yMomxFlux, yMomyFlux, yMomzFlux, zMomxFlux, zMomyFlux, zMomzFlux, eV2xFlux, eV2yFlux, eV2zFlux ]
+    # return [ xMom, yMom, zMom, xMomxFlux, xMomyFlux, xMomzFlux, yMomxFlux, yMomyFlux, yMomzFlux, zMomxFlux, zMomyFlux, zMomzFlux, eV2xFlux, eV2yFlux, eV2zFlux ]
 end

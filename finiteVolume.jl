@@ -622,9 +622,10 @@ function decodeSolution_3D(solutionState, R=287.05, Cp=1005)
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
     nCells = size(cellState, 1)
     for c in 1:nCells
+        # Updates cell primitives
         @views decodePrimitives3D!(cellPrimitives[c,:], cellState[c,:], R, Cp)
-        # mass, xMom, eV2 x,y,z-direction fluxes
-        cellFluxes[c, :] = calculateFluxes3D(cellPrimitives[c,:]..., cellState[c,:]...)
+        # Updates mass, xMom, eV2 x,y,z-direction fluxes
+        @views calculateFluxes3D!(cellFluxes[c, :], cellPrimitives[c,:], cellState[c,:])
     end
 end
 
@@ -704,6 +705,7 @@ end
 ######################### Boundary Conditions #######################
 # Can work as a supersonic inlet if initial conditions are set to the inlet conditions
 # Input: [ Static Pressure, Static Temperture, Ux, Uy, Uz, Cp ]
+# Input: [ P, T, Ux, Uy, Uz, Cp ]
 function supersonicInletBoundary(mesh::Mesh, solutionState, boundaryNumber, inletConditions)
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
 
@@ -713,24 +715,70 @@ function supersonicInletBoundary(mesh::Mesh, solutionState, boundaryNumber, inle
     e = calPerfectEnergy(T, Cp)
     eV2 = rho*(e + (mag(U)^2)/2)
 
-    boundaryFluxes = calculateFluxes3D(P, T, Ux, Uy, Uz, rho, xMom, yMom, zMom, eV2)
+    boundaryFluxes = Vector{Float64}(undef, 15)
+    calculateFluxes3D!(boundaryFluxes, [P, T, Ux, Uy, Uz],  [rho, xMom, yMom, zMom, eV2])
     currentBoundary = mesh.boundaryFaces[boundaryNumber]
     for face in currentBoundary
         faceFluxes[face,:] = boundaryFluxes
     end
 end
 
-# Input: [ totalPressure, totalTemp, nx, ny, nz ]
+# Input: [ totalPressure, totalTemp, nx, ny, nz, gamma, R, Cp ]
 # Where n is the unit vector representing the direction of inlet velocity
 # Using method from FUN3D solver
 # TODO: Allow for variation of R and gamma
 function subsonicInletBoundary(mesh, solutionState, boundaryNumber, inletConditions)
-    Pt, Tt, n = inletConditions
-    gamma = 1.4
-    R = 287.05
-    a = 1 + 2/(gamma + 1)
-    # b =
-    #TODO: Finish subsonic inlet
+    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
+    Pt, Tt, nx, ny, nz, gamma, R, Cp = inletConditions
+
+    boundaryFluxes = Vector{Float64}(undef, 15)
+    primitives = Vector{Float64}(undef, 5)
+    state = Vector{Float64}(undef, 5)
+    velUnitVector = [ nx, ny, nz ]
+    currentBoundary = mesh.boundaryFaces[boundaryNumber]
+
+    for face in currentBoundary
+        ownerCell = mesh.faces[face][1]
+        @views adjustedVelocity = dot(velUnitVector, cellPrimitives[ownerCell, 3:5])
+        primitives[2] = Tt - (gamma-1)/2 * (adjustedVelocity^2)/(gamma*R)
+        machNum = abs(adjustedVelocity) / sqrt(gamma * R * primitives[2])
+        primitives[1] = Pt*(1 + (gamma-1)/2 * machNum^2)^(-gamma/(gamma-1))
+        primitives[3:5] = adjustedVelocity .* velUnitVector
+
+        # Calculate state variables
+        state[1] = idealGasRho(primitives[2], primitives[1], R)
+        state[2:4] .= primitives[3:5] .* state[1]
+        e = calPerfectEnergy(primitives[2], Cp, R)
+        state[5] = state[1]*(e + (mag(primitives[3:5])^2)/2 )
+
+        calculateFluxes3D!(boundaryFluxes, primitives, state)
+        faceFluxes[face, :] = boundaryFluxes
+    end
+end
+
+function pressureOutletBoundary(mesh, solutionState, boundaryNumber, outletPressure)
+    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
+    nFluxes = size(cellFluxes, 2)
+
+    # Directly extrapolate cell center flux to boundary (zero gradient between the cell center and the boundary)
+    currentBoundary = mesh.boundaryFaces[boundaryNumber]
+    for face in currentBoundary
+        ownerCell = mesh.faces[face][1]
+        # Mass fluxes are unaffected by pressure boundary
+        for flux in 1:nFluxes
+            faceFluxes[face, flux] = cellFluxes[ownerCell, flux]
+        end
+
+        origP = cellPrimitives[ownerCell, 1]
+        # Adjust the momentum fluxes containing pressure
+        for flux in [4, 8, 12]
+            faceFluxes[face, flux] += outletPressure - origP
+        end
+        #Adjust the energy fluxes
+        for d in 1:3
+            faceFluxes[face, 12+d] += cellPrimitives[ownerCell, 2+d]*(outletPressure - origP)
+        end
+    end
 end
 
 function zeroGradientBoundary(mesh::Mesh, solutionState, boundaryNumber, _)

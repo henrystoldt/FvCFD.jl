@@ -35,7 +35,7 @@ mesh, cellPrimitives = initializeShockTube3DFVM(nCells...)
 boundaryConditions = [ zeroGradientBoundary, [], emptyBoundary, [] ]
 # cellPrimitives = unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, RK2_Mid, initDt=0.00001, endTime=0.14267, outputInterval=0.14267, targetCFL=0.3, silent=false)
 # @profview unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00001, endTime=0.14267, outputInterval=0.14267, targetCFL=0.1, silent=true)
-@btime unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00001, endTime=0.05, outputInterval=0.14267, targetCFL=0.1, silent=true)
+@btime unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00001, endTime=0.005, outputInterval=0.14267, targetCFL=0.01, silent=true, createRestartFile=false, createVTKOutput=false)
 
 ### Unstructured FVM ##
 # @time cellPrimitives central_UnstructuredADFVM(initializeShockTubeFVM(nCells, silent=false)..., initDt=0.0000001, endTime=0.14267, targetCFL=0.1, Cx=0.5, silent=false)
