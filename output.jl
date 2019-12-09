@@ -90,13 +90,24 @@ function outputVTK(meshPath, cellPrimitives, fileName="solution.vtk")
     end
 end
 
-function updateSolutionOutput(cellPrimitives, restartFile, meshPath, vtkCounter, createRestartFile)
+function updateSolutionOutput(cellPrimitives, restartFile, meshPath, createRestartFile, createVTKOutput)
     if createRestartFile
         println("Writing Restart File: $restartFile")
         writeRestartFile(cellPrimitives, restartFile)
     end
-    solnName = "solution.$vtkCounter.vtk"
-    println("Writing $solnName")
-    outputVTK(meshPath, cellPrimitives, solnName)
 
+    files = readdir()
+    maxNum = 0
+    for item in files
+        if occursin("solution", item)
+            slnNumber = parse(Int, item[10:end-4])
+            maxNum = max(maxNum, slnNumber)
+        end
+    end
+    vtkCounter = maxNum + 1
+    if createVTKOutput
+        solnName = "solution.$vtkCounter.vtk"
+        println("Writing $solnName")
+        outputVTK(meshPath, cellPrimitives, solnName)
+    end
 end

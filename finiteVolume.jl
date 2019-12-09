@@ -572,7 +572,7 @@ function unstructured_JSTFlux(mesh::Mesh, solutionState, boundaryConditions, gam
     #### Add JST artificial Diffusion ####
     fDeltas = faceDeltas(mesh, solutionState)
     fDGrads = greenGaussGrad_matrix(mesh, fDeltas, false)
-    eps2, eps4 = unstructured_JSTEps(mesh, solutionState, 0.2, (0/32), 1, gamma, R)
+    eps2, eps4 = unstructured_JSTEps(mesh, solutionState, 0.25, (1/32), 1, gamma, R)
     # nCells = nFaces - 1
     for f in 1:nFaces-nBdryFaces
         ownerCell = mesh.faces[f][1]
@@ -982,7 +982,7 @@ function structured1DFVM(dx::Array{Float64, 1}, cellPrimitives::Array{Float64, 2
     return cellPrimitives[:,1], cellPrimitives[:,3], cellPrimitives[:,2], cellState[:,1]
 end
 
-function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Array{Float64, 2}, boundaryConditions, timeIntegrationFn=forwardEuler, fluxFunction=unstructured_JSTFlux; initDt=0.001, endTime=0.14267, outputInterval=0.01, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, silent=true, restart=false, createRestartFile=true, restartFile="JuliaCFDRestart.txt")
+function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Array{Float64, 2}, boundaryConditions, timeIntegrationFn=forwardEuler, fluxFunction=unstructured_JSTFlux; initDt=0.001, endTime=0.14267, outputInterval=0.01, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, silent=true, restart=false, createRestartFile=true, createVTKOutput=true, restartFile="JuliaCFDRestart.txt")
     if !silent
         println("Initializing Simulation")
     end
@@ -1017,7 +1017,6 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Array{Float64, 
     timeStepCounter = 0
     nextOutputTime = outputInterval
     writeOutputThisIteration = false
-    vtkCounter = 1
     while currTime < endTime
         ############## Timestep adjustment #############
         maxCFL = maxCFL3D(mesh, solutionState, dt, gamma, R)
@@ -1045,13 +1044,12 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Array{Float64, 
         end
 
         if writeOutputThisIteration
-            updateSolutionOutput(cellPrimitives, restartFile, meshPath, vtkCounter, createRestartFile)
-            vtkCounter += 1
+            updateSolutionOutput(cellPrimitives, restartFile, meshPath, createRestartFile, createVTKOutput)
             writeOutputThisIteration = false
             nextOutputTime = nextOutputTime + outputInterval
         end
     end
 
-    updateSolutionOutput(cellPrimitives, restartFile, meshPath, vtkCounter, createRestartFile)
+    updateSolutionOutput(cellPrimitives, restartFile, meshPath, createRestartFile, createVTKOutput)
     return cellPrimitives
 end
