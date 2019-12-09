@@ -334,7 +334,7 @@ function OpenFOAMMesh_findCellPts(polyMeshPath)
             end
             return true
         end
-        addFace(cells[c][4])
+        addFace(cells[c][1])
 
         # Add any faces with no points in common with existing faces
         for f in cells[c]

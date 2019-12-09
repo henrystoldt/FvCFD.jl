@@ -39,13 +39,16 @@ P = 100000
 T = 300
 U = [ 1041.66, 0, 0 ]
 
-meshPath = "OFforwardStepMesh"
+# meshPath = "OFforwardStepMesh"
+# boundaryConditions = [ supersonicInletBoundary, [P, T, U..., 1005], zeroGradientBoundary, [], symmetryBoundary, [], symmetryBoundary, [], wallBoundary, [], emptyBoundary, [] ]
+meshPath = "OFforwardStepFineMesh"
 boundaryConditions = [ supersonicInletBoundary, [P, T, U..., 1005], zeroGradientBoundary, [], symmetryBoundary, [], symmetryBoundary, [], wallBoundary, [], emptyBoundary, [] ]
 
 # Solve
 mesh = OpenFOAMMesh(meshPath)
 cellPrimitives = initializeUniformSolution3D(mesh, P, T, U...)
-unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, RK4, initDt=0.00000001, endTime=0.01152, outputInterval=0.000288, targetCFL=2.0, silent=false, restart=false)
+# Endtime 0.01152
+unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, ShuOsher, initDt=0.00000001, endTime=0.03, outputInterval=0.000288, targetCFL=0.95, silent=false, restart=true)
 
 #### Simple convection ####
 # mesh, cellPrimitives = initializeShockTube3DFVM(10)
