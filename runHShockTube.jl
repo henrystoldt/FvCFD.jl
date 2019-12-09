@@ -2,7 +2,7 @@ using Plots
 using Plots.PlotMeasures
 using LaTeXStrings
 using Profile
-using ProfileView #Doesn't want to install on my work ubuntu desktop for some reason
+# using ProfileView #Doesn't want to install on my work ubuntu desktop for some reason
 using BenchmarkTools
 
 pyplot()

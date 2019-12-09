@@ -2,7 +2,6 @@ using Printf
 include("constitutiveRelations.jl")
 include("vectorFunctions.jl")
 include("timeDiscretizations.jl")
-include("JST_structured_1D.jl")
 include("mesh.jl")
 include("output.jl")
 
@@ -24,10 +23,6 @@ end
 ######################### CFL ########################
 # TODO: Generalize cell size
 # TODO: 3D definition of CFL: Sum up in all directions
-function CFL(U, T, dt, dx, gamma=1.4, R=287.05)
-    return (abs(U[1]) + sqrt(gamma * R * T)) * dt / dx
-end
-
 function maxCFL3D(mesh::Mesh, solutionState, dt, gamma=1.4, R=287.05)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
@@ -184,212 +179,8 @@ function greenGaussGrad_matrix(mesh::Mesh, matrix::Array{Float64,2}, valuesAtFac
     return grad
 end
 
-######################### Laplacian Computation #######################
-# Calculates the vector Ef for use in the laplacian calculation, as described in Moukalled pg. 241-244
-#TODO: Delete or update
-function laplacian_Ef(nonOrthoCorrection, Sf, n, CF, e)
-    if nonOrthoCorrection == "None"
-        return Sf
-    elseif nonOrthoCorrection == "MinCorr"
-        return dot(e, Sf) .* e
-    elseif nonOrthoCorrection == "OrthogCorr"
-        return mag(Sf) .* e
-    elseif nonOrthoCorrection == "OverRelax"
-        return (dot(Sf, Sf) / dot(e, Sf)) .* e
-    end
-end
-
-function laplacian_FaceFlux(mesh, nonOrthoCorrection, face, interpolatedFaceGrad, orthoFaceGrad)
-    cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
-
-    ownerCell = faces[face][1]
-    neighbourCell = faces[face][2]
-
-    Sf = fAVecs[face]
-    n = normalize(Sf)
-    CF = cCenters[neighbourCell] .- cCenters[ownerCell]
-    e = normalize(CF)
-
-    Ef = laplacian_Ef(nonOrthoCorrection, Sf, n, CF, e)
-    Tf = Sf .- Ef
-
-    # Orthogonal contribution + non-ortho correction term
-    return mag(Ef)*orthoFaceGrad + dot(interpolatedFaceGrad, Tf)
-end
-
-# Used as orthogonal contribution in calculation of laplacian
-function ortho_FaceGradient(mesh, values...)
-    result = []
-
-    # Interpret mesh
-    cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
-    nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
-    bdryFaceIndices = Array(nFaces-nBdryFaces:nFaces)
-
-    for vals in values
-        orthoGrad = Array{Float64, 1}(undef, nFaces)
-
-        # Integrate fluxes from each face
-        for f in 1:nFaces-nBdryFaces
-            ownerCell = faces[f][1]
-            neighbourCell = faces[f][2]
-
-            #TODO: Precompute these distances
-            distance = mag(cCenters[neighbourCell] .- cCenters[ownerCell])
-            orthoGrad[f] = (vals[neighbourCell] .- vals[ownerCell]) ./ distance
-        end
-
-        # Set boundary gradients to zero
-        for f in nFaces-nBdryFaces+1:nFaces
-            orthoGrad[f] = 0.0
-        end
-
-        push!(result, orthoGrad)
-    end
-    return result
-end
-
-# Non-ortho correction options are: (all from Moukalled)
-#   None
-#   MinCorr (Section 8.6.2)
-#   OrthogCorr (Section 8.6.3)
-#   OverRelax (Seciton 8.6.4)
-function laplacian(mesh, nonOrthoCorrection="None", values...)
-    result = []
-
-    # Interpret mesh
-    cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
-    nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
-    bdryFaceIndices = Array(nFaces-nBdryFaces:nFaces)
-
-    for vals in values
-        ###### Precomputations ######
-        # Compute gradients
-        grads = greenGaussGrad(mesh, false, vals)[1]
-        orthoFaceGrads = ortho_FaceGradient(mesh, vals)[1]
-
-        #Interpolate gradients to faces
-        faceGrads = linInterp(mesh, grads)[1]
-
-        ###### Laplacian ######
-        # Initialize to zero
-        lapl = Array{Float64, 1}(undef, nCells)
-        for c in 1:nCells
-            lapl[c] = 0.0
-        end
-
-        # Integrate gradient fluxes from each face
-        for f in 1:nFaces-nBdryFaces
-            faceIntegral = laplacian_FaceFlux(mesh, nonOrthoCorrection, f, faceGrads[f], orthoFaceGrads[f])
-
-            ownerCell = faces[f][1]
-            neighbourCell = faces[f][2]
-            lapl[ownerCell] += faceIntegral
-            lapl[neighbourCell] -= faceIntegral
-        end
-
-        # Divide integral by cell volume to obtain gradients
-        for c in 1:nCells
-            lapl[c] = lapl[c] / cVols[c]
-        end
-
-        # Set boundary laplacians to zero
-        for f in nFaces-nBdryFaces+1:nFaces
-            for cell in faces[f]
-                if cell != -1
-                    lapl[cell] = 0.0
-                end
-            end
-        end
-
-        push!(result, lapl)
-    end
-    return result
-end
-
 ####################### Face value interpolation ####################
 # Interpolates to all INTERIOR faces
-function upwindInterp(mesh, U, values...)
-    cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
-    nFaces = size(faces, 1)
-    nBdryFaces = size(boundaryFaces, 1)
-
-    # Compute face fluxes to see if they're positive or not
-    faceVels = linInterp(mesh, U)[1]
-
-    fFluxes = Array{Float64, 1}(undef, nFaces)
-    for i in 1:nFaces-nBdryFaces
-        fFluxes[i] = dot(fAVecs[i], faceVels[i])
-    end
-
-    result = []
-    for vals in values
-        fVals = []
-
-        # Use sign of flux to choose between owner or neighbour node values
-        for i in 1:nFaces-nBdryFaces
-            if fFluxes[i] > 0
-                push!(fVals, vals[faces[i][1]])
-            elseif fFluxes[i] < 0
-                push!(fVals, vals[faces[i][2]])
-            else
-                push!(fVals, (vals[faces[i][1]] + vals[faces[i][2]])/2)
-            end
-        end
-
-        for i in 1:nBdryFaces
-            push!(fVals, 0)
-        end
-        push!(result, fVals)
-    end
-    return result
-end
-
-# Array versions
-# Handles scalar or vector-valued variables
-function linInterp(mesh::Mesh, values...)
-    nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
-
-    result = []
-    for vals in values
-        fVals = similar(vals)
-
-        ############ Default Value ############
-        # Construct a default value of the appropriate dimensionality
-        # defaultVal = 0.0 for 1D, [ 0.0, 0.0 ] for 2D etc...
-        defaultVal = []
-        if size(vals[1], 1) ==1
-            defaultVal = 0
-        else
-            for a in vals[1]
-                push!(defaultVal, 0.0)
-            end
-        end
-
-        ########### Do Interpolations ###########
-        for i in 1:nFaces
-            if i > nFaces-nBdryFaces
-                # Faces on boundaries not treated, must be set externally
-                push!(fVals, defaultVal)
-
-            else
-                # Find value at face using linear interpolation
-                c1 = mesh.faces[i][1]
-                c2 = mesh.faces[i][2]
-
-                #TODO: Precompute these distances
-                c1Dist = mag(mesh.cCenters[c1] .- mesh.fCenters[i])
-                c2Dist = mag(mesh.cCenters[c2] .- mesh.fCenters[i])
-                totalDist = c1Dist + c2Dist
-                push!(fVals, vals[c1].*(c2Dist/totalDist) .+ vals[c2].*(c1Dist/totalDist))
-            end
-        end
-
-        push!(result, fVals)
-    end
-    return result
-end
-
 # Flux interpolation
 function linInterp_3D(mesh::Mesh, solutionState::Array{Array{Float64, 2}, 1})
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
@@ -435,23 +226,6 @@ function linInterp_3D(mesh::Mesh, matrix::Array{Float64, 2})
     return faceVals
 end
 
-function avgInterp(mesh, solutionState)
-    cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
-    nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
-    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
-    nFluxes = size(cellFluxes, 2)
-
-    # Boundary face fluxes must be set separately
-    for f in 1:nFaces-nBdryFaces
-        c1 = faces[f][1]
-        c2 = faces[f][2]
-
-        for v in 1:nFluxes
-            faceFluxes[f, v] = (cellFluxes[c1, v] + cellFluxes[c2, v])/2
-        end
-    end
-end
-
 # Returns matrix of values
 function maxInterp(mesh::Mesh, vars...)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
@@ -495,19 +269,6 @@ end
 ######################### Convective Term Things #######################
 # Returns the fractional portion of the maccormack aritificial diffusivity term (Eq. 6.58 in Anderson).
 # Result must still be multiplied by (nextU - 2U + U) for each flux variable.
-function macCormackAD_S(mesh, C, P, lapl_P)
-    cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
-    nCells = size(cells, 1)
-
-    S = Array{Float64, 1}(undef, nCells)
-    for i in 1:nCells
-        avgDimension = 1/nCells
-        S[i] = C * abs(lapl_P[i]*avgDimension^2) / (lapl_P[i]*avgDimension^2 + 4*P[i])
-    end
-
-    return S
-end
-
 function unstructured_JSTEps(mesh::Mesh, solutionState, k2=0.5, k4=(1/32), c4=1, gamma=1.4, R=287.05)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
@@ -597,27 +358,6 @@ function unstructured_JSTFlux(mesh::Mesh, solutionState, boundaryConditions, gam
 end
 
 ######################### TimeStepping #######################
-
-function decodeSolution(solutionState, R=287.05, Cp=1005)
-    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
-    nVars = size(cellState, 2)
-    if nVars == 3
-        return decodeSolution_1D(solutionState, R, Cp)
-    else
-        return decodeSolution_3D(solutionState, R, Cp)
-    end
-end
-
-function decodeSolution_1D(solutionState, R=287.05, Cp=1005)
-    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
-    nCells = size(cellState, 1)
-    for c in 1:nCells
-        cellPrimitives[c,:] = decodePrimitives(cellState[c,1], cellState[c,2], cellState[c,3], R, Cp)
-        # mass, xMom, eV2 x-direction fluxes
-        cellFluxes[c, :] = calculateFluxes1D(cellPrimitives[c,1], cellPrimitives[c,3], cellState[c,2], cellState[c,3])
-    end
-end
-
 function decodeSolution_3D(solutionState, R=287.05, Cp=1005)
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
     nCells = size(cellState, 1)
@@ -627,38 +367,6 @@ function decodeSolution_3D(solutionState, R=287.05, Cp=1005)
         # Updates mass, xMom, eV2 x,y,z-direction fluxes
         @views calculateFluxes3D!(cellFluxes[c, :], cellPrimitives[c,:], cellState[c,:])
     end
-end
-
-function integrateFluxes_structured1D(dx, solutionState)
-    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
-    nCells = size(cellState, 1)
-
-    # Recomputing flux balances, so wipe existing values
-    fill!(fluxResiduals, 0)
-
-    # Face-based integration of fluxes
-    #TODO: Multiply by face area here
-    for f in 2:nCells
-        for v in 1:3
-            flux = faceFluxes[f,v]
-            # Subtract from owner cell
-            fluxResiduals[f-1, v] -= flux
-            # Add to neighbour cell
-            fluxResiduals[f, v] += flux
-        end
-    end
-
-    # Divide by cell volume
-    for c in 2:nCells-1
-        fluxResiduals[c,:] ./= dx[c]
-    end
-
-    fluxResiduals[1,:] = [ 0, 0, 0 ]
-    fluxResiduals[nCells,:] = [ 0, 0, 0 ]
-    fluxResiduals[2,:] = [ 0, 0, 0 ]
-    fluxResiduals[nCells-1,:] = [ 0, 0, 0 ]
-
-    return fluxResiduals
 end
 
 function integrateFluxes_unstructured3D(mesh::Mesh, solutionState, boundaryConditions)
@@ -706,6 +414,7 @@ end
 # Can work as a supersonic inlet if initial conditions are set to the inlet conditions
 # Input: [ Static Pressure, Static Temperture, Ux, Uy, Uz, Cp ]
 # Input: [ P, T, Ux, Uy, Uz, Cp ]
+# Input [ P, T, Ux, Uy, Uz, Cp ]
 function supersonicInletBoundary(mesh::Mesh, solutionState, boundaryNumber, inletConditions)
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
 
@@ -824,212 +533,6 @@ end
 #TODO: Gradient calculation at slip walls
 
 ######################### Solvers #######################
-function central_UnstructuredADFVM(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, Cx=0.3, debug=false, silent=true)
-    if !silent
-        println("Initializing solver")
-    end
-    ######### MESH ############
-    # Extract mesh into local variables for readability
-    cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
-    nCells = size(cells, 1)
-    nFaces = size(faces, 1)
-    nBdryFaces = size(boundaryFaces, 1)
-    bdryFaceIndices = Array(nFaces-nBdryFaces:nFaces)
-
-    ########### Variable Arrays #############
-    # State variables, values are the averages/cell center values
-    rho = Array{Float64, 1}(undef, nCells)
-    xMom = Array{Float64, 1}(undef, nCells)
-    eV2 = Array{Float64, 1}(undef, nCells)
-    stateVars = [ rho, xMom, eV2 ]
-    # Flux variables for equations 2 and 3 (xMom is flux variable for the continuity eqn)
-    rhoU2p = Array{Float64, 1}(undef, nCells)
-    rhoUeV2PU = Array{Float64, 1}(undef, nCells)
-
-    # Calc state and flux variables from primitives
-    #TODO: Multi-D
-    for i in 1:nCells
-        rho[i], xMom[i], eV2[i], rhoU2p[i], rhoUeV2PU[i] = encodePrimitives3D(P[i], T[i], U[i])
-    end
-
-    if debug
-        println("Rho: $rho")
-        println("xMom: $xMom")
-        println("eV2: $eV2")
-    end
-
-    ########### SOLVER ###########
-    if !silent
-        println("Starting iterations")
-    end
-    dt = initDt
-    currTime = 0
-    timeStepCounter = 0
-    while currTime < endTime
-
-        if (endTime - currTime) < dt
-            dt = endTime - currTime
-        end
-
-        # Calculate fluxes through each face
-        # TODO: y and z momemtum-fluxes + equations
-        # xMassFlux, xMomFlux, xeV2Flux = upwindInterp(mesh, U, xMom, rhoU2p, rhoUeV2PU)
-        xMassFlux, xMomFlux, xeV2Flux, faceP = linInterp(mesh, xMom, rhoU2p, rhoUeV2PU, P)
-        fluxVars = [ xMassFlux, xMomFlux, xeV2Flux ]
-
-        if debug
-            println("xMass Flux: $xMassFlux")
-            println("xMom Flux: $xMomFlux")
-            println("xEv2 Flux: $xeV2Flux")
-        end
-
-        # Use fluxes to update values in each cell
-        for i in 1:(nFaces-nBdryFaces)
-            fA = mag(fAVecs[i]) #Face Area
-
-            ownerCell = faces[i][1]
-            neighbourCell = faces[i][2]
-            for v in 1:3
-                stateVars[v][ownerCell] -= fluxVars[v][i]*fA*dt/cVols[ownerCell]
-                stateVars[v][neighbourCell] += fluxVars[v][i]*fA*dt/cVols[neighbourCell]
-            end
-        end
-
-        if Cx > 0
-            # Apply McCormack Artificial Diffusivity
-            lapl_P, lapl_rho, lapl_xMom, lapl_eV2 = laplacian(mesh, "None", P, rho, xMom, eV2)
-            S = macCormackAD_S(mesh, Cx , P, lapl_P)
-
-            for i in 2:nCells-1
-                avgD = 1/nCells
-                rho[i] += S[i]*lapl_rho[i]*avgD^2
-                xMom[i] += S[i]*lapl_xMom[i]*avgD^2
-                eV2[i] += S[i]*lapl_eV2[i]*avgD^2
-            end
-        end
-
-        if debug
-            println("Rho2: $rho")
-            println("xMom2: $xMom")
-            println("eV22: $eV2")
-        end
-
-        # Boundaries
-        ############### Boundaries ################
-        # Waves never reach the boundaries, so boundary treatment doesn't need to be good
-        copyValues(3, 2, stateVars)
-        copyValues(2, 1, stateVars)
-        copyValues(nCells-2, nCells-1, stateVars)
-        copyValues(nCells-1, nCells, stateVars)
-
-        # Decode primitive values
-        for i in 1:nCells
-            P[i], T[i], U[i], rhoU2p[i], rhoUeV2PU[i] = decodePrimitives3D(rho[i], xMom[i], eV2[i])
-        end
-
-        currTime += dt
-
-        ############## CFL Calculation, timestep adjustment #############
-        maxCFL = 0
-        for i in 1:nCells
-            dx = 1/nCells
-            maxCFL = max(maxCFL, CFL(U[i], T[i], dt, dx, gamma, R))
-        end
-        # Adjust time step to approach target CFL
-        dt *= ((targetCFL/maxCFL - 1)/5+1)
-
-        timeStepCounter += 1
-        if !silent
-            @printf("Timestep: %5.0f, simTime: %8.4g, Max CFL: %8.4g \n", timeStepCounter, currTime, maxCFL)
-        end
-
-    end
-
-    return P, U, T, rho
-end
-
-function structured1DFVM(dx::Array{Float64, 1}, cellPrimitives::Array{Float64, 2}, timeIntegrationFn=forwardEuler, fluxFunction=structured_JSTFlux1D; initDt=0.001, endTime=0.14267, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, silent=true)
-    if !silent
-        println("Initializing Simulation")
-    end
-
-    boundaryConditions = 0
-
-    nCells = size(dx, 1)
-    nFaces = nCells+1
-    nDims = 1
-    # Each dimension adds one momentum equation
-    nVars = 2+nDims
-    # Each dimension adds a flux for each conserved quantity
-    nFluxes = nVars*nDims
-
-    cellState = zeros(nCells, nVars)
-    cellFluxes = zeros(nCells, nFluxes)
-    fluxResiduals = zeros(nCells, nVars)
-    faceFluxes = zeros(nFaces, nFluxes)
-    solutionState = [ cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes ]
-
-    # Easy access functions
-    function P(cell::Int)           return cellPrimitives[cell, 1]      end
-    function T(cell::Int)           return cellPrimitives[cell, 2]      end
-    function Ux(cell::Int)          return cellPrimitives[cell, 3]      end
-    function rho(cell::Int)         return cellState[cell, 1]           end
-    function xMom(cell::Int)        return cellState[cell, 2]           end
-    function eV2(cell::Int)         return cellState[cell, 3]           end
-    function massXFlux(cell::Int)   return cellFluxes[cell, 1]          end
-    function xMomXFlux(cell::Int)   return cellFluxes[cell, 2]          end
-    function eV2XFlux(cell::Int)    return cellFluxes[cell, 3]          end
-
-    #Initialize States and Fluxes
-    for c in 1:nCells
-        # rho, xMom, total energy from P, T, U
-        cellState[c, :] = encodePrimitives(P(c), T(c), Ux(c))
-        # mass, xMom, eV2 x-direction fluxes
-        cellFluxes[c, :] = calculateFluxes1D(P(c), Ux(c), xMom(c), eV2(c))
-    end
-
-    if !silent
-        println("Starting iterations")
-    end
-
-    dt = initDt
-    currTime = 0
-    timeStepCounter = 0
-    while currTime < endTime
-        ############## Timestep adjustment #############
-        maxCFL = 0.0
-        for c in 1:nCells
-            maxCFL = max(maxCFL, (abs(Ux(c)) + sqrt(gamma * R * T(c))) * dt / dx[c])
-        end
-        # Slowly approach target CFL
-        dt *= ((targetCFL/maxCFL - 1)/5+1)
-        # Adjust timestep to hit endtime if this is the final time step
-        if (endTime - currTime) < dt
-            dt = endTime - currTime
-        end
-
-        ############## Take a timestep #############
-        solutionState = timeIntegrationFn(dx, fluxFunction, solutionState, boundaryConditions, gamma, R, Cp, dt)
-        currTime += dt
-        timeStepCounter += 1
-
-        ############### Apply Boundary conditions ################
-        # Waves never reach the boundaries, so boundary treatment doesn't need to be good
-        allVars = [ cellState, cellFluxes ]
-        copyValues(3, 2, allVars)
-        copyValues(2, 1, allVars)
-        copyValues(nCells-2, nCells-1, allVars)
-        copyValues(nCells-1, nCells, allVars)
-
-        if !silent
-            @printf("Timestep: %5.0f, simTime: %8.4g, Max CFL: %8.4g \n", timeStepCounter, currTime, maxCFL)
-        end
-    end
-
-    # P, U, T, rho
-    return cellPrimitives[:,1], cellPrimitives[:,3], cellPrimitives[:,2], cellState[:,1]
-end
-
 function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Array{Float64, 2}, boundaryConditions, timeIntegrationFn=forwardEuler, fluxFunction=unstructured_JSTFlux; initDt=0.001, endTime=0.14267, outputInterval=0.01, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, silent=true, restart=false, createRestartFile=true, createVTKOutput=true, restartFile="JuliaCFDRestart.txt")
     if !silent
         println("Initializing Simulation")
@@ -1054,7 +557,7 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Array{Float64, 
     solutionState = [ cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes ]
 
     # Calculates cell fluxes, primitives from cell state
-    decodeSolution(solutionState, R, Cp)
+    decodeSolution_3D(solutionState, R, Cp)
 
     if !silent
         println("Starting iterations")
