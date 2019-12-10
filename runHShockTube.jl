@@ -8,7 +8,6 @@ using BenchmarkTools
 pyplot()
 
 include("shockTube.jl")
-include("finiteDifference.jl")
 include("finiteVolume.jl")
 include("mesh.jl")
 
@@ -16,13 +15,6 @@ include("mesh.jl")
 
 println("Meshing")
 #### FDM or Structured FVM ###
-# P, U, T, rho = macCormack1DFDM(initializeShockTubeFDM(nCells)..., initDt=0.000001, targetCFL=0.05, endTime=0.14267, Cx=0.5)
-# P, T, U, rho = macCormack1DConservativeFDM(initializeShockTubeFDM(nCells)..., initDt=0.00001, targetCFL=0.1, endTime=0.14267, Cx=0.5)
-# P, U, T, rho = upwind1DConservativeFDM(initializeShockTubeFDM(nCells)..., initDt=0.00001, endTime=0.14267, targetCFL=0.01, Cx=0.3)
-# P, U, T, rho = structured1DFVM(initializeShockTube_StructuredFVM(nCells)..., forwardEuler, initDt=0.00001, endTime=0.14267, targetCFL=0.5, silent=true)
-# P, U, T, rho = structured1DFVM(initializeShockTube_StructuredFVM(nCells)..., RK2_Mid, initDt=0.00001, endTime=0.14267, targetCFL=0.5, silent=false)
-# P, U, T, rho = structured1DFVM(initializeShockTube_StructuredFVM(nCells)..., RK4, initDt=0.00001, endTime=0.14267, targetCFL=0.5, silent=true)
-# P, U, T, rho = structured1DFVM(initializeShockTube_StructuredFVM(nCells)..., ShuOsher, initDt=0.00001, endTime=0.14267, targetCFL=0.5, silent=false)
 # cellPrimitives = unstructured3DFVM(initializeShockTube3DFVM(nCells)..., ShuOsher, initDt=0.00001, endTime=0.14267, targetCFL=0.05, silent=false)
 # xVel = U
 

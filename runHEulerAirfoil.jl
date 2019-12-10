@@ -63,4 +63,4 @@ boundaryConditions = [ wallBoundary, [], emptyBoundary, [], subsonicInletBoundar
 # Solve
 mesh = OpenFOAMMesh(meshPath)
 cellPrimitives = initializeUniformSolution3D(mesh, P, T, U...)
-unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00000001, endTime=0.015, outputInterval=0.0002, targetCFL=0.5, silent=false, restart=false)
+unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, LTSEuler, initDt=0.00000001, endTime=18000, outputInterval=9.3, targetCFL=0.1, silent=false, restart=false)

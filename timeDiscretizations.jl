@@ -8,6 +8,19 @@ function forwardEuler(mesh, fluxResidualFn, solutionState, boundaryConditions, g
     return solutionState
 end
 
+function LTSEuler(mesh, fluxResidualFn, solutionState, boundaryConditions, gamma, R, Cp, dt)
+    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
+    targetCFL = dt[1]
+
+    CFL!(dt, mesh, solutionState, 1, gamma, R)
+    dt .= targetCFL ./ dt
+    fluxResiduals = fluxResidualFn(mesh, solutionState, boundaryConditions, gamma, R)
+    cellState .+= fluxResiduals .* dt
+    decodeSolution_3D(solutionState, R, Cp)
+
+    return solutionState
+end
+
 function RK2_Mid(mesh, fluxResidualFn, solutionState, boundaryConditions, gamma, R, Cp, dt)
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
 

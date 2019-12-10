@@ -32,27 +32,31 @@ function maxCFL3D(mesh::Mesh, solutionState, dt, gamma=1.4, R=287.05)
     maxCFL = 0.0
     for c in 1:nCells
         a = sqrt(gamma * R * cellPrimitives[c,2])
-        #TODO: Precompute
-        fill!(maxCoords, -10000000)
-        fill!(minCoords, 10000000)
-        for f in mesh.cells[c]
-            for d in 1:3
-                maxCoords[d] = max(maxCoords[d], mesh.fCenters[f][d])
-                minCoords[d] = min(minCoords[d], mesh.fCenters[f][d])
-            end
-        end
+
         CFL = 0.0
         for d in 1:3
-            dx = (maxCoords[d] - minCoords[d])
-            if dx > 0
-                cDeltaT = (abs(cellPrimitives[c,d+2]) + a)*dt
-                CFL += cDeltaT / dx
-            end
+            cDeltaT = (abs(cellPrimitives[c,d+2]) + a)*dt
+            CFL += cDeltaT / mesh.cellSizes[c, d]
         end
         maxCFL = max(maxCFL, CFL)
     end
 
     return maxCFL
+end
+
+function CFL!(CFL, mesh::Mesh, solutionState, dt=1, gamma=1.4, R=287.05)
+    nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
+    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
+
+    for c in 1:nCells
+        a = sqrt(gamma * R * cellPrimitives[c,2])
+
+        CFL[c] = 0.0
+        for d in 1:3
+            cDeltaT = (abs(cellPrimitives[c,d+2]) + a)*dt
+            CFL[c] += cDeltaT / mesh.cellSizes[c, d]
+        end
+    end
 end
 
 ######################### Gradient Computation #######################
@@ -69,65 +73,6 @@ function leastSqGrad(mesh, values...)
     return result
 end
 
-# Pass in values that have already been interpolated to faces to avoid re-interpolating
-# Returns array of 3-D vectors
-function greenGaussGrad(mesh::Mesh, valuesAtFaces=false, values...)
-    nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
-
-    result = Vector{Vector{Vector{Float64}}}(undef, 0)
-    for vals in values
-        #Interpolate values to faces
-        if valuesAtFaces != true
-            faceVals = linInterp(mesh, vals)[1]::Vector{Float64}
-        else
-            faceVals = vals::Vector{Float64}
-        end
-
-        # Initialize gradients to zero
-        grad = Vector{Vector{Float64}}(undef, nCells)
-        for c in 1:nCells
-            grad[c] = [0, 0, 0]
-        end
-
-        # Integrate fluxes from each face
-        for f in 1:nFaces-nBdryFaces
-            faceIntegral = mesh.fAVecs[f] .* faceVals[f]
-
-            ownerCell = mesh.faces[f][1]
-            neighbourCell = mesh.faces[f][2]
-
-            grad[ownerCell] += faceIntegral
-            grad[neighbourCell] -= faceIntegral
-        end
-
-        # Boundary Faces
-        for b in 1:nBoundaries
-            if boundaryConditions[2*b-1] != emptyBoundary
-                for f in mesh.boundaryFaces[b]
-                    grad[mesh.faces[f][1]] += mesh.fAVecs[f] * faceVals[f]
-                end
-            end
-        end
-
-        # Divide integral by cell volume to obtain gradients
-        for c in 1:nCells
-            grad[c] /= mesh.cVols[c]
-        end
-
-        # # Set boundary gradients to zero
-        # for f in nFaces-nBdryFaces+1:nFaces
-        #     for cell in mesh.faces[f]
-        #         if cell != -1
-        #             grad[cell] = [0, 0, 0]
-        #         end
-        #     end
-        # end
-
-        push!(result, grad)
-    end
-    return result
-end
-
 # Will take the gradient of (scalar) data provided in matrix form
 # Cell      x1      x2      x3
 # Cell 1    x1_1    x2_1    x3_1
@@ -139,7 +84,7 @@ end
 # Cell 2    grad(x1)_2  grad(x2)_2  grad(x3)_2
 # ...
 # Where each grad(xa)_b is made up of three elements for the (x,y,z) directions
-function greenGaussGrad_matrix(mesh::Mesh, matrix::Array{Float64,2}, valuesAtFaces=false)
+function greenGaussGrad_matrix(mesh::Mesh, matrix, valuesAtFaces=false)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     nVars = size(matrix, 2)
 
@@ -198,12 +143,12 @@ function linInterp_3D(mesh::Mesh, solutionState::Array{Array{Float64, 2}, 1})
         c2Dist = mag(mesh.cCenters[c2] .- mesh.fCenters[f])
         totalDist = c1Dist + c2Dist
 
-        faceFluxes[f, :] .= cellFluxes[c1, :].*(c2Dist/totalDist) .+ cellFluxes[c2, :].*(c1Dist/totalDist)
+        @views faceFluxes[f, :] .= cellFluxes[c1, :].*(c2Dist/totalDist) .+ cellFluxes[c2, :].*(c1Dist/totalDist)
     end
 end
 
 # Arbitrary value matrix interpolation
-function linInterp_3D(mesh::Mesh, matrix::Array{Float64, 2})
+function linInterp_3D(mesh::Mesh, matrix)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     nVars = size(matrix, 2)
 
@@ -220,7 +165,7 @@ function linInterp_3D(mesh::Mesh, matrix::Array{Float64, 2})
         c2Dist = mag(mesh.cCenters[c2] .- mesh.fCenters[f])
         totalDist = c1Dist + c2Dist
 
-        faceVals[f, :] = matrix[c1, :].*(c2Dist/totalDist) .+ matrix[c2, :].*(c1Dist/totalDist)
+        @views faceVals[f, :] .= matrix[c1, :].*(c2Dist/totalDist) .+ matrix[c2, :].*(c1Dist/totalDist)
     end
 
     return faceVals
@@ -258,7 +203,7 @@ function faceDeltas(mesh::Mesh, solutionState)
         ownerCell = mesh.faces[f][1]
         neighbourCell = mesh.faces[f][2]
 
-        faceDeltas[f, :] .= cellState[neighbourCell, :] .- cellState[ownerCell, :]
+        @views faceDeltas[f, :] .= cellState[neighbourCell, :] .- cellState[ownerCell, :]
     end
 
     return faceDeltas
@@ -273,7 +218,7 @@ function unstructured_JSTEps(mesh::Mesh, solutionState, k2=0.5, k4=(1/32), c4=1,
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
 
-    P = cellPrimitives[:,1]
+    @views P = cellPrimitives[:,1]
     P = reshape(P, nCells, :)
     gradP = greenGaussGrad_matrix(mesh, P, false)
     gradP = reshape(gradP, nCells, 3)
@@ -321,7 +266,7 @@ function unstructured_JSTFlux(mesh::Mesh, solutionState, boundaryConditions, gam
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
     nVars = size(cellState, 2)
 
-    #### Boundaries Prediction ####
+    #### Boundaries ####
     for b in 1:nBoundaries
         bFunctionIndex = 2*b-1
         boundaryConditions[bFunctionIndex](mesh, solutionState, b, boundaryConditions[bFunctionIndex+1])
@@ -376,12 +321,6 @@ function integrateFluxes_unstructured3D(mesh::Mesh, solutionState, boundaryCondi
     # Recomputing flux balances, so wipe existing values
     fill!(fluxResiduals, 0)
     nVars = size(fluxResiduals, 2)
-
-    #### Boundaries Correction ####
-    for b in 1:nBoundaries
-        bFunctionIndex = 2*b-1
-        boundaryConditions[bFunctionIndex](mesh, solutionState, b, boundaryConditions[bFunctionIndex+1])
-    end
 
     #### Flux Integration ####
     for f in eachindex(mesh.faces)
@@ -564,30 +503,49 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Array{Float64, 
     end
 
     dt = initDt
+    if timeIntegrationFn==LTSEuler
+        dt = zeros(nCells)
+    end
     currTime = 0
     timeStepCounter = 0
     nextOutputTime = outputInterval
     writeOutputThisIteration = false
     while currTime < endTime
         ############## Timestep adjustment #############
-        maxCFL = maxCFL3D(mesh, solutionState, dt, gamma, R)
-        # Slowly approach target CFL
-        if maxCFL > targetCFL*1.01
-            dt *= targetCFL/(2*maxCFL)
+        if timeIntegrationFn != LTSEuler
+            maxCFL = maxCFL3D(mesh, solutionState, dt, gamma, R)
+            # Slowly approach target CFL
+            if maxCFL > targetCFL*1.01
+                dt *= targetCFL/(2*maxCFL)
+            else
+                dt *= ((targetCFL/maxCFL - 1)/10+1)
+            end
+            # Adjust timestep to hit endtime if this is the final time step
+            if (endTime - currTime) < dt
+                dt = endTime - currTime
+            elseif (nextOutputTime - currTime) < dt
+                dt = nextOutputTime - currTime
+                writeOutputThisIteration = true
+            end
         else
-            dt *= ((targetCFL/maxCFL - 1)/10+1)
-        end
-        # Adjust timestep to hit endtime if this is the final time step
-        if (endTime - currTime) < dt
-            dt = endTime - currTime
-        elseif (nextOutputTime - currTime) < dt
-            dt = nextOutputTime - currTime
-            writeOutputThisIteration = true
+            if timeStepCounter < 10
+                maxCFL = (timeStepCounter+1) * targetCFL / 10
+            else
+                maxCFL = targetCFL
+            end
+            dt[1] = maxCFL
         end
 
         ############## Take a timestep #############
         solutionState = timeIntegrationFn(mesh, fluxFunction, solutionState, boundaryConditions, gamma, R, Cp, dt)
-        currTime += dt
+        if timeIntegrationFn==LTSEuler
+            currTime += maxCFL
+            if (nextOutputTime - currTime) < maxCFL
+                writeOutputThisIteration = true
+            end
+        else
+            currTime += dt
+        end
         timeStepCounter += 1
 
         if !silent
