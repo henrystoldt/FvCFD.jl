@@ -5,7 +5,7 @@ using Profile
 # using ProfileView #Doesn't want to install on my work ubuntu desktop for some reason
 using BenchmarkTools
 
-pyplot()
+plotly()
 
 include("shockTube.jl")
 include("finiteVolume.jl")
@@ -19,15 +19,18 @@ println("Meshing")
 # xVel = U
 
 ### UnstructuredFVM from OpenFOAM Meshes ###
-meshPath = "OFShockTubeMesh"
+meshPath = "OFshockTube_100"
 OFmesh = OpenFOAMMesh(meshPath)
 nCells = size(OFmesh.cells, 1)
+# nCells = 100
 mesh, cellPrimitives = initializeShockTube3DFVM(nCells...)
-# # Boundaries 1 and 2 are the ends, 3 is all the sides
+# Boundaries 1 and 2 are the ends, 3 is all the sides
+# boundaryConditions = [ zeroGradientBoundary, [], zeroGradientBoundary, [], emptyBoundary, [] ]
+
 boundaryConditions = [ zeroGradientBoundary, [], emptyBoundary, [] ]
-# cellPrimitives = unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, RK2_Mid, initDt=0.00001, endTime=0.14267, outputInterval=0.14267, targetCFL=0.3, silent=false)
+cellPrimitives = unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, RK4, initDt=0.00001, endTime=0.14267, outputInterval=0.14267, targetCFL=0.05, silent=false, createVTKOutput=false)
 # @profview unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00001, endTime=0.14267, outputInterval=0.14267, targetCFL=0.1, silent=true)
-@btime unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00001, endTime=0.005, outputInterval=0.14267, targetCFL=0.01, silent=true, createRestartFile=false, createVTKOutput=false)
+# @btime unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00001, endTime=0.005, outputInterval=0.14267, targetCFL=0.01, silent=true, createRestartFile=false, createVTKOutput=false)
 
 ### Unstructured FVM ##
 # @time cellPrimitives central_UnstructuredADFVM(initializeShockTubeFVM(nCells, silent=false)..., initDt=0.0000001, endTime=0.14267, targetCFL=0.1, Cx=0.5, silent=false)
@@ -38,13 +41,13 @@ boundaryConditions = [ zeroGradientBoundary, [], emptyBoundary, [] ]
 #     xVel[i] = U[i][1]
 # end
 
-# P = cellPrimitives[:,1]
-# T = cellPrimitives[:,2]
-# xVel = cellPrimitives[:,3]
-# rho = zeros(nCells)
-# for i in 1:nCells
-#     rho[i] = idealGasRho(T[i], P[i])
-# end
-#
-# println("Plotting results")
-# plotShockTubeResults_PyPlot(P, xVel, T, rho)
+P = cellPrimitives[:,1]
+T = cellPrimitives[:,2]
+xVel = cellPrimitives[:,3]
+rho = zeros(nCells)
+for i in 1:nCells
+    rho[i] = idealGasRho(T[i], P[i])
+end
+
+println("Plotting results")
+plotShockTubeResults_Plotly(P, xVel, T, rho)

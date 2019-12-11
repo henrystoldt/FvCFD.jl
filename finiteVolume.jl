@@ -21,14 +21,10 @@ function initializeUniformSolution3D(mesh, P, T, Ux, Uy, Uz)
 end
 
 ######################### CFL ########################
-# TODO: Generalize cell size
-# TODO: 3D definition of CFL: Sum up in all directions
 function maxCFL3D(mesh::Mesh, solutionState, dt, gamma=1.4, R=287.05)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
 
-    maxCoords = [ -1000000.0, -1000000.0, -1000000.0 ]
-    minCoords = [ 1000000.0, 1000000.0, 1000000.0 ]
     maxCFL = 0.0
     for c in 1:nCells
         a = sqrt(gamma * R * cellPrimitives[c,2])
@@ -99,7 +95,7 @@ function greenGaussGrad_matrix(mesh::Mesh, matrix, valuesAtFaces=false)
     grad = zeros(nCells, nVars, 3)
 
     # Integrate fluxes from each face
-    for f in eachindex(mesh.faces)
+    @inbounds @fastmath for f in eachindex(mesh.faces)
         ownerCell = mesh.faces[f][1]
         neighbourCell = mesh.faces[f][2]
 
@@ -117,7 +113,7 @@ function greenGaussGrad_matrix(mesh::Mesh, matrix, valuesAtFaces=false)
     end
 
     # Divide integral by cell volume to obtain gradients
-    for c in 1:nCells
+    @inbounds @fastmath for c in 1:nCells
         grad[c,:,:] ./= mesh.cVols[c]
     end
 
@@ -133,7 +129,7 @@ function linInterp_3D(mesh::Mesh, solutionState::Array{Array{Float64, 2}, 1})
     nFluxes = size(cellFluxes, 2)
 
     # Boundary face fluxes must be set separately
-    for f in 1:nFaces-nBdryFaces
+    @inbounds @fastmath for f in 1:nFaces-nBdryFaces
         # Find value at face using linear interpolation
         c1 = mesh.faces[f][1]
         c2 = mesh.faces[f][2]
@@ -155,7 +151,7 @@ function linInterp_3D(mesh::Mesh, matrix)
     faceVals = zeros(nFaces, nVars)
 
     # Boundary face fluxes must be set separately
-    for f in 1:nFaces-nBdryFaces
+    @inbounds @fastmath for f in 1:nFaces-nBdryFaces
         # Find value at face using linear interpolation
         c1 = mesh.faces[f][1]
         c2 = mesh.faces[f][2]
@@ -179,7 +175,7 @@ function maxInterp(mesh::Mesh, vars...)
     faceVals = zeros(nFaces, nVars)
 
     # Boundary face fluxes must be set separately
-    for f in 1:nFaces-nBdryFaces
+    @inbounds @fastmath for f in 1:nFaces-nBdryFaces
         c1 = mesh.faces[f][1]
         c2 = mesh.faces[f][2]
 
@@ -199,7 +195,7 @@ function faceDeltas(mesh::Mesh, solutionState)
     faceDeltas = zeros(nFaces, nVars)
 
     # Boundary face fluxes must be set separately (faceDelta is zero at all possible boundary conditions right now)
-    for f in 1:nFaces-nBdryFaces
+    @inbounds @fastmath for f in 1:nFaces-nBdryFaces
         ownerCell = mesh.faces[f][1]
         neighbourCell = mesh.faces[f][2]
 
@@ -226,7 +222,7 @@ function unstructured_JSTEps(mesh::Mesh, solutionState, k2=0.5, k4=(1/32), c4=1,
     sj = zeros(nCells)
     rj = zeros(nCells)
     sjCount = zeros(nCells)
-    for f in 1:nFaces-nBdryFaces
+    @inbounds @fastmath for f in 1:nFaces-nBdryFaces
         # Calculate sj, rj, eps2, eps4
         ownerCell = mesh.faces[f][1]
         neighbourCell = mesh.faces[f][2]
@@ -242,7 +238,7 @@ function unstructured_JSTEps(mesh::Mesh, solutionState, k2=0.5, k4=(1/32), c4=1,
         sjCount[neighbourCell] += 1
     end
 
-    for c in 1:nCells
+    @inbounds @fastmath for c in 1:nCells
         @views rj[c] = mag(cellPrimitives[c,3:5]) +  sqrt(gamma * R * cellPrimitives[c,2]) # Velocity magnitude + speed of sound
         sj[c] /= sjCount[c] # Average the sj's computed by each face for each cell
     end
@@ -280,7 +276,7 @@ function unstructured_JSTFlux(mesh::Mesh, solutionState, boundaryConditions, gam
     fDGrads = greenGaussGrad_matrix(mesh, fDeltas, false)
     eps2, eps4 = unstructured_JSTEps(mesh, solutionState, 0.25, (1/32), 1, gamma, R)
     # nCells = nFaces - 1
-    for f in 1:nFaces-nBdryFaces
+    @inbounds @fastmath for f in 1:nFaces-nBdryFaces
         ownerCell = mesh.faces[f][1]
         neighbourCell = mesh.faces[f][2]
         d = mesh.cCenters[neighbourCell] .- mesh.cCenters[ownerCell]
@@ -323,7 +319,7 @@ function integrateFluxes_unstructured3D(mesh::Mesh, solutionState, boundaryCondi
     nVars = size(fluxResiduals, 2)
 
     #### Flux Integration ####
-    for f in eachindex(mesh.faces)
+    @inbounds @fastmath for f in eachindex(mesh.faces)
         ownerCell = mesh.faces[f][1]
         neighbourCell = mesh.faces[f][2]
 
@@ -361,12 +357,12 @@ function supersonicInletBoundary(mesh::Mesh, solutionState, boundaryNumber, inle
     rho = idealGasRho(T, P)
     xMom, yMom, zMom = [Ux, Uy, Uz] .* rho
     e = calPerfectEnergy(T, Cp)
-    eV2 = rho*(e + (mag(U)^2)/2)
+    eV2 = rho*(e + (mag([Ux, Uy, Uz])^2)/2)
 
     boundaryFluxes = Vector{Float64}(undef, 15)
     calculateFluxes3D!(boundaryFluxes, [P, T, Ux, Uy, Uz],  [rho, xMom, yMom, zMom, eV2])
     currentBoundary = mesh.boundaryFaces[boundaryNumber]
-    for face in currentBoundary
+    @inbounds for face in currentBoundary
         faceFluxes[face,:] = boundaryFluxes
     end
 end
@@ -385,7 +381,7 @@ function subsonicInletBoundary(mesh, solutionState, boundaryNumber, inletConditi
     velUnitVector = [ nx, ny, nz ]
     currentBoundary = mesh.boundaryFaces[boundaryNumber]
 
-    for face in currentBoundary
+    @inbounds @fastmath for face in currentBoundary
         ownerCell = mesh.faces[face][1]
         @views adjustedVelocity = dot(velUnitVector, cellPrimitives[ownerCell, 3:5])
         primitives[2] = Tt - (gamma-1)/2 * (adjustedVelocity^2)/(gamma*R)
@@ -410,7 +406,7 @@ function pressureOutletBoundary(mesh, solutionState, boundaryNumber, outletPress
 
     # Directly extrapolate cell center flux to boundary (zero gradient between the cell center and the boundary)
     currentBoundary = mesh.boundaryFaces[boundaryNumber]
-    for face in currentBoundary
+    @inbounds @fastmath for face in currentBoundary
         ownerCell = mesh.faces[face][1]
         # Mass fluxes are unaffected by pressure boundary
         for flux in 1:nFluxes
@@ -435,7 +431,7 @@ function zeroGradientBoundary(mesh::Mesh, solutionState, boundaryNumber, _)
 
     # Directly extrapolate cell center flux to boundary (zero gradient between the cell center and the boundary)
     currentBoundary = mesh.boundaryFaces[boundaryNumber]
-    for face in currentBoundary
+    @inbounds for face in currentBoundary
         ownerCell = mesh.faces[face][1] #One of these will be -1 (no cell), the other is the boundary cell we want
         for flux in 1:nFluxes
             faceFluxes[face, flux] = cellFluxes[ownerCell, flux]
@@ -447,7 +443,7 @@ function wallBoundary(mesh::Mesh, solutionState, boundaryNumber, _)
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
 
     currentBoundary = mesh.boundaryFaces[boundaryNumber]
-    for f in currentBoundary
+    @inbounds for f in currentBoundary
         ownerCell = max(mesh.faces[f][1], mesh.faces[f][2]) #One of these will be -1 (no cell), the other is the boundary cell we want
 
         faceP = cellPrimitives[ownerCell, 1]

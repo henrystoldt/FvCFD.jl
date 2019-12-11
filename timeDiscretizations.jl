@@ -2,8 +2,8 @@ function forwardEuler(mesh, fluxResidualFn, solutionState, boundaryConditions, g
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
 
     fluxResiduals = fluxResidualFn(mesh, solutionState, boundaryConditions, gamma, R)
-    cellState .+= fluxResiduals.*dt
-    decodeSolution_3D(solutionState, R, Cp)
+    @fastmath cellState .+= fluxResiduals.*dt
+    @fastmath decodeSolution_3D(solutionState, R, Cp)
 
     return solutionState
 end
