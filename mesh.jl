@@ -1,6 +1,7 @@
 # Methods from Moukalled et al. FVM - OpenFOAM, Matlab
 include("vectorFunctions.jl")
 
+######################### Mesh Data Structure ###########################
 struct Mesh
     cells::Vector{Vector{Int64}}
     cVols::Vector{Float64}
@@ -13,6 +14,7 @@ struct Mesh
     boundaryFaces::Vector{Vector{Int64}}
 end
 
+######################### Mesh/Cell Geometry ###########################
 #3D only
 function crossProd(v1::Array{Float64, 1}, v2::Array{Float64, 1})
     x = v1[2]*v2[3] - v1[3]*v2[2]
@@ -116,6 +118,7 @@ function cellCentroidToFaceVec(points::Array{Array{Float64, 1}}, faceCentroids::
     return cellToFaceVec
 end
 
+######################### Utility Functions ###########################
 function unstructuredMeshInfo(mesh)
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
     nCells = size(cells, 1)
@@ -150,6 +153,7 @@ function isNumber(str)
     return occursin(re, str)
 end
 
+######################### Deal with OpenFOAM Meshes ###########################
 function OFFile_FindNItems(fileLines)
     nLines = size(fileLines, 1)
     lineCounter = 1

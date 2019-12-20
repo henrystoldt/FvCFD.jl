@@ -500,7 +500,7 @@ function emptyBoundary(mesh::Mesh, solutionState, boundaryNumber, _)
 end
 
 ######################### Solvers #######################
-function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Array{Float64, 2}, boundaryConditions, timeIntegrationFn=forwardEuler,
+function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}, boundaryConditions, timeIntegrationFn=forwardEuler,
         fluxFunction=unstructured_JSTFlux; initDt=0.001, endTime=0.14267, outputInterval=0.01, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005,
         silent=true, restart=false, createRestartFile=true, createVTKOutput=true, restartFile="JuliaCFDRestart.txt")
 
@@ -524,6 +524,7 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Array{Float64, 
     cellFluxes = zeros(nCells, nFluxes)
     fluxResiduals = zeros(nCells, nVars)
     faceFluxes = zeros(nFaces, nFluxes)
+    # Initialize solution state
     solutionState = [ cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes ]
 
     # Calculates cell fluxes, primitives from cell state
@@ -537,6 +538,7 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Array{Float64, 
     if timeIntegrationFn==LTSEuler
         dt = zeros(nCells)
     end
+
     currTime = 0
     timeStepCounter = 0
     nextOutputTime = outputInterval
@@ -545,12 +547,14 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Array{Float64, 
         ############## Timestep adjustment #############
         if timeIntegrationFn != LTSEuler
             maxCFL = maxCFL3D(mesh, solutionState, dt, gamma, R)
+
             # Slowly approach target CFL
             if maxCFL > targetCFL*1.01
                 dt *= targetCFL/(2*maxCFL)
             else
                 dt *= ((targetCFL/maxCFL - 1)/10+1)
             end
+
             # Adjust timestep to hit endtime if this is the final time step
             if (endTime - currTime) < dt
                 dt = endTime - currTime
@@ -586,7 +590,7 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Array{Float64, 
         if writeOutputThisIteration
             updateSolutionOutput(cellPrimitives, restartFile, meshPath, createRestartFile, createVTKOutput)
             writeOutputThisIteration = false
-            nextOutputTime = nextOutputTime + outputInterval
+            nextOutputTime += outputInterval
         end
     end
 
