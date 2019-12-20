@@ -55,6 +55,41 @@ function CFL!(CFL, mesh::Mesh, solutionState, dt=1, gamma=1.4, R=287.05)
     end
 end
 
+function OpenFOAMCFL!(CFL, mesh::Mesh, solutionState, dt=1, gamma=1.4, R=287.05)
+    nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
+    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
+
+    fill!(CFL, 0.0)
+    @views rho = linInterp_3D(mesh, cellState[:,1])
+    @views t = linInterp_3D(mesh, cellPrimitives[:,2])
+    for f in 1:nFaces
+        ownerCell = mesh.faces[f][1]
+        neighbourCell = mesh.faces[f][2]
+
+        faceRho = rho[f]
+        if faceRho == 0.0
+            faceRho = cellState[ownerCell, 1]
+        end
+        faceT = t[f]
+        if faceT == 0.0
+            faceT = cellPrimitives[ownerCell, 2]
+        end
+
+        @views faceVel = faceFluxes[f, 1:3] ./ faceRho
+        @views flux = abs(dot(faceVel, mesh.fAVecs[f])*dt)
+
+        a = sqrt(gamma * R * faceT)
+        flux += mag(mesh.fAVecs[f])*a
+
+        CFL[ownerCell] += flux
+        if neighbourCell > -1
+            CFL[neighbourCell] += flux
+        end
+    end
+
+    CFL ./= (2 .* mesh.cVols)
+end
+
 ######################### Gradient Computation #######################
 #TODO: make all these function return a single array if you pass in a single value
 function leastSqGrad(mesh, values...)
@@ -274,7 +309,7 @@ function unstructured_JSTFlux(mesh::Mesh, solutionState, boundaryConditions, gam
     #### Add JST artificial Diffusion ####
     fDeltas = faceDeltas(mesh, solutionState)
     fDGrads = greenGaussGrad_matrix(mesh, fDeltas, false)
-    eps2, eps4 = unstructured_JSTEps(mesh, solutionState, 0.25, (1/32), 1, gamma, R)
+    eps2, eps4 = unstructured_JSTEps(mesh, solutionState, 0.5, (1.2/32), 1, gamma, R)
     # nCells = nFaces - 1
     @inbounds @fastmath for f in 1:nFaces-nBdryFaces
         ownerCell = mesh.faces[f][1]

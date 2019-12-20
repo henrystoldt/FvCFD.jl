@@ -12,13 +12,40 @@ function LTSEuler(mesh, fluxResidualFn, solutionState, boundaryConditions, gamma
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
     targetCFL = dt[1]
 
-    CFL!(dt, mesh, solutionState, 1, gamma, R)
-    dt .= targetCFL ./ dt
     fluxResiduals = fluxResidualFn(mesh, solutionState, boundaryConditions, gamma, R)
+
+    OpenFOAMCFL!(dt, mesh, solutionState, 1, gamma, R)
+    dt .= targetCFL ./ dt
+    smoothTimeStep!(dt, mesh, 0.1)
+    smoothTimeStep!(dt, mesh, 0.1)
     cellState .+= fluxResiduals .* dt
     decodeSolution_3D(solutionState, R, Cp)
 
     return solutionState
+end
+
+function smoothTimeStep!(dt, mesh::Mesh, diffusionCoefficient=0.2)
+    nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
+
+    timeFluxes = zeros(nCells)
+    surfaceAreas = zeros(nCells)
+    for f in 1:nFaces-nBdryFaces
+        ownerCell = mesh.faces[f][1]
+        neighbourCell = mesh.faces[f][2]
+        timeFlux = (dt[ownerCell] - dt[neighbourCell]) * mag(mesh.fAVecs[f])
+        surfaceAreas[ownerCell] += mag(mesh.fAVecs[f])
+        surfaceAreas[neighbourCell] += mag(mesh.fAVecs[f])
+        timeFluxes[ownerCell] -= timeFlux
+        timeFluxes[neighbourCell] += timeFlux
+    end
+
+    timeFluxes .*= (diffusionCoefficient ./ surfaceAreas)
+
+    for i in eachindex(timeFluxes)
+        timeFluxes[i] = min(0, timeFluxes[i])
+    end
+
+    dt .+= timeFluxes
 end
 
 function RK2_Mid(mesh, fluxResidualFn, solutionState, boundaryConditions, gamma, R, Cp, dt)
@@ -81,3 +108,7 @@ function ShuOsher(mesh, fluxResidualFn, solutionState, boundaryConditions, gamma
 
     return solutionState
 end
+
+#TODO: For implicit methods, need to compute the flux Jacobians at each edge, instead of just the fluxes
+    # Use Jacobians as coefficients in matrix representing timestepping equations
+    # Then solve with GMRES or some other matrix solver
