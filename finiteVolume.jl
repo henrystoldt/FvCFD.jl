@@ -7,7 +7,7 @@ include("output.jl")
 
 __precompile__()
 
-######################### Initialization ########################
+######################### Initialization ###########################
 # Returns cellPrimitives matrix
 function initializeUniformSolution3D(mesh, P, T, Ux, Uy, Uz)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
@@ -20,7 +20,7 @@ function initializeUniformSolution3D(mesh, P, T, Ux, Uy, Uz)
     return cellPrimitives
 end
 
-######################### CFL ########################
+######################### CFL #######################################
 function maxCFL3D(mesh::Mesh, solutionState, dt, gamma=1.4, R=287.05)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
@@ -92,8 +92,8 @@ end
 
 ######################### Gradient Computation #######################
 #TODO: make all these function return a single array if you pass in a single value
-function leastSqGrad(mesh, values...)
-    #TODO
+#TODO: LSQ Gradient
+function leastSqGrad(mesh::Mesh, matrix)
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     bdryFaceIndices = Array(nFaces-nBdryFaces:nFaces)
@@ -155,7 +155,7 @@ function greenGaussGrad_matrix(mesh::Mesh, matrix, valuesAtFaces=false)
     return grad
 end
 
-####################### Face value interpolation ####################
+####################### Face value interpolation ######################
 # Interpolates to all INTERIOR faces
 # Flux interpolation
 function linInterp_3D(mesh::Mesh, solutionState::Array{Array{Float64, 2}, 1})
@@ -240,7 +240,7 @@ function faceDeltas(mesh::Mesh, solutionState)
     return faceDeltas
 end
 
-# TODO: TVD Interp
+# TODO: MUSCL Interp
 
 ######################### Convective Term Things #######################
 # Returns the fractional portion of the maccormack aritificial diffusivity term (Eq. 6.58 in Anderson).
@@ -333,7 +333,7 @@ function unstructured_JSTFlux(mesh::Mesh, solutionState, boundaryConditions, gam
     return integrateFluxes_unstructured3D(mesh, solutionState, boundaryConditions)
 end
 
-######################### TimeStepping #######################
+######################### TimeStepping #################################
 function decodeSolution_3D(solutionState, R=287.05, Cp=1005)
     cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
     nCells = size(cellState, 1)
@@ -380,7 +380,7 @@ function integrateFluxes_unstructured3D(mesh::Mesh, solutionState, boundaryCondi
     return fluxResiduals
 end
 
-######################### Boundary Conditions #######################
+######################### Boundary Conditions #########################
 # Can work as a supersonic inlet if initial conditions are set to the inlet conditions
 # Input: [ Static Pressure, Static Temperture, Ux, Uy, Uz, Cp ]
 # Input: [ P, T, Ux, Uy, Uz, Cp ]
@@ -499,11 +499,11 @@ function emptyBoundary(mesh::Mesh, solutionState, boundaryNumber, _)
     return
 end
 
-# Slip wall boundary condition does not require treatment, flux is simply zero across the boundary
-#TODO: Gradient calculation at slip walls
-
 ######################### Solvers #######################
-function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Array{Float64, 2}, boundaryConditions, timeIntegrationFn=forwardEuler, fluxFunction=unstructured_JSTFlux; initDt=0.001, endTime=0.14267, outputInterval=0.01, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, silent=true, restart=false, createRestartFile=true, createVTKOutput=true, restartFile="JuliaCFDRestart.txt")
+function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Array{Float64, 2}, boundaryConditions, timeIntegrationFn=forwardEuler,
+        fluxFunction=unstructured_JSTFlux; initDt=0.001, endTime=0.14267, outputInterval=0.01, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005,
+        silent=true, restart=false, createRestartFile=true, createVTKOutput=true, restartFile="JuliaCFDRestart.txt")
+
     if !silent
         println("Initializing Simulation")
     end
