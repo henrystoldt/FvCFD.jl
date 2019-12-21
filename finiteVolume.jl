@@ -109,7 +109,7 @@ end
 # Cell 1    x1_1    x2_1    x3_1
 # Cell 2    x1_2    x2_2    x3_2
 # ...
-# and output a three-dimensional gradient matrix of the following form
+# and output a THREE-DIMENSIONAL gradient matrix of the following form
 # Cell      x1          x2          x3
 # Cell 1    grad(x1)_1  grad(x2)_1  grad(x3)_1
 # Cell 2    grad(x1)_2  grad(x2)_2  grad(x3)_2
