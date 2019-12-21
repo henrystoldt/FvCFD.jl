@@ -7,6 +7,15 @@ include("output.jl")
 
 __precompile__()
 
+######################### Solution State  ##########################
+mutable struct SolutionState
+    cellState::Matrix
+    cellFluxes::Matrix
+    cellPrimitives::Matrix
+    fluxResiduals::Matrix
+    faceFluxes::Matrix
+end
+
 ######################### Initialization ###########################
 # Returns cellPrimitives matrix
 function initializeUniformSolution3D(mesh, P, T, Ux, Uy, Uz)
@@ -21,17 +30,16 @@ function initializeUniformSolution3D(mesh, P, T, Ux, Uy, Uz)
 end
 
 ######################### CFL #######################################
-function maxCFL3D(mesh::Mesh, solutionState, dt, gamma=1.4, R=287.05)
+function maxCFL3D(mesh::Mesh, sln::SolutionState, dt, gamma=1.4, R=287.05)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
-    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
 
     maxCFL = 0.0
     for c in 1:nCells
-        a = sqrt(gamma * R * cellPrimitives[c,2])
+        a = sqrt(gamma * R * sln.cellPrimitives[c,2])
 
         CFL = 0.0
         for d in 1:3
-            cDeltaT = (abs(cellPrimitives[c,d+2]) + a)*dt
+            cDeltaT = (abs(sln.cellPrimitives[c,d+2]) + a)*dt
             CFL += cDeltaT / mesh.cellSizes[c, d]
         end
         maxCFL = max(maxCFL, CFL)
@@ -40,42 +48,41 @@ function maxCFL3D(mesh::Mesh, solutionState, dt, gamma=1.4, R=287.05)
     return maxCFL
 end
 
-function CFL!(CFL, mesh::Mesh, solutionState, dt=1, gamma=1.4, R=287.05)
+function CFL!(CFL, mesh::Mesh, sln::SolutionState, dt=1, gamma=1.4, R=287.05)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
-    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
+
 
     for c in 1:nCells
-        a = sqrt(gamma * R * cellPrimitives[c,2])
+        a = sqrt(gamma * R * sln.cellPrimitives[c,2])
 
         CFL[c] = 0.0
         for d in 1:3
-            cDeltaT = (abs(cellPrimitives[c,d+2]) + a)*dt
+            cDeltaT = (abs(sln.cellPrimitives[c,d+2]) + a)*dt
             CFL[c] += cDeltaT / mesh.cellSizes[c, d]
         end
     end
 end
 
-function OpenFOAMCFL!(CFL, mesh::Mesh, solutionState, dt=1, gamma=1.4, R=287.05)
+function OpenFOAMCFL!(CFL, mesh::Mesh, sln::SolutionState, dt=1, gamma=1.4, R=287.05)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
-    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
 
     fill!(CFL, 0.0)
-    @views rho = linInterp_3D(mesh, cellState[:,1])
-    @views t = linInterp_3D(mesh, cellPrimitives[:,2])
+    @views rho = linInterp_3D(mesh, sln.cellState[:,1])
+    @views t = linInterp_3D(mesh, sln.cellPrimitives[:,2])
     for f in 1:nFaces
         ownerCell = mesh.faces[f][1]
         neighbourCell = mesh.faces[f][2]
 
         faceRho = rho[f]
         if faceRho == 0.0
-            faceRho = cellState[ownerCell, 1]
+            faceRho = sln.cellState[ownerCell, 1]
         end
         faceT = t[f]
         if faceT == 0.0
-            faceT = cellPrimitives[ownerCell, 2]
+            faceT = sln.cellPrimitives[ownerCell, 2]
         end
 
-        @views faceVel = faceFluxes[f, 1:3] ./ faceRho
+        @views faceVel = sln.faceFluxes[f, 1:3] ./ faceRho
         @views flux = abs(dot(faceVel, mesh.fAVecs[f])*dt)
 
         a = sqrt(gamma * R * faceT)
@@ -212,10 +219,9 @@ function maxInterp(mesh::Mesh, vars...)
     return faceVals
 end
 
-function faceDeltas(mesh::Mesh, solutionState)
+function faceDeltas(mesh::Mesh, sln)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
-    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
-    nVars = size(cellState, 2)
+    nVars = size(sln.cellState, 2)
 
     faceDeltas = zeros(nFaces, nVars)
 
@@ -224,7 +230,7 @@ function faceDeltas(mesh::Mesh, solutionState)
         ownerCell = mesh.faces[f][1]
         neighbourCell = mesh.faces[f][2]
 
-        @views faceDeltas[f, :] .= cellState[neighbourCell, :] .- cellState[ownerCell, :]
+        @views faceDeltas[f, :] .= sln.cellState[neighbourCell, :] .- sln.cellState[ownerCell, :]
     end
 
     return faceDeltas
@@ -235,11 +241,11 @@ end
 ######################### Convective Term Things #######################
 # Returns the fractional portion of the maccormack aritificial diffusivity term (Eq. 6.58 in Anderson).
 # Result must still be multiplied by (nextU - 2U + U) for each flux variable.
-function unstructured_JSTEps(mesh::Mesh, solutionState, k2=0.5, k4=(1/32), c4=1, gamma=1.4, R=287.05)
+function unstructured_JSTEps(mesh::Mesh, sln::SolutionState, k2=0.5, k4=(1/32), c4=1, gamma=1.4, R=287.05)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
-    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
 
-    @views P = cellPrimitives[:,1]
+
+    @views P = sln.cellPrimitives[:,1]
     P = reshape(P, nCells, :)
     gradP = greenGaussGrad(mesh, P, false)
     gradP = reshape(gradP, nCells, 3)
@@ -264,7 +270,7 @@ function unstructured_JSTEps(mesh::Mesh, solutionState, k2=0.5, k4=(1/32), c4=1,
     end
 
     @inbounds @fastmath for c in 1:nCells
-        @views rj[c] = mag(cellPrimitives[c,3:5]) +  sqrt(gamma * R * cellPrimitives[c,2]) # Velocity magnitude + speed of sound
+        @views rj[c] = mag(sln.cellPrimitives[c,3:5]) +  sqrt(gamma * R * sln.cellPrimitives[c,2]) # Velocity magnitude + speed of sound
         sj[c] /= sjCount[c] # Average the sj's computed by each face for each cell
     end
 
@@ -282,24 +288,24 @@ end
 
 # Requires correct cellState and cellPrimitives as input
 # Classical JST, central differencing + artificial diffusion. Each face treated as 1D
-function unstructured_JSTFlux(mesh::Mesh, solutionState, boundaryConditions, gamma, R)
+function unstructured_JSTFlux(mesh::Mesh, sln::SolutionState, boundaryConditions, gamma, R)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
-    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
-    nVars = size(cellState, 2)
+
+    nVars = size(sln.cellState, 2)
 
     #### Boundaries ####
     for b in 1:nBoundaries
         bFunctionIndex = 2*b-1
-        boundaryConditions[bFunctionIndex](mesh, solutionState, b, boundaryConditions[bFunctionIndex+1])
+        boundaryConditions[bFunctionIndex](mesh, sln, b, boundaryConditions[bFunctionIndex+1])
     end
 
     # Centrally differenced fluxes
-    faceFluxes = linInterp_3D(mesh, cellFluxes)
+    sln.faceFluxes = linInterp_3D(mesh, sln.cellFluxes)
 
     #### Add JST artificial Diffusion ####
-    fDeltas = faceDeltas(mesh, solutionState)
-    fDGrads = greenGaussGrad(mesh, fDeltas, false)
-    eps2, eps4 = unstructured_JSTEps(mesh, solutionState, 0.5, (1.2/32), 1, gamma, R)
+    fDeltas = faceDeltas(mesh, sln)
+    fDGrads = greenGaussGrad_matrix(mesh, fDeltas, false)
+    eps2, eps4 = unstructured_JSTEps(mesh, sln, 0.5, (1.2/32), 1, gamma, R)
     # nCells = nFaces - 1
     @inbounds @fastmath for f in 1:nFaces-nBdryFaces
         ownerCell = mesh.faces[f][1]
@@ -316,32 +322,32 @@ function unstructured_JSTFlux(mesh::Mesh, solutionState, boundaryConditions, gam
         for v in 1:nVars
             i1 = (v-1)*3+1
             i2 = i1+2
-            faceFluxes[f,i1:i2] .-= (diffusionFlux[v] .* unitFA)
+            sln.faceFluxes[f,i1:i2] .-= (diffusionFlux[v] .* unitFA)
         end
     end
 
-    return integrateFluxes_unstructured3D(mesh, solutionState, boundaryConditions)
+    return integrateFluxes_unstructured3D(mesh, sln, boundaryConditions)
 end
 
 ######################### TimeStepping #################################
-function decodeSolution_3D(solutionState, R=287.05, Cp=1005)
-    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
-    nCells = size(cellState, 1)
+function decodeSolution_3D(sln::SolutionState, R=287.05, Cp=1005)
+
+    nCells = size(sln.cellState, 1)
     for c in 1:nCells
         # Updates cell primitives
-        @views decodePrimitives3D!(cellPrimitives[c,:], cellState[c,:], R, Cp)
+        @views decodePrimitives3D!(sln.cellPrimitives[c,:], sln.cellState[c,:], R, Cp)
         # Updates mass, xMom, eV2 x,y,z-direction fluxes
-        @views calculateFluxes3D!(cellFluxes[c, :], cellPrimitives[c,:], cellState[c,:])
+        @views calculateFluxes3D!(sln.cellFluxes[c, :], sln.cellPrimitives[c,:], sln.cellState[c,:])
     end
 end
 
-function integrateFluxes_unstructured3D(mesh::Mesh, solutionState, boundaryConditions)
-    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
+function integrateFluxes_unstructured3D(mesh::Mesh, sln::SolutionState, boundaryConditions)
+
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
 
     # Recomputing flux balances, so wipe existing values
-    fill!(fluxResiduals, 0)
-    nVars = size(fluxResiduals, 2)
+    fill!(sln.fluxResiduals, 0)
+    nVars = size(sln.fluxResiduals, 2)
 
     #### Flux Integration ####
     @inbounds @fastmath for f in eachindex(mesh.faces)
@@ -351,23 +357,23 @@ function integrateFluxes_unstructured3D(mesh::Mesh, solutionState, boundaryCondi
         for v in 1:nVars
             i1 = (v-1)*3 + 1
             i2 = i1+2
-            @views flow = dot(faceFluxes[f, i1:i2], mesh.fAVecs[f])
+            @views flow = dot(sln.faceFluxes[f, i1:i2], mesh.fAVecs[f])
 
             # Subtract from owner cell
-            fluxResiduals[ownerCell, v] -= flow
+            sln.fluxResiduals[ownerCell, v] -= flow
             if neighbourCell > -1
                 # Add to neighbour cell
-                fluxResiduals[neighbourCell, v] += flow
+                sln.fluxResiduals[neighbourCell, v] += flow
             end
         end
     end
 
     # Divide by cell volume
     for c in 1:nCells
-        fluxResiduals[c,:] ./= mesh.cVols[c]
+        sln.fluxResiduals[c,:] ./= mesh.cVols[c]
     end
 
-    return fluxResiduals
+    return sln.fluxResiduals
 end
 
 ######################### Boundary Conditions #########################
@@ -375,8 +381,8 @@ end
 # Input: [ Static Pressure, Static Temperture, Ux, Uy, Uz, Cp ]
 # Input: [ P, T, Ux, Uy, Uz, Cp ]
 # Input [ P, T, Ux, Uy, Uz, Cp ]
-function supersonicInletBoundary(mesh::Mesh, solutionState, boundaryNumber, inletConditions)
-    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
+function supersonicInletBoundary(mesh::Mesh, sln::SolutionState, boundaryNumber, inletConditions)
+
 
     P, T, Ux, Uy, Uz, Cp = inletConditions
     rho = idealGasRho(T, P)
@@ -388,7 +394,7 @@ function supersonicInletBoundary(mesh::Mesh, solutionState, boundaryNumber, inle
     calculateFluxes3D!(boundaryFluxes, [P, T, Ux, Uy, Uz],  [rho, xMom, yMom, zMom, eV2])
     currentBoundary = mesh.boundaryFaces[boundaryNumber]
     @inbounds for face in currentBoundary
-        faceFluxes[face,:] = boundaryFluxes
+        sln.faceFluxes[face,:] = boundaryFluxes
     end
 end
 
@@ -396,8 +402,8 @@ end
 # Where n is the unit vector representing the direction of inlet velocity
 # Using method from FUN3D solver
 # TODO: Allow for variation of R and gamma
-function subsonicInletBoundary(mesh, solutionState, boundaryNumber, inletConditions)
-    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
+function subsonicInletBoundary(mesh, sln::SolutionState, boundaryNumber, inletConditions)
+
     Pt, Tt, nx, ny, nz, gamma, R, Cp = inletConditions
 
     boundaryFluxes = Vector{Float64}(undef, 15)
@@ -408,7 +414,7 @@ function subsonicInletBoundary(mesh, solutionState, boundaryNumber, inletConditi
 
     @inbounds @fastmath for face in currentBoundary
         ownerCell = mesh.faces[face][1]
-        @views adjustedVelocity = dot(velUnitVector, cellPrimitives[ownerCell, 3:5])
+        @views adjustedVelocity = dot(velUnitVector, sln.cellPrimitives[ownerCell, 3:5])
         primitives[2] = Tt - (gamma-1)/2 * (adjustedVelocity^2)/(gamma*R)
         machNum = abs(adjustedVelocity) / sqrt(gamma * R * primitives[2])
         primitives[1] = Pt*(1 + (gamma-1)/2 * machNum^2)^(-gamma/(gamma-1))
@@ -421,13 +427,12 @@ function subsonicInletBoundary(mesh, solutionState, boundaryNumber, inletConditi
         state[5] = state[1]*(e + (mag(primitives[3:5])^2)/2 )
 
         calculateFluxes3D!(boundaryFluxes, primitives, state)
-        faceFluxes[face, :] = boundaryFluxes
+        sln.faceFluxes[face, :] = boundaryFluxes
     end
 end
 
-function pressureOutletBoundary(mesh, solutionState, boundaryNumber, outletPressure)
-    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
-    nFluxes = size(cellFluxes, 2)
+function pressureOutletBoundary(mesh, sln::SolutionState, boundaryNumber, outletPressure)
+    nFluxes = size(sln.cellFluxes, 2)
 
     # Directly extrapolate cell center flux to boundary (zero gradient between the cell center and the boundary)
     currentBoundary = mesh.boundaryFaces[boundaryNumber]
@@ -435,57 +440,57 @@ function pressureOutletBoundary(mesh, solutionState, boundaryNumber, outletPress
         ownerCell = mesh.faces[face][1]
         # Mass fluxes are unaffected by pressure boundary
         for flux in 1:nFluxes
-            faceFluxes[face, flux] = cellFluxes[ownerCell, flux]
+            sln.faceFluxes[face, flux] = sln.cellFluxes[ownerCell, flux]
         end
 
-        origP = cellPrimitives[ownerCell, 1]
+        origP = sln.cellPrimitives[ownerCell, 1]
         # Adjust the momentum fluxes containing pressure
         for flux in [4, 8, 12]
-            faceFluxes[face, flux] += outletPressure - origP
+            sln.faceFluxes[face, flux] += outletPressure - origP
         end
         #Adjust the energy fluxes
         for d in 1:3
-            faceFluxes[face, 12+d] += cellPrimitives[ownerCell, 2+d]*(outletPressure - origP)
+            sln.faceFluxes[face, 12+d] += sln.cellPrimitives[ownerCell, 2+d]*(outletPressure - origP)
         end
     end
 end
 
-function zeroGradientBoundary(mesh::Mesh, solutionState, boundaryNumber, _)
-    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
-    nFluxes = size(cellFluxes, 2)
+function zeroGradientBoundary(mesh::Mesh, sln::SolutionState, boundaryNumber, _)
+
+    nFluxes = size(sln.cellFluxes, 2)
 
     # Directly extrapolate cell center flux to boundary (zero gradient between the cell center and the boundary)
     currentBoundary = mesh.boundaryFaces[boundaryNumber]
     @inbounds for face in currentBoundary
         ownerCell = mesh.faces[face][1] #One of these will be -1 (no cell), the other is the boundary cell we want
         for flux in 1:nFluxes
-            faceFluxes[face, flux] = cellFluxes[ownerCell, flux]
+            sln.faceFluxes[face, flux] = sln.cellFluxes[ownerCell, flux]
         end
     end
 end
 
-function wallBoundary(mesh::Mesh, solutionState, boundaryNumber, _)
-    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
+function wallBoundary(mesh::Mesh, sln::SolutionState, boundaryNumber, _)
+
 
     currentBoundary = mesh.boundaryFaces[boundaryNumber]
     @inbounds for f in currentBoundary
         ownerCell = max(mesh.faces[f][1], mesh.faces[f][2]) #One of these will be -1 (no cell), the other is the boundary cell we want
 
-        faceP = cellPrimitives[ownerCell, 1]
+        faceP = sln.cellPrimitives[ownerCell, 1]
         # Momentum flux is Pressure in each of the normal directions (dot product)
-        faceFluxes[f, 4] = faceP
-        faceFluxes[f, 8] = faceP
-        faceFluxes[f, 12] = faceP
+        sln.faceFluxes[f, 4] = faceP
+        sln.faceFluxes[f, 8] = faceP
+        sln.faceFluxes[f, 12] = faceP
 
         # Mass Flux is zero
-        faceFluxes[f, 1:3] .= 0.0
+        sln.faceFluxes[f, 1:3] .= 0.0
         # Energy Flux is zero
-        faceFluxes[f, 13:15] .= 0.0
+        sln.faceFluxes[f, 13:15] .= 0.0
     end
 end
 symmetryBoundary = wallBoundary
 
-function emptyBoundary(mesh::Mesh, solutionState, boundaryNumber, _)
+function emptyBoundary(mesh::Mesh, sln::SolutionState, boundaryNumber, _)
     return
 end
 
@@ -515,10 +520,10 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
     fluxResiduals = zeros(nCells, nVars)
     faceFluxes = zeros(nFaces, nFluxes)
     # Initialize solution state
-    solutionState = [ cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes ]
+    sln = SolutionState(cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes)
 
     # Calculates cell fluxes, primitives from cell state
-    decodeSolution_3D(solutionState, R, Cp)
+    decodeSolution_3D(sln, R, Cp)
 
     if !silent
         println("Starting iterations")
@@ -536,7 +541,7 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
     while currTime < endTime
         ############## Timestep adjustment #############
         if timeIntegrationFn != LTSEuler
-            maxCFL = maxCFL3D(mesh, solutionState, dt, gamma, R)
+            maxCFL = maxCFL3D(mesh, sln, dt, gamma, R)
 
             # Slowly approach target CFL
             if maxCFL > targetCFL*1.01
@@ -562,7 +567,7 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
         end
 
         ############## Take a timestep #############
-        solutionState = timeIntegrationFn(mesh, fluxFunction, solutionState, boundaryConditions, gamma, R, Cp, dt)
+        sln = timeIntegrationFn(mesh, fluxFunction, sln, boundaryConditions, gamma, R, Cp, dt)
         if timeIntegrationFn==LTSEuler
             currTime += maxCFL
             if (nextOutputTime - currTime) < maxCFL
@@ -578,12 +583,12 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
         end
 
         if writeOutputThisIteration
-            updateSolutionOutput(cellPrimitives, restartFile, meshPath, createRestartFile, createVTKOutput)
+            updateSolutionOutput(sln.cellPrimitives, restartFile, meshPath, createRestartFile, createVTKOutput)
             writeOutputThisIteration = false
             nextOutputTime += outputInterval
         end
     end
 
-    updateSolutionOutput(cellPrimitives, restartFile, meshPath, createRestartFile, createVTKOutput)
-    return cellPrimitives
+    updateSolutionOutput(sln.cellPrimitives, restartFile, meshPath, createRestartFile, createVTKOutput)
+    return sln.cellPrimitives
 end

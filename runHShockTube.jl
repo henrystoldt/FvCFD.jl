@@ -21,8 +21,8 @@ nCells = size(OFmesh.cells, 1)
 
 _, cellPrimitives = initializeShockTube3DFVM(nCells...)
 
-boundaryConditions = [ wallBoundary, [], wallBoundary, [] ]
-cellPrimitives = unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.0001, endTime=0.14267, outputInterval=0.14267, targetCFL=0.3  , silent=false, createVTKOutput=false)
+boundaryConditions = [ zeroGradientBoundary, [], emptyBoundary, [] ]
+cellPrimitives = unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.0001, endTime=0.14267, outputInterval=0.14267, targetCFL=0.3, silent=false, createVTKOutput=false)
 # @profview unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00001, endTime=0.14267, outputInterval=0.14267, targetCFL=0.1, silent=true)
 # @btime unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00001, endTime=0.005, outputInterval=0.14267, targetCFL=0.01, silent=true, createRestartFile=false, createVTKOutput=false)
 
