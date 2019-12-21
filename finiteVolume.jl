@@ -109,13 +109,14 @@ end
 # Cell 1    x1_1    x2_1    x3_1
 # Cell 2    x1_2    x2_2    x3_2
 # ...
-# and output a THREE-DIMENSIONAL gradient matrix of the following form
+# and output a THREE-DIMENSIONAL gradient arrays of the following form
 # Cell      x1          x2          x3
 # Cell 1    grad(x1)_1  grad(x2)_1  grad(x3)_1
 # Cell 2    grad(x1)_2  grad(x2)_2  grad(x3)_2
 # ...
-# Where each grad(xa)_b is made up of three elements for the (x,y,z) directions
-function greenGaussGrad_matrix(mesh::Mesh, matrix, valuesAtFaces=false)
+# Where each grad(xa)_b is made up of THREE elements for the (x,y,z) directions
+#Ex. Gradient @ cell 1 of P would be: greenGaussGrad(mesh, P)[1, 1, :]
+function greenGaussGrad(mesh::Mesh, matrix, valuesAtFaces=false)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     nVars = size(matrix, 2)
 
@@ -158,27 +159,16 @@ end
 ####################### Face value interpolation ######################
 # Interpolates to all INTERIOR faces
 # Flux interpolation
-function linInterp_3D(mesh::Mesh, solutionState::Array{Array{Float64, 2}, 1})
-    cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes = solutionState
-    nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
-    nFluxes = size(cellFluxes, 2)
-
-    # Boundary face fluxes must be set separately
-    @inbounds @fastmath for f in 1:nFaces-nBdryFaces
-        # Find value at face using linear interpolation
-        c1 = mesh.faces[f][1]
-        c2 = mesh.faces[f][2]
-
-        #TODO: Precompute these distances
-        c1Dist = mag(mesh.cCenters[c1] .- mesh.fCenters[f])
-        c2Dist = mag(mesh.cCenters[c2] .- mesh.fCenters[f])
-        totalDist = c1Dist + c2Dist
-
-        @views faceFluxes[f, :] .= cellFluxes[c1, :].*(c2Dist/totalDist) .+ cellFluxes[c2, :].*(c1Dist/totalDist)
-    end
-end
-
 # Arbitrary value matrix interpolation
+# Cell      x1      x2      x3
+# Cell 1    y1_1    y2_1    y3_1
+# Cell 2    y1_2    y2_2    y3_2
+# ...
+# and output a THREE-DIMENSIONAL gradient matrix of the following form
+# Cell      x1          x2          x3
+# Face 1    y1_f1    y2_f1    y3_f1
+# Face 2    y1_f2    y2_f2    y3_f2
+# ...
 function linInterp_3D(mesh::Mesh, matrix)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     nVars = size(matrix, 2)
@@ -251,7 +241,7 @@ function unstructured_JSTEps(mesh::Mesh, solutionState, k2=0.5, k4=(1/32), c4=1,
 
     @views P = cellPrimitives[:,1]
     P = reshape(P, nCells, :)
-    gradP = greenGaussGrad_matrix(mesh, P, false)
+    gradP = greenGaussGrad(mesh, P, false)
     gradP = reshape(gradP, nCells, 3)
 
     sj = zeros(nCells)
@@ -304,11 +294,11 @@ function unstructured_JSTFlux(mesh::Mesh, solutionState, boundaryConditions, gam
     end
 
     # Centrally differenced fluxes
-    linInterp_3D(mesh, solutionState)
+    faceFluxes = linInterp_3D(mesh, cellFluxes)
 
     #### Add JST artificial Diffusion ####
     fDeltas = faceDeltas(mesh, solutionState)
-    fDGrads = greenGaussGrad_matrix(mesh, fDeltas, false)
+    fDGrads = greenGaussGrad(mesh, fDeltas, false)
     eps2, eps4 = unstructured_JSTEps(mesh, solutionState, 0.5, (1.2/32), 1, gamma, R)
     # nCells = nFaces - 1
     @inbounds @fastmath for f in 1:nFaces-nBdryFaces
