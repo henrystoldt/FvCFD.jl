@@ -177,10 +177,14 @@ end
 # Face 1    y1_f1    y2_f1    y3_f1
 # Face 2    y1_f2    y2_f2    y3_f2
 # ...
-function linInterp_3D(mesh::Mesh, matrix)
+function linInterp_3D(mesh::Mesh, matrix, faceVals=Nothing)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     nVars = size(matrix, 2)
-    faceVals = zeros(nFaces, nVars)
+
+    # Make a new matrix if one is not passed in
+    if faceVals == Nothing
+        faceVals = zeros(nFaces, nVars)
+    end
 
     # Boundary face fluxes must be set separately
     @inbounds @fastmath for f in 1:nFaces-nBdryFaces
@@ -292,7 +296,7 @@ function unstructured_JSTFlux(mesh::Mesh, sln::SolutionState, boundaryConditions
     nVars = size(sln.cellState, 2)
 
     # Centrally differenced fluxes
-    sln.faceFluxes = linInterp_3D(mesh, sln.cellFluxes)
+    linInterp_3D(mesh, sln.cellFluxes, sln.faceFluxes)
 
     #### Add JST artificial Diffusion ####
     fDeltas = faceDeltas(mesh, sln)
