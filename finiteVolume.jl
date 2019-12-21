@@ -164,14 +164,15 @@ function greenGaussGrad(mesh::Mesh, matrix, valuesAtFaces=false)
 end
 
 ####################### Face value interpolation ######################
+
 # Interpolates to all INTERIOR faces
-# Flux interpolation
 # Arbitrary value matrix interpolation
+# Example Input Matrix:
 # Cell      x1      x2      x3
 # Cell 1    y1_1    y2_1    y3_1
 # Cell 2    y1_2    y2_2    y3_2
 # ...
-# and output a THREE-DIMENSIONAL gradient matrix of the following form
+# Ouptus a matrix of the following form
 # Cell      x1          x2          x3
 # Face 1    y1_f1    y2_f1    y3_f1
 # Face 2    y1_f2    y2_f2    y3_f2
@@ -179,7 +180,6 @@ end
 function linInterp_3D(mesh::Mesh, matrix)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     nVars = size(matrix, 2)
-
     faceVals = zeros(nFaces, nVars)
 
     # Boundary face fluxes must be set separately
@@ -244,7 +244,6 @@ end
 function unstructured_JSTEps(mesh::Mesh, sln::SolutionState, k2=0.5, k4=(1/32), c4=1, gamma=1.4, R=287.05)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
 
-
     @views P = sln.cellPrimitives[:,1]
     P = reshape(P, nCells, :)
     gradP = greenGaussGrad(mesh, P, false)
@@ -290,14 +289,7 @@ end
 # Classical JST, central differencing + artificial diffusion. Each face treated as 1D
 function unstructured_JSTFlux(mesh::Mesh, sln::SolutionState, boundaryConditions, gamma, R)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
-
     nVars = size(sln.cellState, 2)
-
-    #### Boundaries ####
-    for b in 1:nBoundaries
-        bFunctionIndex = 2*b-1
-        boundaryConditions[bFunctionIndex](mesh, sln, b, boundaryConditions[bFunctionIndex+1])
-    end
 
     # Centrally differenced fluxes
     sln.faceFluxes = linInterp_3D(mesh, sln.cellFluxes)
@@ -324,6 +316,12 @@ function unstructured_JSTFlux(mesh::Mesh, sln::SolutionState, boundaryConditions
             i2 = i1+2
             sln.faceFluxes[f,i1:i2] .-= (diffusionFlux[v] .* unitFA)
         end
+    end
+
+    #### Boundaries ####
+    for b in 1:nBoundaries
+        bFunctionIndex = 2*b-1
+        boundaryConditions[bFunctionIndex](mesh, sln, b, boundaryConditions[bFunctionIndex+1])
     end
 
     return integrateFluxes_unstructured3D(mesh, sln, boundaryConditions)
