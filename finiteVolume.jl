@@ -59,17 +59,16 @@ function OpenFOAMCFL!(CFL, mesh::Mesh, sln::SolutionState, dt=1, gamma=1.4, R=28
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
 
     fill!(CFL, 0.0)
-    @views rho = linInterp_3D(mesh, sln.cellState[:,1])
-    @views t = linInterp_3D(mesh, sln.cellPrimitives[:,2])
+    faceRhoT = linInterp_3D(mesh, sln.cellState[:,1:2])
     for f in 1:nFaces
         ownerCell = mesh.faces[f][1]
         neighbourCell = mesh.faces[f][2]
 
-        faceRho = rho[f]
+        faceRho = faceRhoT[f, 1]
         if faceRho == 0.0
             faceRho = sln.cellState[ownerCell, 1]
         end
-        faceT = t[f]
+        faceT = faceRhoT[f, 2]
         if faceT == 0.0
             faceT = sln.cellPrimitives[ownerCell, 2]
         end
@@ -541,34 +540,41 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
     writeOutputThisIteration = false
     while currTime < endTime
         ############## Timestep adjustment #############
-        if timeIntegrationFn != LTSEuler
+        if timeIntegrationFn == LTSEuler
+            CFL = 1.0
+            if timeStepCounter < 10
+                # Ramp up CFL linearly in the first ten time steps to reach the target CFL
+                CFL = (timeStepCounter+1) * targetCFL / 10
+            else
+                CFL = targetCFL
+            end
+
+            # Store the target CFL for the present time step in the first element of the dt vector.
+            # The time discretization function will determine the actual local time step based on this target CFL
+            dt[1] = CFL
+        else
             maxCFL = maxCFL3D(mesh, sln, dt, gamma, R)
 
-            # Slowly approach target CFL
+            # If CFL too high, attempt to preserve stability by cutting timestep size in half
             if maxCFL > targetCFL*1.01
                 dt *= targetCFL/(2*maxCFL)
+            # Otherwise slowly approach target CFL
             else
                 dt *= ((targetCFL/maxCFL - 1)/10+1)
             end
 
-            # Adjust timestep to hit endtime if this is the final time step
+            # Cut timestep to hit endtime/writeTimes as necessary
             if (endTime - currTime) < dt
                 dt = endTime - currTime
             elseif (nextOutputTime - currTime) < dt
                 dt = nextOutputTime - currTime
                 writeOutputThisIteration = true
             end
-        else
-            if timeStepCounter < 10
-                maxCFL = (timeStepCounter+1) * targetCFL / 10
-            else
-                maxCFL = targetCFL
-            end
-            dt[1] = maxCFL
         end
 
         ############## Take a timestep #############
         sln = timeIntegrationFn(mesh, fluxFunction, sln, boundaryConditions, gamma, R, Cp, dt)
+
         if timeIntegrationFn==LTSEuler
             currTime += maxCFL
             if (nextOutputTime - currTime) < maxCFL
@@ -580,7 +586,7 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
         timeStepCounter += 1
 
         if !silent
-            @printf("Timestep: %5.0f, simTime: %8.4g, Max CFL: %8.4g \n", timeStepCounter, currTime, maxCFL)
+            @printf("Timestep: %5.0f, simTime: %9.4g, Max CFL: %9.4g \n", timeStepCounter, currTime, maxCFL)
         end
 
         if writeOutputThisIteration
