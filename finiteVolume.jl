@@ -363,8 +363,8 @@ function integrateFluxes_unstructured3D(mesh::Mesh, sln::SolutionState, boundary
 
             # Subtract from owner cell
             sln.fluxResiduals[ownerCell, v] -= flow
+            # Add to neighbour cell
             if neighbourCell > -1
-                # Add to neighbour cell
                 sln.fluxResiduals[neighbourCell, v] += flow
             end
         end
@@ -511,7 +511,17 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
     nFluxes = nVars*nDims
 
     if restart
+        if !silent
+            println("Reading restart file: $restartFile")
+        end
+
         cellPrimitives = readRestartFile(restartFile)
+
+        # Check that restart file has the same nnumber of cells as the mesh
+        nCellsRestart = size(cellPrimitives, 1)
+        if nCellsRestart != nCells
+            throw(ArgumentError("Number of cells in restart file ($nCellsRestart) does not match the present mesh ($nCells). Please provide a matching mesh and restart file."))
+        end
     end
 
     # rho, xMom, total energy from P, T, Ux, Uy, Uz
@@ -553,14 +563,14 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
             # The time discretization function will determine the actual local time step based on this target CFL
             dt[1] = CFL
         else
-            maxCFL = maxCFL3D(mesh, sln, dt, gamma, R)
+            CFL = maxCFL3D(mesh, sln, dt, gamma, R)
 
             # If CFL too high, attempt to preserve stability by cutting timestep size in half
-            if maxCFL > targetCFL*1.01
-                dt *= targetCFL/(2*maxCFL)
+            if CFL > targetCFL*1.01
+                dt *= targetCFL/(2*CFL)
             # Otherwise slowly approach target CFL
             else
-                dt *= ((targetCFL/maxCFL - 1)/10+1)
+                dt *= ((targetCFL/CFL - 1)/10+1)
             end
 
             # Cut timestep to hit endtime/writeTimes as necessary
@@ -576,8 +586,8 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
         sln = timeIntegrationFn(mesh, fluxFunction, sln, boundaryConditions, gamma, R, Cp, dt)
 
         if timeIntegrationFn==LTSEuler
-            currTime += maxCFL
-            if (nextOutputTime - currTime) < maxCFL
+            currTime += CFL
+            if (nextOutputTime - currTime) < CFL
                 writeOutputThisIteration = true
             end
         else
@@ -586,7 +596,7 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
         timeStepCounter += 1
 
         if !silent
-            @printf("Timestep: %5.0f, simTime: %9.4g, Max CFL: %9.4g \n", timeStepCounter, currTime, maxCFL)
+            @printf("Timestep: %5.0f, simTime: %9.4g, Max CFL: %9.4g \n", timeStepCounter, currTime, CFL)
         end
 
         if writeOutputThisIteration
