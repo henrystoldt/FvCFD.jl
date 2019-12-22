@@ -3,12 +3,11 @@ using ProfileView #Doesn't want to install on my work ubuntu desktop for some re
 using BenchmarkTools
 
 include("shockTube.jl")
-include("finiteDifference.jl")
 include("finiteVolume.jl")
 include("mesh.jl")
 
 # Create mesh
-meshPath = "OFShockTubeMesh"
+meshPath = "OFshockTube_400"
 OFmesh = OpenFOAMMesh(meshPath)
 nCells = size(OFmesh.cells, 1)
 mesh, cellPrimitives = initializeShockTube3DFVM(nCells...)
@@ -21,14 +20,15 @@ cellState = encodePrimitives3D(cellPrimitives)
 cellFluxes = zeros(nCells, nFluxes)
 fluxResiduals = zeros(nCells, nVars)
 faceFluxes = zeros(nFaces, nFluxes)
-solutionState = [ cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes ]
-decodeSolution(solutionState)
+sln = SolutionState(cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes)
+decodeSolution_3D(sln)
+
 # Apply zero face fluxes to empty faces
 zeroFlux = zeros(nFluxes)
 for b in 1:nBoundaries
     if boundaryConditions[2*b-1] == emptyBoundary
         for f in OFmesh.boundaryFaces[b]
-            faceFluxes[f] = zeroFlux
+            sln.faceFluxes[f,:] = zeroFlux
         end
     end
 end
@@ -49,13 +49,17 @@ end
 # @benchmark greenGaussGrad_matrix(OFmesh, fDeltas, false)
 
 #### greenGaussGrad ####
-P = cellPrimitives[:,1]
-P = reshape(P, nCells, :)
-# greenGaussGrad(OFmesh, false, P)[1]
-function run1000()
-    for i in 1:1000
-        greenGaussGrad(OFmesh, false, P)
-    end
-end
-# @profview run1000()
-@benchmark greenGaussGrad_matrix(OFmesh, P, false)
+# P = sln.cellPrimitives[:,1]
+# P = reshape(P, nCells, :)
+# # greenGaussGrad(OFmesh, false, P)[1]
+# function run1000()
+#     for i in 1:1000
+#         greenGaussGrad(OFmesh, false, P)
+#     end
+# end
+# # @profview run1000()
+# @code_warntype greenGaussGrad(OFmesh, P, false)
+
+
+#### LinInterp ####
+@code_warntype linInterp_3D(mesh, sln.cellFluxes, sln.faceFluxes)

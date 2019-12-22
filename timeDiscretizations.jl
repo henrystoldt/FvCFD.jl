@@ -1,5 +1,7 @@
+include("dataStructures.jl")
+
 ######################### Global Time Stepping ###########################
-function forwardEuler(mesh, fluxResidualFn, sln, boundaryConditions, gamma, R, Cp, dt)
+function forwardEuler(mesh::Mesh, fluxResidualFn, sln::SolutionState, boundaryConditions, gamma, R, Cp, dt)
     sln.fluxResiduals = fluxResidualFn(mesh, sln, boundaryConditions, gamma, R)
     @fastmath sln.cellState .+= sln.fluxResiduals.*dt
     @fastmath decodeSolution_3D(sln, R, Cp)

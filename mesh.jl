@@ -1,18 +1,9 @@
 # Methods from Moukalled et al. FVM - OpenFOAM, Matlab
 include("vectorFunctions.jl")
+include("dataStructures.jl")
 
 ######################### Mesh Data Structure ###########################
-struct Mesh
-    cells::Vector{Vector{Int64}}
-    cVols::Vector{Float64}
-    cCenters::Vector{Vector{Float64}}
-    cellSizes::Matrix{Float64}
 
-    faces::Vector{Vector{Int64}}
-    fAVecs::Vector{Vector{Float64}}
-    fCenters::Vector{Vector{Float64}}
-    boundaryFaces::Vector{Vector{Int64}}
-end
 
 ######################### Mesh/Cell Geometry ###########################
 #3D only
