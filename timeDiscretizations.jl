@@ -12,7 +12,7 @@ end
 function RK2_Mid(mesh, fluxResidualFn, sln, boundaryConditions, gamma, R, Cp, dt)
     fluxResiduals1 = fluxResidualFn(mesh, sln, boundaryConditions, gamma, R )
     halfwayEstimate = sln.cellState .+ fluxResiduals1.*dt/2
-    solutionState2 = [ halfwayEstimate, sln.cellFluxes, sln.cellPrimitives, sln.fluxResiduals, sln.faceFluxes ]
+    solutionState2 = SolutionState(halfwayEstimate, sln.cellFluxes, sln.cellPrimitives, sln.fluxResiduals, sln.faceFluxes)
     decodeSolution_3D(solutionState2, R, Cp)
 
     sln.fluxResiduals = fluxResidualFn(mesh, solutionState2, boundaryConditions, gamma, R)
@@ -26,17 +26,17 @@ function RK4(mesh, fluxResidualFn, sln, boundaryConditions, gamma, R, Cp, dt)
 
     fluxResiduals1 = fluxResidualFn(mesh, sln, boundaryConditions, gamma, R)
     halfwayEstimate = sln.cellState .+ fluxResiduals1*dt/2
-    lastSolutionState = [ halfwayEstimate, sln.cellFluxes, sln.cellPrimitives, sln.fluxResiduals, sln.faceFluxes ]
+    lastSolutionState = SolutionState(halfwayEstimate, sln.cellFluxes, sln.cellPrimitives, sln.fluxResiduals, sln.faceFluxes)
     decodeSolution_3D(lastSolutionState, R, Cp)
 
     fluxResiduals2 = fluxResidualFn(mesh, lastSolutionState, boundaryConditions, gamma, R)
     halfwayEstimate2 = sln.cellState .+ fluxResiduals2*dt/2
-    lastSolutionState = [ halfwayEstimate2, sln.cellFluxes, sln.cellPrimitives, sln.fluxResiduals, sln.faceFluxes ]
+    lastSolutionState.cellState = halfwayEstimate2
     decodeSolution_3D(lastSolutionState, R, Cp)
 
     fluxResiduals3 = fluxResidualFn(mesh, lastSolutionState, boundaryConditions, gamma, R)
     finalEstimate1 = sln.cellState .+ fluxResiduals3*dt
-    lastSolutionState = [ finalEstimate1, sln.cellFluxes, sln.cellPrimitives, sln.fluxResiduals, sln.faceFluxes ]
+    lastSolutionState.cellState = finalEstimate1
     decodeSolution_3D(lastSolutionState, R, Cp)
 
     fluxResiduals4 = fluxResidualFn(mesh, lastSolutionState, boundaryConditions, gamma, R)
@@ -50,18 +50,16 @@ function ShuOsher(mesh, fluxResidualFn, sln, boundaryConditions, gamma, R, Cp, d
 
     fluxResiduals1 = fluxResidualFn(mesh, sln, boundaryConditions, gamma, R)
     endEstimate = sln.cellState .+ fluxResiduals1.*dt
-    lastSolutionState = [ endEstimate, sln.cellFluxes, sln.cellPrimitives, sln.fluxResiduals, sln.faceFluxes ]
+    lastSolutionState = SolutionState(endEstimate, sln.cellFluxes, sln.cellPrimitives, sln.fluxResiduals, sln.faceFluxes)
     decodeSolution_3D(lastSolutionState, R, Cp)
 
     fluxResiduals2 = fluxResidualFn(mesh, lastSolutionState, boundaryConditions, gamma, R)
     estimate2 = (3/4).*sln.cellState .+ (1/4).*(endEstimate .+ fluxResiduals2.*dt)
-    lastSolutionState = [ estimate2, sln.cellFluxes, sln.cellPrimitives, sln.fluxResiduals, sln.faceFluxes ]
+    lastSolutionState.cellState = estimate2
     decodeSolution_3D(lastSolutionState, R, Cp)
 
     fluxResiduals3 = fluxResidualFn(mesh, lastSolutionState, boundaryConditions, gamma, R)
     sln.cellState .= (1/3).*sln.cellState .+ (2/3).*(estimate2 .+ dt.*fluxResiduals3)
-    #TODO: Can we remove this line?
-    sln = [ sln.cellState, sln.cellFluxes, sln.cellPrimitives, sln.fluxResiduals, sln.faceFluxes ]
     decodeSolution_3D(sln, R, Cp)
 
     return sln
