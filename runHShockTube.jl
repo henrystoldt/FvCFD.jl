@@ -15,16 +15,16 @@ include("mesh.jl")
 println("Meshing")
 
 ### UnstructuredFVM from OpenFOAM Meshes ###
-meshPath = "OFshockTube_100"
+meshPath = "OFshockTube_400"
 OFmesh = OpenFOAMMesh(meshPath)
 nCells = size(OFmesh.cells, 1)
 
 _, cellPrimitives = initializeShockTube3DFVM(nCells...)
 
 boundaryConditions = [ zeroGradientBoundary, [], emptyBoundary, [] ]
-cellPrimitives = unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, LTSEuler, initDt=0.0001, endTime=0.14267, outputInterval=0.14267, targetCFL=0.1, silent=false, createVTKOutput=false)
+# cellPrimitives = unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, LTSEuler, initDt=0.0001, endTime=0.14267, outputInterval=0.14267, targetCFL=0.1, silent=false, createVTKOutput=false)
 # @profview unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00001, endTime=0.14267, outputInterval=0.14267, targetCFL=0.1, silent=true)
-# @btime unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00001, endTime=0.005, outputInterval=0.14267, targetCFL=0.01, silent=true, createRestartFile=false, createVTKOutput=false)
+@btime unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00001, endTime=0.005, outputInterval=0.14267, targetCFL=0.01, silent=true, createRestartFile=false, createVTKOutput=false)
 # @code_warntype unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00001, endTime=0.00001, outputInterval=0.14267, targetCFL=0.01, silent=true, createRestartFile=false, createVTKOutput=false)
 
 # P = cellPrimitives[:,1]

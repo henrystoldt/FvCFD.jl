@@ -22,62 +22,51 @@ function initializeUniformSolution3D(mesh, P, T, Ux, Uy, Uz)
 end
 
 ######################### CFL #######################################
-function maxCFL3D(mesh::Mesh, sln::SolutionState, dt, gamma=1.4, R=287.05)
-    nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
-
-    maxCFL = 0.0
-    for c in 1:nCells
-        a = sqrt(gamma * R * sln.cellPrimitives[c,2])
-
-        CFL = 0.0
-        for d in 1:3
-            cDeltaT = (abs(sln.cellPrimitives[c,d+2]) + a)*dt
-            CFL += cDeltaT / mesh.cellSizes[c, d]
-        end
-        maxCFL = max(maxCFL, CFL)
-    end
-
-    return maxCFL
-end
+# function maxCFL3D(mesh::Mesh, sln::SolutionState, dt, gamma=1.4, R=287.05)
+#     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
+#
+#     maxCFL = 0.0
+#     for c in 1:nCells
+#         a = sqrt(gamma * R * sln.cellPrimitives[c,2])
+#
+#         CFL = 0.0
+#         for d in 1:3
+#             cDeltaT = (abs(sln.cellPrimitives[c,d+2]) + a)*dt
+#             CFL += cDeltaT / mesh.cellSizes[c, d]
+#         end
+#         maxCFL = max(maxCFL, CFL)
+#     end
+#
+#     return maxCFL
+# end
 
 function CFL!(CFL, mesh::Mesh, sln::SolutionState, dt=1, gamma=1.4, R=287.05)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
 
-
-    for c in 1:nCells
-        a = sqrt(gamma * R * sln.cellPrimitives[c,2])
-
-        CFL[c] = 0.0
-        for d in 1:3
-            cDeltaT = (abs(sln.cellPrimitives[c,d+2]) + a)*dt
-            CFL[c] += cDeltaT / mesh.cellSizes[c, d]
-        end
-    end
-end
-
-function OpenFOAMCFL!(CFL, mesh::Mesh, sln::SolutionState, dt=1, gamma=1.4, R=287.05)
-    nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
-
     fill!(CFL, 0.0)
-    faceRhoT = linInterp_3D(mesh, sln.cellState[:,1:2])
+    faceRhoT = linInterp_3D(mesh, hcat(sln.cellState[:,1], sln.cellPrimitives[:,2]))
     for f in 1:nFaces
         ownerCell = mesh.faces[f][1]
         neighbourCell = mesh.faces[f][2]
 
         faceRho = faceRhoT[f, 1]
-        if faceRho == 0.0
-            faceRho = sln.cellState[ownerCell, 1]
-        end
         faceT = faceRhoT[f, 2]
-        if faceT == 0.0
+
+        # Use cell center values on the boundary
+        if neighbourCell == -1
+            faceRho = sln.cellState[ownerCell, 1]
             faceT = sln.cellPrimitives[ownerCell, 2]
         end
 
         @views faceVel = sln.faceFluxes[f, 1:3] ./ faceRho
-        @views flux = abs(dot(faceVel, mesh.fAVecs[f])*dt)
+        @views flux = abs(dot(faceVel, mesh.fAVecs[f]))*dt
+
+        if faceT <= 0.0
+            println("Found it!")
+        end
 
         a = sqrt(gamma * R * faceT)
-        flux += mag(mesh.fAVecs[f])*a
+        flux += mag(mesh.fAVecs[f])*a*dt
 
         CFL[ownerCell] += flux
         if neighbourCell > -1
@@ -548,6 +537,7 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
     timeStepCounter = 0
     nextOutputTime = outputInterval
     writeOutputThisIteration = false
+    CFLvec = zeros(nCells)
     while currTime < endTime
         ############## Timestep adjustment #############
         if timeIntegrationFn == LTSEuler
@@ -563,7 +553,8 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
             # The time discretization function will determine the actual local time step based on this target CFL
             dt[1] = CFL
         else
-            CFL = maxCFL3D(mesh, sln, dt, gamma, R)
+            CFL!(CFLvec, mesh, sln, dt, gamma, R)
+            CFL = maximum(CFLvec)
 
             # If CFL too high, attempt to preserve stability by cutting timestep size in half
             if CFL > targetCFL*1.01
@@ -585,7 +576,7 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
         ############## Take a timestep #############
         sln = timeIntegrationFn(mesh, fluxFunction, sln, boundaryConditions, gamma, R, Cp, dt)
 
-        if timeIntegrationFn==LTSEuler
+        if timeIntegrationFn == LTSEuler
             currTime += CFL
             if (nextOutputTime - currTime) < CFL
                 writeOutputThisIteration = true

@@ -71,7 +71,7 @@ function LTSEuler(mesh, fluxResidualFn, sln, boundaryConditions, gamma, R, Cp, d
 
     fluxResiduals = fluxResidualFn(mesh, sln, boundaryConditions, gamma, R)
 
-    OpenFOAMCFL!(dt, mesh, sln, 1, gamma, R)
+    CFL!(dt, mesh, sln, 1, gamma, R)
     dt .= targetCFL ./ dt
     smoothTimeStep!(dt, mesh, 0.1)
     smoothTimeStep!(dt, mesh, 0.1)

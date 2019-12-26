@@ -36,7 +36,7 @@ boundaryConditions = [ wallBoundary, [], emptyBoundary, [], subsonicInletBoundar
 # # Solve
 mesh = OpenFOAMMesh(meshPath)
 cellPrimitives = initializeUniformSolution3D(mesh, P, T, U...)
-unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, LTSEuler, initDt=0.0000001, endTime=500, outputInterval=100, targetCFL=0.3, silent=false, restart=true)
+unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, LTSEuler, initDt=0.0000001, endTime=500, outputInterval=100, targetCFL=0.3, silent=false, restart=false)
 
 
 # ### Delta Wing ###
