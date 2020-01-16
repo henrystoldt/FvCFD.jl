@@ -1,3 +1,5 @@
+include("mesh.jl")
+
 ######################### Initialization #######################
 function checkPRatio(Pratio)
     if Pratio < 0
@@ -135,6 +137,7 @@ function initializeShockTube3DFVM(nCells=100; domainLength=1, Pratio=10, silent=
     boundaryFaces = [ [nCells,], [nCells+1,], [] ]
     cVols = []
     cCenters = []
+    cellSizes = zeros(nCells, 3)
 
     fAVec = [h*w, 0, 0]
     cV = h*w*domainLength/nCells
@@ -162,6 +165,9 @@ function initializeShockTube3DFVM(nCells=100; domainLength=1, Pratio=10, silent=
             # Left boundary face
             push!(fCenters, [ 0.0, 0.0, 0.0 ])
         end
+
+
+        cellSizes[i, :] = [dx, h, w]
     end
 
     # Last face
@@ -171,6 +177,7 @@ function initializeShockTube3DFVM(nCells=100; domainLength=1, Pratio=10, silent=
     push!(faces, [nCells, -1])
     push!(fCenters, [ nCells*dx, 0.0, 0.0 ])
 
+    # Add the empty faces on the sides
     for c in 1:nCells
         push!(faces, [c, -1])
         push!(faces, [c, -1])
@@ -195,7 +202,7 @@ function initializeShockTube3DFVM(nCells=100; domainLength=1, Pratio=10, silent=
     end
 
     # Returns in mesh format
-    mesh = [ cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces ]
+    mesh = Mesh(cells, cVols, cCenters, cellSizes, faces, fAVecs, fCenters, boundaryFaces)
     return mesh, cellPrimitives
 end
 

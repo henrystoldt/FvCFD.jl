@@ -1,20 +1,20 @@
 ######################### Constitutive Relations #######################
 function idealGasRho(T, P, R=287.05)
-    return P/(R*T)
+    @fastmath return P/(R*T)
 end
 
 function idealGasP(rho, T, R=287.05)
     # PV = mRT
     # P = rho R T
-    return rho*R*T
+    @fastmath return rho*R*T
 end
 
 function calPerfectEnergy(T, Cp=1005, R=287.05)
-    return T*(Cp-R)
+    @fastmath return T*(Cp-R)
 end
 
 function calPerfectT(e, Cp=1005, R=287.05)
-    return e/(Cp-R)
+    @fastmath return e/(Cp-R)
 end
 
 function decodePrimitives3D!(primitives, cellState, R=287.05, Cp=1005)
