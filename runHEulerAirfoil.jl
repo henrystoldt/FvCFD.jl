@@ -29,7 +29,7 @@ Tt = T*(1 + ((gamma-1)/2)*machNum^2)
 UunitVec = normalize(U)
 
 # Choose a mesh
-meshPath = "OFairfoilMesh"
+meshPath = "Test/OFairfoilMesh"
 boundaryConditions = [ wallBoundary, [], emptyBoundary, [], subsonicInletBoundary, [Pt, Tt, UunitVec..., gamma, R, Cp], pressureOutletBoundary, P ]
 # meshPath = "OFmemesAirfoilMesh"
 # boundaryConditions = [ wallBoundary, [], emptyBoundary, [], subsonicInletBoundary, [Pt, Tt, UunitVec..., gamma, R, Cp], pressureOutletBoundary, P ]

@@ -18,7 +18,7 @@ P = 100000
 T = 300
 U = [ 694.44, 0, 0 ]
 
-meshPath = "OFunstructuredWedgeMesh"
+meshPath = "Test/OFunstructuredWedgeMesh"
 boundaryConditions = [ emptyBoundary, [], supersonicInletBoundary, [P, T, U..., 1005], zeroGradientBoundary, [], symmetryBoundary, [], zeroGradientBoundary, [], wallBoundary, [] ]
 # meshPath = "OFwedgeMesh"
 # boundaryConditions = [ supersonicInletBoundary, [P, T, U..., 1005], zeroGradientBoundary, [], symmetryBoundary, [], zeroGradientBoundary, [], wallBoundary, [], emptyBoundary, [] ]

@@ -19,7 +19,7 @@ println("Meshing")
 # xVel = U
 
 ### UnstructuredFVM from OpenFOAM Meshes ###
-meshPath = "OFShockTubeMesh"
+meshPath = "Test/OFShockTubeMesh"
 OFmesh = OpenFOAMMesh(meshPath)
 nCells = size(OFmesh.cells, 1)
 mesh, cellPrimitives = initializeShockTube3DFVM(nCells...)
