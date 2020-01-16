@@ -1,9 +1,9 @@
 using Test
-include("mesh.jl")
-include("finiteVolume.jl")
-include("./1D/finiteDifference.jl")
-include("shockTube.jl")
-include("vectorFunctions.jl")
+include("../mesh.jl")
+include("../finiteVolume.jl")
+include("../1D/finiteDifference.jl")
+include("../shockTube.jl")
+include("../vectorFunctions.jl")
 include("test.jl")
 include("testMeshes.jl")
 
