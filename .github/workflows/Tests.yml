@@ -18,4 +18,4 @@ jobs:
     - name: Run tests
       run: |
         julia setupEnvironment.jl
-        run: julia runTests.jl
+        julia runTests.jl
