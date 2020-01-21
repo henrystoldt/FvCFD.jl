@@ -4,6 +4,7 @@ using Plots.PlotMeasures
 using LaTeXStrings
 using Profile
 #using ProfileView
+using DelimitedFiles
 
 pyplot()
 
@@ -22,7 +23,8 @@ nCells = 500
 # P, U, T, rho = macCormack1DFDM(initializeShockTubeFDM(nCells)..., initDt=0.000001, targetCFL=0.95, endTime=0.14267, Cx=0.1)
 # P, U, T, rho = macCormack1DConservativeFDM(initializeShockTubeFDM(nCells)..., initDt=0.00001, targetCFL=0.95, endTime=0.14267, Cx=0.3)
 # P, U, T, rho = upwind1DConservativeFDM(initializeShockTubeFDM(nCells)..., initDt=0.00001, endTime=0.14267, targetCFL=0.01, Cx=0.3)
-@time P, U, T, rho = upwindFVMRoe1D(initializeShockTubeFVM(nCells)..., initDt=0.00001, endTime=0.14267, targetCFL=0.2, verbose=true)
+#@time P, U, T, rho = upwindFVMRoe1D(initializeShockTubeFVM(nCells)..., initDt=0.00001, endTime=0.14267, timeStep="RK4", targetCFL=0.02, verbose=true)
+@time P, U, T, rho = upwindFVMRoe1D(initializeShockTubeFVM(nCells)..., initDt=0.00001, endTime=0.14267, timeStep="EulerExp", targetCFL=0.04, verbose=true)
 #@time P, U, T, rho = upwindFVMRoe1D(initializeShockTubeFVM(4)..., initDt=0.051, endTime=0.05, targetCFL=0.2, verbose=true)
 
 #@time P, U, T, rho = JST_Structured1DFVM(initializeShockTube_StructuredFVM(nCells)..., forwardEuler, initDt=0.00001, endTime=0.14267, targetCFL=0.5, silent=true)
@@ -59,6 +61,8 @@ for i in 1:nCells
 end
 
 #println("Vel = ", xVel)
+
+writedlm("roe_shocktube_most_recent_vA.csv", rho)
 
 println("Plotting results")
 plotShockTubeResults_PyPlot(P, xVel, T, rho)

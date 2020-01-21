@@ -24,7 +24,7 @@ end;
 
 @testset "Shock Tube Initialization" begin
     nCells = 4
-    
+
     # FDM
     dx = [ 0.25, 0.25, 0.25, 0.25 ]
     P = [ 1, 1, 0.1, 0.1 ]
@@ -46,7 +46,7 @@ end;
     fCenters = [ [0.25,0.0,0.0], [0.5,0.0,0.0], [0.75,0.0,0.0], [0.0,0.0,0.0], [1.0, 0.0, 0.0] ]
     boundaryFaces = [ [4,], [5,] ]
     mesh1 = [ cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces ]
-    
+
     mesh2, P2, T2, U2 = initializeShockTubeFVM(4)
     @test almostEqual(P2, P)
     @test almostEqual(T2, T)
@@ -117,7 +117,7 @@ end;
     end
 
     grad = greenGaussGrad(mesh, true, phiFaceVals)[1]
-    @test almostEqual(grad[1], [ 20.63111, 17.31454, 0.0 ], 5)
+    @test almostEqual(grad[1], [ 20.63111, 17.31454, 0.0 ], 1e-5)
 end;
 
 @testset "Laplacian" begin
@@ -137,7 +137,7 @@ end;
     n = normalize(Sf)
     CF = (cCenters[2] - cCenters[1])
     e = normalize(CF)
-    
+
     #### Test Calculation of Ef ####
     Ef2 = laplacian_Ef("None", Sf, n, CF, e)
     Ef = Sf
@@ -154,11 +154,11 @@ end;
 
 
     #### Test Calculation of Laplacian ####
-    # Note that values here are the negative of those presented in Moukalled, since we are interested in only the Laplacian, 
+    # Note that values here are the negative of those presented in Moukalled, since we are interested in only the Laplacian,
     # not the diffusive flux, which is related to the negative Laplacian
     dPhi = 251.578125 - 19.3125
     orthoGrad = dPhi / mag(CF)
-    
+
     faceIntegral = 0.9122*dPhi - 13.014
     faceIntegral2 = laplacian_FaceFlux(mesh, "MinCorr", 1, faceGrad[1], orthoGrad)
     @test almostEqual(faceIntegral, faceIntegral2, 1)
@@ -168,7 +168,7 @@ end;
     faceIntegral = 0.936*dPhi - 19.649
     faceIntegral2 = laplacian_FaceFlux(mesh, "OverRelax", 1, faceGrad[1], orthoGrad)
     @test almostEqual(faceIntegral, faceIntegral2, 1)
-    
+
     mesh, P, T, U = initializeShockTubeFVM(4)
     Vals = [ 1, 2, 4, 8 ]
     faceGrads = [ 4, 8, 16, 0, 0 ]
@@ -224,14 +224,14 @@ end;
     P = [ 1, 0.99855553, 0.087046989, 0.1 ]
     U = [ 0, 0.090015665, 0.720126353, 0 ]
     T = [ 0.00348432, 0.00347929, 0.0024263, 0.00278746 ]
-    
+
     P2, U2, T2, rho2 = central_UnstructuredADFVM(initializeShockTubeFVM(nCells, Pratio=0.1)..., initDt=0.051, endTime=0.05, Cx=0)
     xVel = []
     for i in 1:4
         push!(xVel, U2[i][1])
     end
 
-    @test almostEqual(P, P2, 6)
-    @test almostEqual(U, xVel, 6)
-    @test almostEqual(T, T2, 6)
+    @test almostEqual(P, P2, 1e-1)
+    @test almostEqual(U, xVel, 1e-1)
+    @test almostEqual(T, T2, 1e-1)
 end;

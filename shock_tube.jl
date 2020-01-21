@@ -1,10 +1,19 @@
 # julia shock tube solver
 #Written with conservative Euler eqns, FD MacCormack method
 #include PyPlot
-using PyPlot
+#using PyPlot
 #using Plots.PlotMeasures
 #pyplot()
 
+using Plots
+using Plots.PlotMeasures
+#using PyPlot
+using LaTeXStrings
+using Profile
+#using ProfileView
+using DelimitedFiles
+
+pyplot()
 
 
 function main()
@@ -15,8 +24,8 @@ function main()
     gamma = 1.4
 
     #Define the grid
-    n = 501
-    n_half = 251
+    n = 4000
+    n_half = 2000
     x_pos = range(0,stop=1,length=n)
 
     #Time step size
@@ -24,7 +33,7 @@ function main()
     #t_end = 0.5
     #dt = t_end / 10000
     #t_end = 0.14267
-    dt = t_end/8000
+    dt = t_end/32000
 
     #Check time_step size is appropriate
     #For now, impose a soft cfl limit of 0.2
@@ -42,10 +51,10 @@ function main()
     end
 
     #Artificial Viscosity Constants
-    C_x = 0.3
-    
+    C_x = 0.5
 
-    
+
+
 
     #Arrays to store the conditions
     #First primitives
@@ -106,7 +115,10 @@ function main()
     =#
 
 
+
     results = do_cfd(rho, u_vel, ener, pres, temp, R, gamma, t_end, n , dx, dt, C_x)
+
+
 
 
     println("Finshed solving CFD, about to plot!")
@@ -119,15 +131,17 @@ function main()
 
     #println("Rho results are: ", rho_res)
 
+    writedlm("maccormack_shocktube_cx04_mostrec.csv", rho_res)
+
     plot(x_pos, rho_res, label="RHO")
     #title("Density Results at the final time")
     #show()
-    
+
     #plot(x_pos, pres_res, marker="o", label="PRES")
     #title("Pressure Results at the final time")
     #show()
 
-    
+
     #plot(x_pos, temp_res, marker="o", label="TEMP")
     #title("Temperature Results at the final time")
     #show()
@@ -136,7 +150,7 @@ function main()
     #title("Velocity Results at the final time")
 
     #show()
-    
+
 
 
     #plot(x_pos)
@@ -290,7 +304,7 @@ function predictor(rho, u_vel, ener, pres, R, gamma, dx, dt, C_x)
             s_ener_pred = artificial_visc(pres[i+1], pres[i], pres[i-1], ener_flux[i+1], ener_flux[i], ener_flux[i-1], C_x)
         end
 
-        
+
 
         #Now create predicted updated variables (conserved)
         rho_pred[i] = rho[i] + drho_dt_pred[i] * dt + s_rho_pred
@@ -351,11 +365,11 @@ end
 
 # -------------------------------------------------------------------
 # Euler Equations
-# 
+#
 # - Equations should only take scalar inputs, no vectors
 
 function mass_conserv(rho_1, rho_2, u_1, u_2, dx; dif_direc=0)
-    #=Performs the mass conservation equation 
+    #=Performs the mass conservation equation
 
     rho_1,u_1 should always be i
     rho_2,u_2 will be (i+1) if forward difference, and (i-1) if backward dif

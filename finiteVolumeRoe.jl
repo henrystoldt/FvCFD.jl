@@ -120,7 +120,7 @@ function musclDifference(mesh, rho, xMom, eV2, dx, gamma=1.4; debug=false)
     return consLeft, primsLeft, consRight, primsRight
 end
 
-function leftFaceVals(q_ip, q_i, q_im, dx; sig=1/3)
+function leftFaceVals(q_ip, q_i, q_im, dx; sig=-1)
     #=MUSCL difference interpolates values to the left face
     q_i - value at your cell
     q_ip - value at the cell opposite the face you're interpolating TODO
@@ -133,7 +133,7 @@ function leftFaceVals(q_ip, q_i, q_im, dx; sig=1/3)
     return Q_L
 end
 
-function rightFaceVals(q_ip, q_i, q_im, dx; sig=1/3)
+function rightFaceVals(q_ip, q_i, q_im, dx; sig=-1)
     #=MUSCL difference to the right face
     Slightly different than left face function
         q_i - value at the cell
@@ -161,8 +161,8 @@ function vanAlbeda(q_ip, q_i, q_im, dx; direc=0)
     end
 
     if r > 0
-        s = 2*r / (r^2 + 1)
-        #s = (r^2 + r)/(r^2 + 1)
+        #s = 2*r / (r^2 + 1)
+        s = (r^2 + r)/(r^2 + 1)
     else
         s = 0
     end
@@ -210,10 +210,10 @@ function roeAveraged(n, rhoLeft,rhoRight,uLeft,uRight,HLeft,HRight, gamma=1.4)
     roeU = ( sqrt.(rhoLeft).*uLeft + sqrt.(rhoRight).*uRight ) ./ (sqrt.(rhoLeft)+sqrt.(rhoRight))
     roeH = ( sqrt.(rhoLeft).*HLeft + sqrt.(rhoRight).*HRight ) ./ (sqrt.(rhoLeft)+sqrt.(rhoRight))
 
-    #println(roeH)
+    println(minimum(roeH))
 
     #println("\n")
-    #println(roeU)
+    println(minimum(roeU))
 
 
     roeA = sqrt.( (gamma-1).*(roeH - 0.5 .*roeU.^2) )
@@ -437,10 +437,72 @@ end
 
 ######################### Convective Term Things #######################
 
+function convectFlux(mesh, rho, xMom, eV2, dx; gamma=1.4, verbose=false, debug=false)
+    cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
+    nCells = size(cells, 1)
+    nFaces = size(faces, 1)
+
+    #Use MUSCL differencing to get values at left/right of each face. Boundaries are treated inside this function
+    consLeft, primsLeft, consRight, primsRight = musclDifference(mesh, rho, xMom, eV2, dx, debug=debug)
+
+    rhoLeft = consLeft[:,1]
+    rhoRight = consRight[:,1]
+
+    uLeft = primsLeft[:,1]
+    uRight = primsRight[:,1]
+
+    pLeft = primsLeft[:,2]
+    pRight = primsRight[:,2]
+
+    HLeft = primsLeft[:,3]
+    HRight = primsRight[:,3]
+
+    aLeft = (gamma-1)*(HLeft - 0.5*uLeft.^2)
+    aRight = (gamma-1)*(HRight - 0.5*uRight.^2)
+
+    #println("Checkpoint 2!\n")
+
+
+    #Find ROE averaged quantities at each face
+    rhoRoe, uRoe, HRoe, aRoe = roeAveraged(nFaces, rhoLeft, rhoRight, uLeft, uRight, HLeft, HRight)
+
+    #Construct flux partial vectors
+    leftFlux = fluxVector(consLeft, primsLeft, fAVecs)
+    rightFlux = fluxVector(consRight, primsRight, fAVecs)
+
+    deltaRho = rhoRight - rhoLeft
+    deltaU = uRight - uLeft
+    deltaP = pRight - pLeft
+    deltaA = aRight - aLeft
+
+    #println("Checkpoint 3!\n")
+
+    eigen1Flux, eigen2Flux, eigen3Flux = eigenFluxVectors(rhoRoe, uRoe, HRoe, aRoe, deltaRho, deltaU, deltaP, deltaA, fAVecs) #Eigenvalue check and correction for entropy happens in this step
+
+    #Combines decomposed flux vectors into flux at every step
+    xMassFlux, xMomFlux, xeV2Flux = findFluxes(leftFlux, rightFlux, eigen1Flux, eigen2Flux, eigen3Flux, fAVecs )
+
+    #println("Checkpoint 4!\n")
+
+
+
+    fluxVars = [ xMassFlux, xMomFlux, xeV2Flux ]
+
+
+    if debug
+        println("xMass Flux: $xMassFlux")
+        println("xMom Flux: $xMomFlux")
+        println("xEv2 Flux: $xeV2Flux")
+    end
+
+    return fluxVars
+
+end
+
 
 
 ######################### Solvers #######################
-function upwindFVMRoe1D(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, debug=false, verbose=false)
+function upwindFVMRoe1D(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005, debug=false, verbose=false, timeStep="EulerExp")
     ######### MESH ############
     # Extract mesh into local variables for readability
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
@@ -465,6 +527,11 @@ function upwindFVMRoe1D(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=
     rhoU2p = Array{Float64, 1}(undef, nCells)
     rhoUeV2PU = Array{Float64, 1}(undef, nCells)
 
+
+    stateVars_old = Array{Float64,2}(undef, 3, nCells)
+
+
+
     # Calc state and flux variables from primitives
     #TODO: Multi-D
     for i in 1:nCells
@@ -485,172 +552,261 @@ function upwindFVMRoe1D(mesh, P, T, U; initDt=0.001, endTime=0.14267, targetCFL=
         println("CurrentTime ------ dt ------ max mom res")
     end
 
+    for i in 1:3
+        stateVars_old[i,:] = stateVars[i][:]
+    end
+
+
     ########### SOLVER ###########
     dt = initDt
     currTime = 0
-    while currTime < endTime
 
-        if (endTime - currTime) < dt
-            dt = endTime - currTime
-        end
+    if timeStep=="EulerExp"
+        while currTime < endTime
 
-        # Calculate fluxes through each face
-        # TODO: y and z momemtum-fluxes + equations
-        # xMassFlux, xMomFlux, xeV2Flux = upwindInterp(mesh, U, xMom, rhoU2p, rhoUeV2PU)
-        #xMassFlux, xMomFlux, xeV2Flux, faceP = linInterp(mesh, xMom, rhoU2p, rhoUeV2PU, P)
-
-        #println("Checkpoint 1!\n")
-
-        #Use MUSCL differencing to get values at left/right of each face. Boundaries are treated inside this function
-        consLeft, primsLeft, consRight, primsRight = musclDifference(mesh, rho, xMom, eV2, dx, debug=debug)
-
-        rhoLeft = consLeft[:,1]
-        rhoRight = consRight[:,1]
-
-        uLeft = primsLeft[:,1]
-        uRight = primsRight[:,1]
-
-        pLeft = primsLeft[:,2]
-        pRight = primsRight[:,2]
-
-        HLeft = primsLeft[:,3]
-        HRight = primsRight[:,3]
-
-        aLeft = (gamma-1)*(HLeft - 0.5*uLeft.^2)
-        aRight = (gamma-1)*(HRight - 0.5*uRight.^2)
-
-        #println("Checkpoint 2!\n")
-
-
-        #Find ROE averaged quantities at each face
-        rhoRoe, uRoe, HRoe, aRoe = roeAveraged(nFaces, rhoLeft, rhoRight, uLeft, uRight, HLeft, HRight)
-
-        #Construct flux partial vectors
-        leftFlux = fluxVector(consLeft, primsLeft, fAVecs)
-        rightFlux = fluxVector(consRight, primsRight, fAVecs)
-
-        deltaRho = rhoRight - rhoLeft
-        deltaU = uRight - uLeft
-        deltaP = pRight - pLeft
-        deltaA = aRight - aLeft
-
-        #println("Checkpoint 3!\n")
-
-        eigen1Flux, eigen2Flux, eigen3Flux = eigenFluxVectors(rhoRoe, uRoe, HRoe, aRoe, deltaRho, deltaU, deltaP, deltaA, fAVecs) #Eigenvalue check and correction for entropy happens in this step
-
-        #Combines decomposed flux vectors into flux at every step
-        xMassFlux, xMomFlux, xeV2Flux = findFluxes(leftFlux, rightFlux, eigen1Flux, eigen2Flux, eigen3Flux, fAVecs )
-
-        #println("Checkpoint 4!\n")
-
-
-
-        fluxVars = [ xMassFlux, xMomFlux, xeV2Flux ]
-
-
-        if debug
-            println("xMass Flux: $xMassFlux")
-            println("xMom Flux: $xMomFlux")
-            println("xEv2 Flux: $xeV2Flux")
-        end
-
-        # Use fluxes to update values in each cell
-        for i in 1:(nFaces-nBdryFaces)
-            fA = mag(fAVecs[i]) #Face Area
-
-            ownerCell = faces[i][1]
-            neighbourCell = faces[i][2]
-            for v in 1:3
-                #Not sure if I need the +/-?? I think that's accounted for in the dot area vector? Or maybe not?
-                #Also don't think you need to divide each face by cell vol, only the final result?
-                stateVars[v][ownerCell] -= fluxVars[v][i]*fA*dt/cVols[ownerCell]
-                stateVars[v][neighbourCell] += fluxVars[v][i]*fA*dt/cVols[neighbourCell]
+            if (endTime - currTime) < dt
+                dt = endTime - currTime
             end
-        end
 
-        #println("Flux vars: ", fluxVars)
+            # Calculate fluxes through each face
+            # TODO: y and z momemtum-fluxes + equations
+            # xMassFlux, xMomFlux, xeV2Flux = upwindInterp(mesh, U, xMom, rhoU2p, rhoUeV2PU)
+            #xMassFlux, xMomFlux, xeV2Flux, faceP = linInterp(mesh, xMom, rhoU2p, rhoUeV2PU, P)
 
+            fluxVars = convectFlux(mesh, rho, xMom, eV2, dx; gamma=gamma, verbose=verbose, debug=debug)
 
+            #[xMassFlux, xMomFlux, xEnerFlux] = fluxVars
 
-        if debug
-            println("Rho2: $rho")
-            println("xMom2: $xMom")
-            println("eV22: $eV2")
-        end
+            # Use fluxes to update values in each cell
+            for i in 1:(nFaces-nBdryFaces)
+                fA = mag(fAVecs[i]) #Face Area
 
-        #BC fix
-
-        stateVars[2][1] = stateVars[2][2]
-        stateVars[2][nCells] = stateVars[2][nCells-1]
-
-        #Unpack state variables
-        #Not sure if this step is required??
-        rho = stateVars[1][:]
-        xMom = stateVars[2][:]
-        eV2 = stateVars[3][:]
-
-        # Boundaries
-        ############### Boundaries ################
-        # Waves never reach the boundaries, so boundary treatment doesn't need to be good
-
-        #= Farfield neumann-BC is dealt with during the MUSCL-difference I hope
-        copyValues(3, 2, stateVars)
-        copyValues(2, 1, stateVars)
-        copyValues(nCells-2, nCells-1, stateVars)
-        copyValues(nCells-1, nCells, stateVars)
-        =#
-
-        #println("Checkpoint 5!\n")
-
-        # Decode primitive values
-        for i in 1:nCells
-            P[i], T[i], U[i], rhoU2p[i], rhoUeV2PU[i] = decodePrimitives3D(rho[i], xMom[i], eV2[i])
-        end
-        #println("Prims are: ", rho, xMom, eV2)
-
-        #println("\n")
-
-        #println("U is early: ", U)
-
-        #println("\n")
-
-        #println("T is early: ", T)
-
-
-        if verbose
-            println("\n")
-            println(" ", currTime, " --- ", dt, " --- ", maximum(xMassFlux))
-            println("\n")
-        end
-
-        currTime += dt
-
-        #println("Checkpoint 6!\n")
-
-        #Catch negative temps for now - until can find cause
-
-        for z in 1:nCells
-            if T[z]< 0
-                T[z] = 0.0001222
+                ownerCell = faces[i][1]
+                neighbourCell = faces[i][2]
+                for v in 1:3
+                    #Not sure if I need the +/-?? I think that's accounted for in the dot area vector? Or maybe not?
+                    #Also don't think you need to divide each face by cell vol, only the final result?
+                    stateVars[v][ownerCell] -= fluxVars[v][i]*fA*dt/cVols[ownerCell]
+                    stateVars[v][neighbourCell] += fluxVars[v][i]*fA*dt/cVols[neighbourCell]
+                end
             end
-        end
 
 
-        ############## CFL Calculation, timestep adjustment #############
-        maxCFL = 0
-        #println("Temp is: ", T)
-        for i in 1:nCells
-            dx = 1/nCells
-            maxCFL = max(maxCFL, CFL(U[i], T[i], dt, dx, gamma, R))
+            if debug
+                println("Rho2: $rho")
+                println("xMom2: $xMom")
+                println("eV22: $eV2")
+            end
+
+
+            stateVars[2][1] = stateVars[2][2]
+            stateVars[2][nCells] = stateVars[2][nCells-1]
+
+            #Unpack state variables
+            #Not sure if this step is required??
+            rho = stateVars[1][:]
+            xMom = stateVars[2][:]
+            eV2 = stateVars[3][:]
+
+            # Decode primitive values
+            for i in 1:nCells
+                P[i], T[i], U[i], rhoU2p[i], rhoUeV2PU[i] = decodePrimitives3D(rho[i], xMom[i], eV2[i])
+            end
+
+            if verbose
+                println("\n")
+                println(" ", currTime, " --- ", dt, " --- ", maximum(fluxVars[1][:]))
+                println("\n")
+            end
+
+            currTime += dt
+
+            #println("Checkpoint 6!\n")
+
+            #Catch negative temps for now - until can find cause
+            #=
+            for z in 1:nCells
+                if T[z]< 0
+                    T[z] = 0.0001222
+                end
+            end
+            =#
+
+            ############## CFL Calculation, timestep adjustment #############
+            maxCFL = 0
+            #println("Temp is: ", T)
+            for i in 1:nCells
+                dx = 1/nCells
+                maxCFL = max(maxCFL, CFL(U[i], T[i], dt, dx, gamma, R))
+            end
+            # Adjust time step to approach target CFL
+            dt *= ((targetCFL/maxCFL - 1)/5+1)
+
         end
-        # Adjust time step to approach target CFL
-        dt *= ((targetCFL/maxCFL - 1)/5+1)
+    elseif timeStep=="RK4"
+        while currTime < endTime
+
+            if (endTime - currTime) < dt
+                dt = endTime - currTime
+            end
+
+            fluxResid_1 = Array{Float64, 2}(undef, 3, nCells)
+            fluxResid_2 = Array{Float64, 2}(undef, 3, nCells)
+            fluxResid_3 = Array{Float64, 2}(undef, 3, nCells)
+            fluxResid_4 = Array{Float64, 2}(undef, 3, nCells)
+
+            stateVars_1 = Array{Float64, 2}(undef, 3, nCells)
+            stateVars_2 = Array{Float64, 2}(undef, 3, nCells)
+            stateVars_3 = Array{Float64, 2}(undef, 3, nCells)
+            stateVars_new = Array{Float64, 2}(undef, 3, nCells)
+
+            ##########################  Step 1 #################################
+            # Calculate fluxes through each face
+            fluxVars_1 = convectFlux(mesh, rho, xMom, eV2, dx; gamma=gamma, verbose=verbose, debug=debug)
+
+            # Use fluxes to update values in each cell
+            for i in 1:(nFaces-nBdryFaces)
+                fA = mag(fAVecs[i]) #Face Area
+
+                ownerCell = faces[i][1]
+                neighbourCell = faces[i][2]
+                for v in 1:3
+                    #Not sure if I need the +/-?? I think that's accounted for in the dot area vector? Or maybe not?
+                    #Also don't think you need to divide each face by cell vol, only the final result?
+                    fluxResid_1[v,ownerCell] -= fluxVars_1[v][i]*fA/cVols[ownerCell]
+                    fluxResid_1[v,neighbourCell] += fluxVars_1[v][i]*fA/cVols[neighbourCell]
+                end
+            end
+
+            stateVars_1 = stateVars_old + fluxResid_1*dt*0.5
+
+            stateVars_1[2,1] = stateVars_1[2,2]
+            stateVars_1[2,nCells] = stateVars_1[2,nCells-1]
+
+            ##########################  Step 2 #################################
+
+
+            #Unpack state variables
+            #Not sure if this step is required??
+            rho_1 = stateVars_1[1,:]
+            xMom_1 = stateVars_1[2,:]
+            eV2_1 = stateVars_1[3,:]
+
+            fluxVars_2 = convectFlux(mesh, rho_1, xMom_1, eV2_1, dx; gamma=gamma, verbose=verbose, debug=debug)
+
+            # Use fluxes to update values in each cell
+            for i in 1:(nFaces-nBdryFaces)
+                fA = mag(fAVecs[i]) #Face Area
+
+                ownerCell = faces[i][1]
+                neighbourCell = faces[i][2]
+                for v in 1:3
+                    #Not sure if I need the +/-?? I think that's accounted for in the dot area vector? Or maybe not?
+                    #Also don't think you need to divide each face by cell vol, only the final result?
+                    fluxResid_2[v,ownerCell] -= fluxVars_2[v][i]*fA/cVols[ownerCell]
+                    fluxResid_2[v,neighbourCell] += fluxVars_2[v][i]*fA/cVols[neighbourCell]
+                end
+            end
+
+            stateVars_new = stateVars_old + fluxResid_2*dt
+
+            stateVars_new[2,1] = stateVars_new[2,2]
+            stateVars_new[2,nCells] = stateVars_new[2,nCells-1]
+            #=
+            ##########################  Step 3 #################################
+
+            #Unpack state variables
+            #Not sure if this step is required??
+            rho_2 = stateVars_2[1,:]
+            xMom_2 = stateVars_2[2,:]
+            eV2_2 = stateVars_2[3,:]
+
+            fluxVars_3 = convectFlux(mesh, rho_2, xMom_2, eV2_2, dx; gamma=gamma, verbose=verbose, debug=debug)
+
+            # Use fluxes to update values in each cell
+            for i in 1:(nFaces-nBdryFaces)
+                fA = mag(fAVecs[i]) #Face Area
+
+                ownerCell = faces[i][1]
+                neighbourCell = faces[i][2]
+                for v in 1:3
+                    #Not sure if I need the +/-?? I think that's accounted for in the dot area vector? Or maybe not?
+                    #Also don't think you need to divide each face by cell vol, only the final result?
+                    fluxResid_3[v,ownerCell] -= fluxVars_3[v][i]*fA/cVols[ownerCell]
+                    fluxResid_3[v,neighbourCell] += fluxVars_3[v][i]*fA/cVols[neighbourCell]
+                end
+            end
+
+            stateVars_3 = stateVars_old + fluxResid_3*dt
+
+            stateVars_3[2,1] = stateVars_3[2,2]
+            stateVars_3[2,nCells] = stateVars_3[2,nCells-1]
+
+            ##########################  Step 4 #################################
+
+            #Unpack state variables
+            #Not sure if this step is required??
+            rho_3 = stateVars_3[1,:]
+            xMom_3 = stateVars_3[2,:]
+            eV2_3 = stateVars_3[3,:]
+
+            fluxVars_4 = convectFlux(mesh, rho_3, xMom_3, eV2_3, dx; gamma=gamma, verbose=verbose, debug=debug)
+
+            # Use fluxes to update values in each cell
+            for i in 1:(nFaces-nBdryFaces)
+                fA = mag(fAVecs[i]) #Face Area
+
+                ownerCell = faces[i][1]
+                neighbourCell = faces[i][2]
+                for v in 1:3
+                    #Not sure if I need the +/-?? I think that's accounted for in the dot area vector? Or maybe not?
+                    #Also don't think you need to divide each face by cell vol, only the final result?
+                    fluxResid_4[v,ownerCell] -= fluxVars_4[v][i]*fA/cVols[ownerCell]
+                    fluxResid_4[v,neighbourCell] += fluxVars_4[v][i]*fA/cVols[neighbourCell]
+                end
+            end
+
+            stateVars_new = stateVars_old + (dt/6)*(fluxResid_1 + 2*fluxResid_2 + 2*fluxResid_3 + fluxResid_4)
+
+            stateVars_new[2,1] = stateVars_new[2,2]
+            stateVars_new[2,nCells] = stateVars_new[2,nCells-1]
+            =#
+
+            ##########################  Decode for next step ############################
+            rho = deepcopy(stateVars_new[1,:])
+            xMom = deepcopy(stateVars_new[2,:])
+            eV2 = deepcopy(stateVars_new[3,:])
+
+            # Decode primitive values
+            for i in 1:nCells
+                P[i], T[i], U[i], rhoU2p[i], rhoUeV2PU[i] = decodePrimitives3D(rho[i], xMom[i], eV2[i])
+            end
+
+            if verbose
+                println("\n")
+                println(" ", currTime, " --- ", dt, " --- ")
+                println("\n")
+            end
+
+            currTime += dt
+
+            ############## CFL Calculation, timestep adjustment #############
+            maxCFL = 0
+            #println("Temp is: ", T)
+            for i in 1:nCells
+                dx = 1/nCells
+                maxCFL = max(maxCFL, CFL(U[i], T[i], dt, dx, gamma, R))
+            end
+            # Adjust time step to approach target CFL
+            dt *= ((targetCFL/maxCFL - 1)/5+1)
+
+        end
 
     end
 
-    println("P is: ", P)
-    println("U is: ", U)
-    println("Temp is: ", T)
+    #println("P is: ", P)
+    #println("U is: ", U)
+    #println("Temp is: ", T)
 
 
 
