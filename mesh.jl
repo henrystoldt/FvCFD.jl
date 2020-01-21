@@ -1,6 +1,11 @@
 # Methods from Moukalled et al. FVM - OpenFOAM, Matlab
 include("vectorFunctions.jl")
+include("dataStructures.jl")
 
+######################### Mesh Data Structure ###########################
+
+
+######################### Mesh/Cell Geometry ###########################
 #3D only
 function crossProd(v1::Array{Float64, 1}, v2::Array{Float64, 1})
     x = v1[2]*v2[3] - v1[3]*v2[2]
@@ -104,6 +109,7 @@ function cellCentroidToFaceVec(points::Array{Array{Float64, 1}}, faceCentroids::
     return cellToFaceVec
 end
 
+######################### Utility Functions ###########################
 function unstructuredMeshInfo(mesh)
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
     nCells = size(cells, 1)
@@ -119,11 +125,26 @@ function unstructuredMeshInfo(mesh)
     return nCells, nFaces, nBoundaries, nBdryFaces
 end
 
+function unstructuredMeshInfo(mesh::Mesh)
+    nCells = size(mesh.cells, 1)
+    nFaces = size(mesh.faces, 1)
+    nBoundaries = size(mesh.boundaryFaces, 1)
+
+    # Count boundary faces
+    nBdryFaces = 0
+    for bdry in 1:nBoundaries
+        nBdryFaces += size(mesh.boundaryFaces[bdry], 1)
+    end
+
+    return nCells, nFaces, nBoundaries, nBdryFaces
+end
+
 function isNumber(str)
     re = r"^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)$"
     return occursin(re, str)
 end
 
+######################### Deal with OpenFOAM Meshes ###########################
 function OFFile_FindNItems(fileLines)
     nLines = size(fileLines, 1)
     lineCounter = 1
@@ -343,6 +364,8 @@ function OpenFOAMMesh(polyMeshPath)
     cells = Array{Array{Int64, 1}, 1}(undef, nCells)
     cVols = zeros(nCells)
     cCenters = Array{Array{Float64, 1}, 1}(undef, nCells)
+    cellSizes = Matrix{Float64}(undef, nCells, 3)
+
     faces = Array{Array{Int64, 1}, 1}(undef, nFaces)
     fAVecs = Array{Array{Float64, 1}, 1}(undef, nFaces)
     fCenters = Array{Array{Float64, 1}, 1}(undef, nFaces)
@@ -402,7 +425,37 @@ function OpenFOAMMesh(polyMeshPath)
         boundaryFaces[b] = Array(startF:endF)
     end
 
-    mesh = [ cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces ]
+    # Compute cell sizes in the x, y, z directions
+    maxCoords = [ -1000000.0, -1000000.0, -1000000.0 ]
+    minCoords = [ 1000000.0, 1000000.0, 1000000.0 ]
+    for c in 1:nCells
+        fill!(maxCoords, -10000000)
+        fill!(minCoords, 10000000)
+
+        pts = Vector{Vector{Float64}}()
+
+        # Add points
+        for f in cells[c]
+            for pt in OFfaces[f]
+                if !any(x->x==pt, pts)
+                    push!(pts, points[pt, :])
+                end
+            end
+        end
+
+        for pt in pts
+            for d in 1:3
+                maxCoords[d] = max(maxCoords[d], pt[d])
+                minCoords[d] = min(minCoords[d], pt[d])
+            end
+        end
+
+        for d in 1:3
+            cellSizes[c,d] = maxCoords[d] - minCoords[d]
+        end
+    end
+
+    mesh = Mesh(cells, cVols, cCenters, cellSizes, faces, fAVecs, fCenters, boundaryFaces)
 
     return mesh
 end

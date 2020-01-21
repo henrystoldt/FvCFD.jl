@@ -1,5 +1,7 @@
 # JuliaCFD
 
+![](https://github.com/henrystoldt/JuliaCFD/workflows/CI/badge.svg)
+
 # Plan:
 1. Euler 1D Solver (shock tube)
 2. 3D Adjoint multigridding implicit coupled runge-kutta
@@ -8,46 +10,59 @@
 # Required Components
 1. Parser for SU2 Mesh files
  - Inputs: mesh file name (path)
- - Outputs: 
+ - Outputs:
 	- See meshDataStructureDefinition.md
+Done (OpenFOAM mesh files instead)
 
 2. Need a standard input file format and a parser for it, which includes
 	- Mesh file path
 	- Freestream/initialization conditions
 	- Boundary conditions
 	- FD/FVM (if we have time to implement both?)
-	- Numerical convective scheme (MacCormack, Lax-Wendroff, Lax-Friedrich, JST) 
+	- Numerical convective scheme (MacCormack, Lax-Wendroff, Lax-Friedrich, JST)
+TODO
 
 3. Each numerical convective scheme will need a function to setup the solution matrices, and a method to deal with boundary conditions
+Boundary conditions independent of scheme
 
 4. Initialize solution (apply freestream conditions to every DOF) - primitives of rho, u,v,w (depending on dimensions), and e
 	-Shock tube needs better ICs - from analytical??
+TODO: Need a good non-uniform initialization method
 
 5. Apply convective numerical scheme to take one time-step. Setup matrix equations with unknowns
+Done
 
 6. Matrix solver (SOR or Thomas)
+Done
 
-7. Convert conserved quatities back into primitives
+7. Convert conserved quantities back into primitives
+Done
 
 8. Add results of matrix solution to current state to create state t+dt. Depends on time-marching scheme (euler-impl, euler-exp, rk4)
+Done
 
 9. Calculate residuals (on primitives or conserved??)
+TODO: Output
 
 9a. Print values to console
+Done
 
 10. Check convergence criteria
+TODO
 
 11. Repeat if required
+Done
 
 12. Output file format - primitive values at every cell
 	- Make vtk file if possible, csv if not
 	- If transient, should output primitives for each cell at each time step
+Done
 
 # Nomenclature
 All units SI  
 For the simple variables:
 
-Var | Meaning 
+Var | Meaning
 --- | ---
 e | internal energy  
 P | Pressure  

@@ -1,0 +1,21 @@
+name: CI
+
+on: [push]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v1
+    - uses: julia-actions/setup-julia@v1.0.2
+      # with:
+        # The Julia version to download (if necessary) and use. Example: 1.0.4
+        # version: # optional, default is 1
+        # Architecture of the Julia binaries. Defaults to x64.
+        # arch: # optional, default is x64
+    - name: Run tests
+      run: |
+        julia setupEnvironment.jl
+        julia runTests.jl
