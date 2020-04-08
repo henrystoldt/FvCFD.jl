@@ -2,11 +2,7 @@
 include("vectorFunctions.jl")
 include("dataStructures.jl")
 
-######################### Mesh Data Structure ###########################
-
-
 ######################### Mesh/Cell Geometry ###########################
-#3D only
 function crossProd(v1::Array{Float64, 1}, v2::Array{Float64, 1})
     x = v1[2]*v2[3] - v1[3]*v2[2]
     y = -(v1[1]*v2[3] - v1[3]*v2[1])
@@ -14,7 +10,6 @@ function crossProd(v1::Array{Float64, 1}, v2::Array{Float64, 1})
     return [x,y,z]
 end
 
-# Points must be ordered sequentially
 function triangleCentroid(points)
     center = [ 0.0, 0.0, 0.0 ]
     nPts = size(points, 1)
@@ -36,12 +31,16 @@ function triangleArea(points::Array{Array{Float64, 1}})
     return fAVec
 end
 
-# Points must be ordered sequentially
-# Returns face area vector and centroid
-# Splits face into subtriangles
-    # Area and centroid is computed for each subtriangles
-    # Areas vectors are summed and returned
-    # The centroid returned is obtainde from an area-weighted of sum of the subtriangle areas
+"""
+    Calculates face area vector and centroid from the points that make up the face
+    Points must be ordered sequentially
+
+    How it works:
+        1. Splits face into subtriangles
+        2. Area and centroid is computed for each subtriangle
+        3. Areas vectors are summed and returned
+        4. The centroid returned is obtained from an area-weighted of sum of the subtriangle centroids
+"""
 function faceAreaCentroid(points::Array{Array{Float64, 1}})
     gC = geometricCenter(points)
     nPts = size(points, 1)
@@ -68,11 +67,15 @@ function faceAreaCentroid(points::Array{Array{Float64, 1}})
     return fAVec, centroid
 end
 
-# Returns cell volume (scalar) and centroid (vector)
-# fAVecs can be computed using the faceAreaCentroids function
-# Splits cell into polygonal pyramids, each incorporating a single face and the geometric center of the cell
-#   Computes volume and centroid of each sub-pyramid
-#   Resulting volume is sum, centroid is the volume-weighted sum
+"""
+    Calculates cell volume (scalar) and centroid (vector) from the points and face area vectors (fAVecs) that make up the cell
+        fAVecs can be computed using the faceAreaCentroids function
+
+    How it works:
+        1. Splits cell into polygonal pyramids, each incorporating a single face and the geometric center of the cell
+        2. Computes volume and centroid of each sub-pyramid
+        3. Resulting volume is sum of sub-pyramid volumes, centroid is the volume-weighted sum of sub-pyramid centroids
+"""
 function cellVolCentroid(points, fAVecs, faceCentroids)
     gC = geometricCenter(points)
     nFaces = size(fAVecs,1)
@@ -94,10 +97,9 @@ function cellVolCentroid(points, fAVecs, faceCentroids)
     return vol, centroid
 end
 
-function cellCentroidToFaceVec(points::Array{Array{Float64, 1}}, faceCentroids::Array{Array{Float64, 1}}, cellCentroids::Array{Array{Float64, 1}})
-    # Calculates vectors from cell centroid to face centers
+# For each face, calculates the vectors from it's owner and neighbour cell centers to it's own center
+function cellCentroidToFaceVec(faceCentroids::Array{Array{Float64, 1}}, cellCentroids::Array{Array{Float64, 1}})
     #TODO: Understand ordering to make sure we're accepting faces in the order we need to pass them back in??
-
     nFaces = size(faceCentroids, 1)
 
     cellToFaceVec = zeros(nFaces, 3)
@@ -110,21 +112,7 @@ function cellCentroidToFaceVec(points::Array{Array{Float64, 1}}, faceCentroids::
 end
 
 ######################### Utility Functions ###########################
-function unstructuredMeshInfo(mesh)
-    cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
-    nCells = size(cells, 1)
-    nFaces = size(faces, 1)
-    nBoundaries = size(boundaryFaces, 1)
-
-    # Count boundary faces
-    nBdryFaces = 0
-    for bdry in 1:nBoundaries
-        nBdryFaces += size(boundaryFaces[bdry], 1)
-    end
-
-    return nCells, nFaces, nBoundaries, nBdryFaces
-end
-
+# Returns basic info about the mesh: nCells, nFaces, nBoundaries, nBdryFaces
 function unstructuredMeshInfo(mesh::Mesh)
     nCells = size(mesh.cells, 1)
     nFaces = size(mesh.faces, 1)
@@ -139,12 +127,31 @@ function unstructuredMeshInfo(mesh::Mesh)
     return nCells, nFaces, nBoundaries, nBdryFaces
 end
 
+# Checks whether a string represents a number (using a regular expression)
 function isNumber(str)
     re = r"^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)$"
     return occursin(re, str)
 end
 
-######################### Deal with OpenFOAM Meshes ###########################
+######################### Parse OpenFOAM Meshes ###########################
+"""
+    In the points, faces, owner, and neighbour files, the beginning of useful information in the file looks like this:
+    
+        ...
+        object      faces;
+        }
+        // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+        
+        
+        5135
+        (
+        4(79 1516 1380 37)
+        4(1381 1422 1249 39)
+        ...
+
+    The 5135 indicates how many lines of information follow it.
+    This function would return 5135, and the line number of the first piece of information in the file ((line number of 5135) + 2)
+"""
 function OFFile_FindNItems(fileLines)
     nLines = size(fileLines, 1)
     lineCounter = 1
@@ -161,6 +168,13 @@ function OFFile_FindNItems(fileLines)
     return startLine, itemCount
 end
 
+"""
+    Takes the file path to an OpenFOAM mesh 'points' file, returns a 2D array of point coordinates:
+            X   Y   Z
+        P1  x1  y1  z1
+        P2  x2  y2  z2
+        ...
+"""
 function readOFPointsFile(filePath)
     f = open(filePath)
     pointsLines = readlines(f)
@@ -180,6 +194,15 @@ function readOFPointsFile(filePath)
     return points
 end
 
+"""
+    Takes the file path to an OpenFOAM mesh 'faces' file, returns a 1D array of 1D arrays.
+    Each entry in the upper level array represents a single face
+    Each face-array contains the indices of the points that make up that face
+    Note that all indices from the file are incremented by 1, to switch from OpenFOAM's 0-based indexing to Julia's 1-based indexing
+
+    Example return value:
+        [ [face1_pt1Index, face1_pt2Index, face1_pt3Index], [face2_pt1Index, face2_pt2Index, face2_pt3Index, face2_pt4Index], ... ]
+"""
 function readOFFacesFile(filePath)
     f = open(filePath)
     facesLines = readlines(f)
@@ -204,6 +227,11 @@ function readOFFacesFile(filePath)
     return faces
 end
 
+"""
+    Takes the file path to an OpenFOAM 'owner' file, returns a 1D array of owner cell indices
+    Example return value:
+        [ face1_ownerCellIndex, face2_ownerCellIndex, ...  ]
+"""
 function readOFOwnerFile(filePath)
     f = open(filePath)
     ownerLines = readlines(f)
@@ -218,6 +246,13 @@ function readOFOwnerFile(filePath)
     return faceOwnerCells
 end
 
+"""
+    Takes the file path to an OpenFOAM 'neighbour' file, returns a 1D array of neighbour cell indices
+    Note that all indices from the file are incremented by 1, to switch from OpenFOAM's 0-based indexing to Julia's 1-based indexing
+
+    Example return value:
+        [ face1_neighbourCellIndex, face2_neighbourCellIndex, ...  ]
+"""
 function readOFNeighbourFile(filePath)
     f = open(filePath)
     neighbourLines = readlines(f)
@@ -232,8 +267,10 @@ function readOFNeighbourFile(filePath)
     return faceNeighbourCells
 end
 
-# Returns index of first line containing str
-# Otherwise returns -1
+"""     
+    Returns index of first line containing str
+    Otherwise returns -1
+"""
 function findInLines(str, lines, startLine)
     nLines = size(lines, 1)
     for i in startLine:nLines
@@ -244,6 +281,12 @@ function findInLines(str, lines, startLine)
     return -1
 end
 
+"""
+    Takes the file path to an OpenFOAM 'boundary' file, returns 3 arrays:
+    boundaryNames:          Array of boundary names (strings)
+    boundaryNumFaces:       Array containing the number of faces in each boundary
+    boundaryStartFaces:     Array containing the index of the first face in the boundary (boundaries always occupy a continuous sequence of face indices, and are usually numbered last)
+"""
 function readOFBoundaryFile(filePath)
     f = open(filePath)
     bLines = readlines(f)
@@ -269,7 +312,10 @@ function readOFBoundaryFile(filePath)
     return boundaryNames, boundaryNumFaces, boundaryStartFaces
 end
 
-# Supply absolute path to folder containing the OpenFOAM points, faces, cells, and boundaries files
+"""
+    Input: Path to an OpenFOAM mesh FOLDER.
+    Output: Calls readOFPoints/Faces/Owner/NeighbourFile and returns all of their results (reads all OpenFOAM's mesh file data into arrays)
+"""
 function readOpenFOAMMesh(polyMeshPath)
     pointsFilePath = "$polyMeshPath/points"
     points = readOFPointsFile(pointsFilePath)
@@ -285,15 +331,26 @@ function readOpenFOAMMesh(polyMeshPath)
     return points, faces, owner, neighbour, boundaryNames, boundaryNumFaces, boundaryStartFaces
 end
 
+"""
+    Function used to find all the points in each cell.
+    Not required for CFD, which is face-based, but required for cell-based .vtk file output.
+
+    Input: Path to an OpenFOAM mesh FOLDER.
+    Returns:
+        points:         Array of points obtained from readOFPoints()
+        cellPtIndices:  Array of arrays, where each subarrary represents a cell, and each entry in a cell's array is the index of one of its points
+"""
 function OpenFOAMMesh_findCellPts(polyMeshPath)
     points, OFfaces, owner, neighbour, boundaryNames, boundaryNumFaces, boundaryStartFaces = readOpenFOAMMesh(polyMeshPath)
     nCells = maximum(owner)
     nFaces = size(OFfaces, 1)
     nBoundaries = size(boundaryNames, 1)
 
-    cellPtIndices = Array{Array{Int64, 1}, 1}(undef, nCells)
-    cells = Array{Array{Int64, 1}, 1}(undef, nCells)
+    cellPtIndices = Array{Array{Int64, 1}, 1}(undef, nCells)    # OUTPUT, Array of arrays, where each subarrary represents a cell, and each entry in a cell's array is the index of one of its points
+    cells = Array{Array{Int64, 1}, 1}(undef, nCells)            # Indices of faces that make up a cell
 
+    ### Populate the cells array ###
+    #TODO: This code to make the cells array is nearly duplicated in OpenFOAMMesh() below. Perhaps extract it into a function.
     nOwners = size(owner, 1)
     for f in 1:nOwners
         ownerCell = owner[f]
@@ -315,14 +372,18 @@ function OpenFOAMMesh_findCellPts(polyMeshPath)
     end
     # fAVecs, fCenters, faces, cells now complete
 
+    ### Using the cells array, populate the cellPtIndices array ###
     for c in 1:nCells
-        pts = Array{Int64,1}(undef, 0)
+        pts = Array{Int64,1}(undef, 0) # Points that make up the present cell
 
+        # Add all points from face f to pts
         function addFace(f)
             for pt in OFfaces[f]
                 push!(pts, pt)
             end
         end
+
+        # Are all points in face f currently absent from the pts array (are the arrays OFfaces[f] and pts disjont?)
         function disjoint(f)
             for pt in OFfaces[f]
                 if any(x->x==pt, pts)
@@ -331,16 +392,19 @@ function OpenFOAMMesh_findCellPts(polyMeshPath)
             end
             return true
         end
+
+        # First face to add to the pts array. Changing the index of this face (which must be <= Number of faces in smallest cell) can change in which order points are added to the array.
+            # This sometimes happens to put points in the correct order for nice-looking .vtk output
         addFace(cells[c][1])
 
-        # Add any faces with no points in common with existing faces
+        # Add any disjoint faces
         for f in cells[c]
             if disjoint(f)
                 addFace(f)
             end
         end
 
-        # Add any remaining points
+        # Add any leftover points
         for f in cells[c]
             for pt in OFfaces[f]
                 if !any(x->x==pt, pts)
@@ -349,34 +413,42 @@ function OpenFOAMMesh_findCellPts(polyMeshPath)
             end
         end
 
+        # Store the list of points that make up the current cell
         cellPtIndices[c] = pts
     end
 
     return points, cellPtIndices
 end
 
+"""
+    Reads an OpenFOAM mesh and returns a Mesh object suitable for calculations in JuliaCFD.
+
+    Mesh defined in dataStructures.jl, documented in dataStructureDefintions.md
+"""
 function OpenFOAMMesh(polyMeshPath)
     points, OFfaces, owner, neighbour, boundaryNames, boundaryNumFaces, boundaryStartFaces = readOpenFOAMMesh(polyMeshPath)
     nCells = maximum(owner)
     nFaces = size(OFfaces, 1)
     nBoundaries = size(boundaryNames, 1)
 
-    cells = Array{Array{Int64, 1}, 1}(undef, nCells)
-    cVols = zeros(nCells)
-    cCenters = Array{Array{Float64, 1}, 1}(undef, nCells)
-    cellSizes = Matrix{Float64}(undef, nCells, 3)
+    cells = Array{Array{Int64, 1}, 1}(undef, nCells)                # Indices of faces that make up a cell
+    cVols = zeros(nCells)                                           # Cell Volumes
+    cCenters = Array{Array{Float64, 1}, 1}(undef, nCells)           # Cell Centroids
+    cellSizes = Matrix{Float64}(undef, nCells, 3)                   # Cell sizes (x,y,z) direction
 
-    faces = Array{Array{Int64, 1}, 1}(undef, nFaces)
-    fAVecs = Array{Array{Float64, 1}, 1}(undef, nFaces)
-    fCenters = Array{Array{Float64, 1}, 1}(undef, nFaces)
-    boundaryFaces = Array{Array{Int64, 1}, 1}(undef, nBoundaries)
+    faces = Array{Array{Int64, 1}, 1}(undef, nFaces)                # Indices of cells adjacent to each face always owner first, then neighbour
+    fAVecs = Array{Array{Float64, 1}, 1}(undef, nFaces)             # Face Area Vectors
+    fCenters = Array{Array{Float64, 1}, 1}(undef, nFaces)           # Face Centroids
+    boundaryFaces = Array{Array{Int64, 1}, 1}(undef, nBoundaries)   # Indices of faces that make up each boundary
 
+    # Calculate face area vectors and face centroids from list of points in each face
     for f in 1:nFaces
         fPts = [ points[pt,:] for pt in OFfaces[f] ]
         fAVecs[f], fCenters[f] = faceAreaCentroid(fPts)
     end
     #fAVecs and fCenters now complete
 
+    # Build 'cells' and 'faces' arrays from info from 'owner' file
     nOwners = size(owner, 1)
     for f in 1:nOwners
         ownerCell = owner[f]
@@ -389,6 +461,7 @@ function OpenFOAMMesh(polyMeshPath)
         faces[f] = [ownerCell, -1]
     end
 
+    # Finish building 'cells' and 'faces' arrays, adding info from 'neighbour' file
     nNeighbours = size(neighbour, 1)
     for f in 1:nNeighbours
         neighbourCell = neighbour[f]
@@ -402,6 +475,7 @@ function OpenFOAMMesh(polyMeshPath)
     end
     # fAVecs, fCenters, faces, cells now complete
 
+    # For each cell, use the face area vectors and face centroids for all of its faces, to calculate it's volume and centroid location
     for c in 1:nCells
         pts = []
         for f in cells[c]
@@ -418,7 +492,7 @@ function OpenFOAMMesh(polyMeshPath)
     end
     # fAVecs, fCenters, faces, cells, cVols, cCenters now complete
 
-    # Add boundaries
+    # Create boundaryFaces array
     for b in 1:nBoundaries
         startF = boundaryStartFaces[b]
         endF = startF + boundaryNumFaces[b] - 1
@@ -426,6 +500,7 @@ function OpenFOAMMesh(polyMeshPath)
     end
 
     # Compute cell sizes in the x, y, z directions
+    # In the past, cell sizes were used for a shitty CFL calculation, may be able to get rid of them now
     maxCoords = [ -1000000.0, -1000000.0, -1000000.0 ]
     minCoords = [ 1000000.0, 1000000.0, 1000000.0 ]
     for c in 1:nCells
@@ -455,7 +530,5 @@ function OpenFOAMMesh(polyMeshPath)
         end
     end
 
-    mesh = Mesh(cells, cVols, cCenters, cellSizes, faces, fAVecs, fCenters, boundaryFaces)
-
-    return mesh
+    return Mesh(cells, cVols, cCenters, cellSizes, faces, fAVecs, fCenters, boundaryFaces)
 end
