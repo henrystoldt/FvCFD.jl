@@ -331,7 +331,9 @@ function OpenFOAMMesh_findCellPts(polyMeshPath)
             end
             return true
         end
-        addFace(cells[c][1])
+        # Line to change the number on to get best output quality, until vtk bug is fixed
+        # Best options for each mesh: Wedge - 3
+        addFace(cells[c][3])
 
         # Add any faces with no points in common with existing faces
         for f in cells[c]
@@ -355,6 +357,9 @@ function OpenFOAMMesh_findCellPts(polyMeshPath)
     return points, cellPtIndices
 end
 
+
+#Reads in mesh path
+# Returns a data structure Mesh, with: Cells, cell volumes, cell centers, cell sizes, faces, face vectors, face sizes, & boundary faces
 function OpenFOAMMesh(polyMeshPath)
     points, OFfaces, owner, neighbour, boundaryNames, boundaryNumFaces, boundaryStartFaces = readOpenFOAMMesh(polyMeshPath)
     nCells = maximum(owner)

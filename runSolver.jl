@@ -29,7 +29,7 @@ boundaryConditions = [ emptyBoundary, [], supersonicInletBoundary, [P, T, U..., 
 
 mesh = OpenFOAMMesh(meshPath)
 cellPrimitives = initializeUniformSolution3D(mesh, P, T, U...)
-unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00000001, endTime=0.005, outputInterval=0.005, targetCFL=0.5)
+unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00000001, endTime=0.005, outputInterval=0.005, targetCFL=0.5, silent=false)
 
 ### Forward Step ###
 # Freestream Conditions (Mach 3)
