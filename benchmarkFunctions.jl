@@ -1,3 +1,5 @@
+''' File used to benchmark the performance of individual functions and different versions of those functions to improve solver performance '''
+
 using Profile
 using ProfileView #Doesn't want to install on my work ubuntu desktop for some reason
 using BenchmarkTools
