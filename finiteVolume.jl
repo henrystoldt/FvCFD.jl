@@ -9,7 +9,7 @@ include("dataStructures.jl")
 __precompile__()
 
 ######################### Initialization ###########################
-# Returns cellPrimitives matrix
+# Returns cellPrimitives matrix for uniform solution
 function initializeUniformSolution3D(mesh, P, T, Ux, Uy, Uz)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
 
@@ -40,6 +40,7 @@ end
 #     return maxCFL
 # end
 
+# Calculates CFL at each cell. Expects sln.cellState, sln.cellPrimitives and sln.faceFluxes to be up to date
 function CFL!(CFL, mesh::Mesh, sln::SolutionState, dt=1, gamma=1.4, R=287.05)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
 
@@ -80,6 +81,7 @@ end
 ######################### Gradient Computation #######################
 #TODO: make all these function return a single array if you pass in a single value
 #TODO: LSQ Gradient
+# Non-functional
 function leastSqGrad(mesh::Mesh, matrix)
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
@@ -91,18 +93,22 @@ function leastSqGrad(mesh::Mesh, matrix)
     return result
 end
 
-# Will take the gradient of (scalar) data provided in matrix form
-# Cell      x1      x2      x3
-# Cell 1    x1_1    x2_1    x3_1
-# Cell 2    x1_2    x2_2    x3_2
-# ...
-# and output a THREE-DIMENSIONAL gradient arrays of the following form
-# Cell      x1          x2          x3
-# Cell 1    grad(x1)_1  grad(x2)_1  grad(x3)_1
-# Cell 2    grad(x1)_2  grad(x2)_2  grad(x3)_2
-# ...
-# Where each grad(xa)_b is made up of THREE elements for the (x,y,z) directions
-#Ex. Gradient @ cell 1 of P would be: greenGaussGrad(mesh, P)[1, 1, :]
+"""
+    Takes the gradient of (scalar) data provided in matrix form (passed into arugment 'matrix'):
+    Cell      x1      x2      x3
+    Cell 1    x1_1    x2_1    x3_1
+    Cell 2    x1_2    x2_2    x3_2
+    ...
+    (where x1, x2, and x3 are arbitrary scalars)
+    and output a THREE-DIMENSIONAL gradient arrays of the following form
+    Cell      x1          x2          x3
+    Cell 1    grad(x1)_1  grad(x2)_1  grad(x3)_1
+    Cell 2    grad(x1)_2  grad(x2)_2  grad(x3)_2
+    ...
+    Where each grad(xa)_b is made up of THREE elements for the (x,y,z) directions
+
+    Ex. Gradient @ cell 1 of P would be: greenGaussGrad(mesh, P)[1, 1, :]
+"""
 function greenGaussGrad(mesh::Mesh, matrix::AbstractArray{Float64, 2}, valuesAtFaces=false)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     nVars = size(matrix, 2)
@@ -148,19 +154,20 @@ function greenGaussGrad(mesh::Mesh, matrix::AbstractArray{Float64, 2}, valuesAtF
 end
 
 ####################### Face value interpolation ######################
-
-# Interpolates to all INTERIOR faces
-# Arbitrary value matrix interpolation
-# Example Input Matrix:
-# Cell      x1      x2      x3
-# Cell 1    y1_1    y2_1    y3_1
-# Cell 2    y1_2    y2_2    y3_2
-# ...
-# Ouptus a matrix of the following form
-# Cell      x1          x2          x3
-# Face 1    y1_f1    y2_f1    y3_f1
-# Face 2    y1_f2    y2_f2    y3_f2
-# ...
+"""
+    Interpolates to all INTERIOR faces
+    Arbitrary value matrix interpolation
+    Example Input Matrix:
+    Cell      x1       x2       x3
+    Cell 1    x1_c1    x2_c1    x3_c1
+    Cell 2    x1_c2    x2_c2    x3_c2
+    ...
+    Outputs a matrix of the following form
+    Cell      x1       x2       x3
+    Face 1    x1_f1    x2_f1    x3_f1
+    Face 2    x1_f2    x2_f2    x3_f2
+    ...
+"""
 function linInterp_3D(mesh::Mesh, matrix::AbstractArray{Float64, 2}, faceVals=zeros(2,2))
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     nVars = size(matrix, 2)
@@ -176,7 +183,7 @@ function linInterp_3D(mesh::Mesh, matrix::AbstractArray{Float64, 2}, faceVals=ze
         c1 = mesh.faces[f][1]
         c2 = mesh.faces[f][2]
 
-        #TODO: Precompute these distances
+        #TODO: Precompute these distances?
         c1Dist = mag(mesh.cCenters[c1] .- mesh.fCenters[f])
         c2Dist = mag(mesh.cCenters[c2] .- mesh.fCenters[f])
         totalDist = c1Dist + c2Dist
@@ -189,7 +196,7 @@ function linInterp_3D(mesh::Mesh, matrix::AbstractArray{Float64, 2}, faceVals=ze
     return faceVals
 end
 
-# Returns matrix of values
+# Similar to linInterp_3D. Instead of linearly interpolating, selects the maximum value of the two adjacent cell centers as the face value
 function maxInterp(mesh::Mesh, vars...)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
 
@@ -209,6 +216,7 @@ function maxInterp(mesh::Mesh, vars...)
     return faceVals
 end
 
+# Similar to linInterp_3D. Instead of linearly interpolating, calculates the change (delta) of each variable across each face (required for JST method)
 function faceDeltas(mesh::Mesh, sln::SolutionState)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     nVars = size(sln.cellState, 2)
@@ -231,42 +239,49 @@ end
 # TODO: MUSCL Interp
 
 ######################### Convective Term Things #######################
-# Returns the fractional portion of the maccormack aritificial diffusivity term (Eq. 6.58 in Anderson).
-# Result must still be multiplied by (nextU - 2U + U) for each flux variable.
+# Calculates eps2 and eps4, the second and fourth-order artificial diffusion coefficients used in the JST method
 function unstructured_JSTEps(mesh::Mesh, sln::SolutionState, k2=0.5, k4=(1/32), c4=1, gamma=1.4, R=287.05)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
 
+    # Calc Pressure Gradient
     @views P = sln.cellPrimitives[:,1]
     P = reshape(P, nCells, :)
     gradP = greenGaussGrad(mesh, P, false)
     gradP = reshape(gradP, nCells, 3)
 
-    sj = zeros(nCells)
-    rj = zeros(nCells)
-    sjCount = zeros(nCells)
+    sj = zeros(nCells) # 'Sensor' used to detect shock waves and apply second-order artificial diffusion to stabilize solution in their vicinity
+    sjCount = zeros(nCells) # Store the number of sj's calculated for each cell, cell-center value will be the average of all of them
     @inbounds @fastmath for f in 1:nFaces-nBdryFaces
-        # Calculate sj, rj, eps2, eps4
+        # At each internal face, calculate sj, rj, eps2, eps4
         ownerCell = mesh.faces[f][1]
         neighbourCell = mesh.faces[f][2]
         d = mesh.cCenters[neighbourCell] .- mesh.cCenters[ownerCell]
 
+        # 1. Find pressure at owner/neighbour cells
         oP = P[ownerCell]
         nP = P[neighbourCell]
+
+        # 2. Calculate pressures at 'virtual' far-owner and far-neighbour cells using the pressure gradient (2nd-order)
         @views farOwnerP = nP - 2*dot(d, gradP[ownerCell, :])
         @views farNeighbourP = oP + 2*dot(d, gradP[neighbourCell, :])
+
+        # 3. With the known and virtual values, can calculate sj at each cell center. 
         sj[ownerCell] += (abs( nP - 2*oP + farOwnerP )/ max( abs(nP - oP) + abs(oP - farOwnerP), 0.0000000001))^2
         sjCount[ownerCell] += 1
         sj[neighbourCell] += (abs( oP - 2*nP + farNeighbourP )/ max( abs(farNeighbourP - nP) + abs(nP - oP), 0.0000000001))^2
         sjCount[neighbourCell] += 1
     end
 
+    rj = zeros(nCells) # 'Spectral radius' -> maximum possible speed of wave propagation relative to mesh
     @inbounds @fastmath for c in 1:nCells
         @views rj[c] = mag(sln.cellPrimitives[c,3:5]) +  sqrt(gamma * R * sln.cellPrimitives[c,2]) # Velocity magnitude + speed of sound
-        sj[c] /= sjCount[c] # Average the sj's computed by each face for each cell
+        sj[c] /= sjCount[c] # Average the sj's computed at each face for each cell
     end
 
+    # Values of rj, sj at faces is the maximum of their values at the two adjacent cell centers
     rjsjF = maxInterp(mesh, rj, sj) # column one is rj, column two is sj, both at face centers
 
+    # Calculate eps2 and eps4
     eps2 = zeros(nFaces)
     eps4 = zeros(nFaces)
     for f in 1:nFaces-nBdryFaces
@@ -277,20 +292,25 @@ function unstructured_JSTEps(mesh::Mesh, sln::SolutionState, k2=0.5, k4=(1/32), 
     return eps2, eps4
 end
 
-# Requires correct cellState and cellPrimitives as input
-# Classical JST, central differencing + artificial diffusion. Each face treated as 1D
+"""
+    Inputs: Expects that sln.cellState, sln.cellPrimitives and sln.cellFluxes are up-to-date
+    Outputs: Updates sln.faceFluxes and sln.cellResiduals
+    Returns: Updated sln.cellResiduals
+
+    Applies classical JST method: central differencing + JST artificial diffusion. Each face treated as a 1D problem
+    http://aero-comlab.stanford.edu/Papers/jst_2015_updated_07_03_2015.pdf -  see especially pg.5-6
+"""
 function unstructured_JSTFlux(mesh::Mesh, sln::SolutionState, boundaryConditions, gamma, R)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     nVars = size(sln.cellState, 2)
 
-    # Centrally differenced fluxes
+    #### 1. Centrally differenced fluxes ####
     linInterp_3D(mesh, sln.cellFluxes, sln.faceFluxes)
 
-    #### Add JST artificial Diffusion ####
+    #### 2. Add JST artificial Diffusion ####
     fDeltas = faceDeltas(mesh, sln)
     fDGrads = greenGaussGrad(mesh, fDeltas, false)
     eps2, eps4 = unstructured_JSTEps(mesh, sln, 0.5, (1.2/32), 1, gamma, R)
-    # nCells = nFaces - 1
 
     diffusionFlux = zeros(nVars)
     @inbounds @fastmath for f in 1:nFaces-nBdryFaces
@@ -313,16 +333,18 @@ function unstructured_JSTFlux(mesh::Mesh, sln::SolutionState, boundaryConditions
         end
     end
 
-    #### Boundaries ####
+    #### 3. Apply boundary conditions ####
     for b in 1:nBoundaries
         bFunctionIndex = 2*b-1
         boundaryConditions[bFunctionIndex](mesh, sln, b, boundaryConditions[bFunctionIndex+1])
     end
 
+    #### 4. Integrate fluxes at in/out of each cell (sln.faceFluxes) to get change in cell center values (sln.fluxResiduals) ####
     return integrateFluxes_unstructured3D(mesh, sln, boundaryConditions)
 end
 
 ######################### TimeStepping #################################
+# Calculate sln.cellPrimitives and sln.cellFluxes from sln.cellState
 function decodeSolution_3D(sln::SolutionState, R=287.05, Cp=1005)
     nCells = size(sln.cellState, 1)
     for c in 1:nCells
@@ -333,6 +355,9 @@ function decodeSolution_3D(sln::SolutionState, R=287.05, Cp=1005)
     end
 end
 
+'''
+    Calculates sln.fluxResiduals from sln.faceFluxes
+'''
 function integrateFluxes_unstructured3D(mesh::Mesh, sln::SolutionState, boundaryConditions)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
 
@@ -370,13 +395,11 @@ function integrateFluxes_unstructured3D(mesh::Mesh, sln::SolutionState, boundary
 end
 
 ######################### Boundary Conditions #########################
-# Can work as a supersonic inlet if initial conditions are set to the inlet conditions
-# Input: [ Static Pressure, Static Temperture, Ux, Uy, Uz, Cp ]
-# Input: [ P, T, Ux, Uy, Uz, Cp ]
-# Input [ P, T, Ux, Uy, Uz, Cp ]
+# The job of the BC functions is to calculate/enforce face fluxes at boundary faces.
+# The JST method only calculates fluxes at internal faces, then these conditions are applied to calculate them at the boundaries
+
+# InletConditions: [ Static Pressure, Static Temperture, Ux, Uy, Uz, Cp ]
 function supersonicInletBoundary(mesh::Mesh, sln::SolutionState, boundaryNumber, inletConditions)
-
-
     P, T, Ux, Uy, Uz, Cp = inletConditions
     rho = idealGasRho(T, P)
     xMom, yMom, zMom = [Ux, Uy, Uz] .* rho
@@ -391,7 +414,7 @@ function supersonicInletBoundary(mesh::Mesh, sln::SolutionState, boundaryNumber,
     end
 end
 
-# Input: [ totalPressure, totalTemp, nx, ny, nz, gamma, R, Cp ]
+# InletConditions: [ totalPressure, totalTemp, nx, ny, nz, gamma, R, Cp ]
 # Where n is the unit vector representing the direction of inlet velocity
 # Using method from FUN3D solver
 # TODO: Allow for variation of R and gamma
@@ -484,6 +507,36 @@ function emptyBoundary(mesh::Mesh, sln::SolutionState, boundaryNumber, _)
 end
 
 ######################### Solvers #######################
+"""
+    Do CFD!
+
+    Arguments:
+        mesh: see dataStructuresDefinitions.md / dataStructures.jl
+        meshPath:           (string) path to folder where mesh is stored
+        cellPrimitives:     initial cell-center conditions, see dataStructuresDefinitions.md / dataStructures.jl
+        boundaryConditions: Array of alternating boundary condition function references and associated boundary condition parameters: 
+            Ex: [ emptyBoundary, [], supersonicInletBoundary, [P, T, Ux, Uy, Uz, Cp], zeroGradientBoundary, [], symmetryBoundary, [], zeroGradientBoundary, [], wallBoundary, [] ]
+            Order of BC's must match the order of boundaries defined in the mesh's 'boundaries' file
+        timeIntegrationFn:  The desired time integration function from timeDiscretizations.jl (should update sln.cellState, sln.cellPrimitives, and sln.cellFluxes based on their old values and sln.cellResiduals (obtained from fluxFunction))
+        fluxFunction:       The desired function to calculate sln.cellResiduals from sln.cellState, sln.cellPrimitives, and sln.cellFluxes
+        initDt:             Initial time step (s)
+        endTime:            Simulation End Time (s). Start Time = 0
+        outputInterval:     Writes solution/restart files every outputInterval seconds of simulation time
+        targetCFL:          Target maximum CFL in the computation domain (time step will be adjusted based on this value)
+        gamma/R/Cp:         Fluid properties
+        silent:             Controls whether progress is written to console (can slow down simulation slightly for very simple cases)
+        restart:            Controls whether restarting from a restart file
+        createRestartFile:  Controls whether to write restart files. These are overwritten every time they are outputted.
+        createVTKOutput:    Controls whether to write .vtk output. These are not overwritten every time they are outputted.
+        restartFiles:       (string) path to restart file to read/write from
+
+    Returns:
+        sln.cellPrimitives at end of simulation
+
+    Outputs:
+        restart file (if specified)
+        .vtk files (is specified)
+"""
 function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}, boundaryConditions, timeIntegrationFn=forwardEuler,
         fluxFunction=unstructured_JSTFlux; initDt=0.001, endTime=0.14267, outputInterval=0.01, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005,
         silent=true, restart=false, createRestartFile=true, createVTKOutput=true, restartFile="JuliaCFDRestart.txt")
