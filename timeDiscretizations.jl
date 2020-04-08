@@ -66,6 +66,7 @@ function ShuOsher(mesh, fluxResidualFn, sln, boundaryConditions, gamma, R, Cp, d
 end
 
 ######################### Local Time Stepping ###########################
+# Incomplete, will be commented more fully once it produces nice solutions and the implementation is finalized
 function LTSEuler(mesh, fluxResidualFn, sln, boundaryConditions, gamma, R, Cp, dt)
     targetCFL = dt[1]
 
