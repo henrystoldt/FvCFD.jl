@@ -6,6 +6,7 @@ mutable struct SolutionState
     cellFluxes::Matrix{Float64}
     cellPrimitives::Matrix{Float64}
     fluxResiduals::Matrix{Float64}
+    faceState::Matrix{Float64}
     faceFluxes::Matrix{Float64}
 end
 

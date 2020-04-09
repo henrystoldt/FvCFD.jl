@@ -38,6 +38,7 @@ solutionState =
    cellFluxes,       # massFluxes, momentumFluxes, energyFluxes at cell centers
    cellPrimitives,   # P, T, U at cell centers
    fluxResiduals,    # d/dt of each "cellState" variable (flux balances for each cell)
+   faceState         # rho, rhoU, eV2 (conserved variables) at face centers. Used primarily for holding linInterp results
    faceFluxes        # massFluxes, momentumFluxes, and energyFluxes at face centers
 ]  
 ```

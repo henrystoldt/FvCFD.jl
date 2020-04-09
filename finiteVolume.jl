@@ -634,9 +634,10 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
     cellState = encodePrimitives3D(cellPrimitives, R, Cp)
     cellFluxes = zeros(nCells, nFluxes)
     fluxResiduals = zeros(nCells, nVars)
+    faceState = zeros(nFaces, nVars)
     faceFluxes = zeros(nFaces, nFluxes)
     # Initialize solution state
-    sln = SolutionState(cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes)
+    sln = SolutionState(cellState, cellFluxes, cellPrimitives, fluxResiduals, faceState, faceFluxes)
 
     # Calculates cell fluxes, primitives from cell state
     decodeSolution_3D(sln, R, Cp)
