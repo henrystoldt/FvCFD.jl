@@ -18,9 +18,9 @@ function calPerfectT(e, Cp=1005, R=287.05)
 end
 
 ######################### Public functions (called by finiteVolume.jl) #######################
-'''
+#=
     Calculate primitives from cellState
-'''
+=#
 function decodePrimitives3D!(primitives, cellState, R=287.05, Cp=1005)
     ## Velocity ##
     # Ux = xMom/rho
@@ -41,7 +41,7 @@ function decodePrimitives3D!(primitives, cellState, R=287.05, Cp=1005)
     primitives[1] = idealGasP(cellState[1], primitives[2], R)
 end
 
-'''
+#=
     Calculate cellState from cellPrimitives
 
     Arguments:
@@ -51,7 +51,7 @@ end
 
     Returns:
         cellState: 2D vector of conserved variable values: see dataStructuresDefinitions.md
-'''
+=#
 function encodePrimitives3D(cellPrimitives::Array{Float64, 2}, R=287.05, Cp=1005)
     nCells = size(cellPrimitives, 1)
 
@@ -65,8 +65,8 @@ function encodePrimitives3D(cellPrimitives::Array{Float64, 2}, R=287.05, Cp=1005
     return cellState
 end
 
-'''
-    Calculates fluxes of transported variables at cell center, from 
+#=
+    Calculates fluxes of transported variables at cell center, from
     Arguments:
         fluxes: (output) vector of cell center fluxes (to be calculated/populated)
         prim:   (input) vector of cell center primitives
@@ -78,7 +78,7 @@ end
     Notes:
         See dataStructuresDefinitions.md for definitions of state, primitives, etc...
 
-'''
+=#
 function calculateFluxes3D!(fluxes, prim, state)
     #### Mass Fluxes ####
     fluxes[1] = state[2]

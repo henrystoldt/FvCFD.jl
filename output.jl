@@ -3,9 +3,9 @@ using DelimitedFiles
 include("mesh.jl")
 pyplot()
 
-"""
+#=
     Displays surface plot of cellValue for a 2D mesh.
-"""
+=#
 function plot2DResult(mesh, cellValue)
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
@@ -49,7 +49,7 @@ function outputVTK(meshPath, cellPrimitives, fileName="solution.vtk")
             write(f, "$x $y $z\n")
         end
 
-        #### Output CELLS, and CELL_TYPES ####        
+        #### Output CELLS, and CELL_TYPES ####
         # Count and output the total number of points that we will have to output to make up all cells
         totalCellListSize = nCells
         for c in 1:nCells
@@ -102,7 +102,7 @@ function outputVTK(meshPath, cellPrimitives, fileName="solution.vtk")
     end
 end
 
-"""
+#=
     Calls above functions to output restart and .vtk files, if desired.
 
     Inputs:
@@ -114,7 +114,7 @@ end
 
     Will overwrite existing restart files
     Will not overwrite existing .vtk files
-"""
+=#
 function updateSolutionOutput(cellPrimitives, restartFile, meshPath, createRestartFile, createVTKOutput)
     if createRestartFile
         println("Writing Restart File: $restartFile")
