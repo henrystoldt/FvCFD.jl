@@ -1,4 +1,5 @@
-''' See dataStructuresDefinitions.md for explanation '''
+#= See dataStructuresDefinitions.md for explanation
+=#
 
 mutable struct SolutionState
     cellState::Matrix{Float64}

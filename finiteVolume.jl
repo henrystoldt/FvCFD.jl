@@ -82,18 +82,81 @@ end
 #TODO: make all these function return a single array if you pass in a single value
 #TODO: LSQ Gradient
 # Non-functional
-function leastSqGrad(mesh::Mesh, matrix)
-    cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
-    nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
-    bdryFaceIndices = Array(nFaces-nBdryFaces:nFaces)
+function leastSqGrad(mesh::Mesh, matrix::AbstractArray{Float64, 2}, stencil=zeros(2,2))
+    # Stencil should be a list of lists, with each sublist containing the cells contained in the stencil of the main cell
 
-    result = []
-    for vals in values
+
+    #cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
+    #bdryFaceIndices = Array(nFaces-nBdryFaces:nFaces)
+
+    nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
+    nVars = size(matrix, 2) # Returns the length of the second dimension of "matrix"
+
+    grad = zeros(nCells, nVars, 3)
+
+    L11 = zeros(nCells,nVars)
+    L12 = zeros(nCells,nVars)
+    L13 = zeros(nCells,nVars)
+    L22 = zeros(nCells,nVars)
+    L23 = zeros(nCells,nVars)
+    L33 = zeros(nCells,nVars)
+    L1f = zeros(nCells,nVars)
+    L2f = zeros(nCells,nVars)
+    L3f = zeros(nCells,nVars)
+
+    @fastmath for f in 1:nFaces-nBdryFaces
+
+        c1 = mesh.faces[f][1]
+        c2 = mesh.faces[f][2]
+
+        dx = mesh.cCenter[c2][1] - mesh.cCenter[c1][1]
+        dy = mesh.cCenter[c2][2] - mesh.cCenter[c1][2]
+        dz = mesh.cCenter[c2][3] - mesh.cCenter[c1][3]
+
+        weight = 1 / sqrt(dx*dx + dy*dy + dz*dz)
+
+        wdx = weight * dx
+        wdy = weight * dy
+        wdz = weight * dz
+
+        for v in 1:nVars
+            dv = matrix[c2,v] - matrix[c1,v]
+            wdv = weight * dv
+
+            L11[c1,v] += wdx^2
+            L12[c1,v] += wdx * wdy
+            L13[c1,v] += wdx * wdz
+            L22[c1,v] += wdy^2
+            L23[c1,v] += wdy * wdz
+            L33[c1,v] += wdz^2
+
+            L1f[c1,v] += wdx * wdv
+            L2f[c1,v] += wdy * wdv
+            L3f[c1,v] += wdz * wdv
+
+            L11[c2,v] += wdx^2
+            L12[c2,v] += wdx * wdy
+            L13[c2,v] += wdx * wdz
+            L22[c2,v] += wdy^2
+            L23[c2,v] += wdy * wdz
+            L33[c2,v] += wdz^2
+
+            L1f[c2,v] += wdx * wdv
+            L2f[c2,v] += wdy * wdv
+            L3f[c2,v] += wdz * wdv
+
+        end
+
     end
-    return result
+
+    # Deal with boundary faces, and add them to the matrix vectors
+
+
+
+    return grad
 end
 
-"""
+#=
     Takes the gradient of (scalar) data provided in matrix form (passed into arugment 'matrix'):
     Cell      x1      x2      x3
     Cell 1    x1_1    x2_1    x3_1
@@ -108,7 +171,7 @@ end
     Where each grad(xa)_b is made up of THREE elements for the (x,y,z) directions
 
     Ex. Gradient @ cell 1 of P would be: greenGaussGrad(mesh, P)[1, 1, :]
-"""
+=#
 function greenGaussGrad(mesh::Mesh, matrix::AbstractArray{Float64, 2}, valuesAtFaces=false)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     nVars = size(matrix, 2)
@@ -154,7 +217,7 @@ function greenGaussGrad(mesh::Mesh, matrix::AbstractArray{Float64, 2}, valuesAtF
 end
 
 ####################### Face value interpolation ######################
-"""
+#=
     Interpolates to all INTERIOR faces
     Arbitrary value matrix interpolation
     Example Input Matrix:
@@ -167,7 +230,7 @@ end
     Face 1    x1_f1    x2_f1    x3_f1
     Face 2    x1_f2    x2_f2    x3_f2
     ...
-"""
+=#
 function linInterp_3D(mesh::Mesh, matrix::AbstractArray{Float64, 2}, faceVals=zeros(2,2))
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     nVars = size(matrix, 2)
@@ -292,14 +355,14 @@ function unstructured_JSTEps(mesh::Mesh, sln::SolutionState, k2=0.5, k4=(1/32), 
     return eps2, eps4
 end
 
-"""
+#=
     Inputs: Expects that sln.cellState, sln.cellPrimitives and sln.cellFluxes are up-to-date
     Outputs: Updates sln.faceFluxes and sln.cellResiduals
     Returns: Updated sln.cellResiduals
 
     Applies classical JST method: central differencing + JST artificial diffusion. Each face treated as a 1D problem
     http://aero-comlab.stanford.edu/Papers/jst_2015_updated_07_03_2015.pdf -  see especially pg.5-6
-"""
+=#
 function unstructured_JSTFlux(mesh::Mesh, sln::SolutionState, boundaryConditions, gamma, R)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     nVars = size(sln.cellState, 2)
@@ -355,9 +418,9 @@ function decodeSolution_3D(sln::SolutionState, R=287.05, Cp=1005)
     end
 end
 
-'''
+#=
     Calculates sln.fluxResiduals from sln.faceFluxes
-'''
+=#
 function integrateFluxes_unstructured3D(mesh::Mesh, sln::SolutionState, boundaryConditions)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
 
@@ -507,7 +570,7 @@ function emptyBoundary(mesh::Mesh, sln::SolutionState, boundaryNumber, _)
 end
 
 ######################### Solvers #######################
-"""
+#=
     This is where the magic happens!
     Do CFD!
 
@@ -537,7 +600,7 @@ end
     Outputs:
         restart file (if specified)
         .vtk files (is specified)
-"""
+=#
 function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}, boundaryConditions, timeIntegrationFn=forwardEuler,
         fluxFunction=unstructured_JSTFlux; initDt=0.001, endTime=0.14267, outputInterval=0.01, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005,
         silent=true, restart=false, createRestartFile=true, createVTKOutput=true, restartFile="JuliaCFDRestart.txt")

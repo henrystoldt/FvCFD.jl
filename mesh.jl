@@ -31,7 +31,7 @@ function triangleArea(points::Array{Array{Float64, 1}})
     return fAVec
 end
 
-"""
+#=
     Calculates face area vector and centroid from the points that make up the face
     Points must be ordered sequentially
 
@@ -40,7 +40,7 @@ end
         2. Area and centroid is computed for each subtriangle
         3. Areas vectors are summed and returned
         4. The centroid returned is obtained from an area-weighted of sum of the subtriangle centroids
-"""
+=#
 function faceAreaCentroid(points::Array{Array{Float64, 1}})
     gC = geometricCenter(points)
     nPts = size(points, 1)
@@ -67,7 +67,7 @@ function faceAreaCentroid(points::Array{Array{Float64, 1}})
     return fAVec, centroid
 end
 
-"""
+#=
     Calculates cell volume (scalar) and centroid (vector) from the points and face area vectors (fAVecs) that make up the cell
         fAVecs can be computed using the faceAreaCentroids function
 
@@ -75,7 +75,7 @@ end
         1. Splits cell into polygonal pyramids, each incorporating a single face and the geometric center of the cell
         2. Computes volume and centroid of each sub-pyramid
         3. Resulting volume is sum of sub-pyramid volumes, centroid is the volume-weighted sum of sub-pyramid centroids
-"""
+=#
 function cellVolCentroid(points, fAVecs, faceCentroids)
     gC = geometricCenter(points)
     nFaces = size(fAVecs,1)
@@ -134,7 +134,7 @@ function isNumber(str)
 end
 
 ######################### Parse OpenFOAM Meshes ###########################
-"""
+#=
     In the points, faces, owner, and neighbour files, the beginning of useful information in the file looks like this:
 
         ...
@@ -151,7 +151,7 @@ end
 
     The 5135 indicates how many lines of information follow it.
     This function would return 5135, and the line number of the first piece of information in the file ((line number of 5135) + 2)
-"""
+=#
 function OFFile_FindNItems(fileLines)
     nLines = size(fileLines, 1)
     lineCounter = 1
@@ -168,13 +168,13 @@ function OFFile_FindNItems(fileLines)
     return startLine, itemCount
 end
 
-"""
+#=
     Takes the file path to an OpenFOAM mesh 'points' file, returns a 2D array of point coordinates:
             X   Y   Z
         P1  x1  y1  z1
         P2  x2  y2  z2
         ...
-"""
+=#
 function readOFPointsFile(filePath)
     f = open(filePath)
     pointsLines = readlines(f)
@@ -194,7 +194,7 @@ function readOFPointsFile(filePath)
     return points
 end
 
-"""
+#=
     Takes the file path to an OpenFOAM mesh 'faces' file, returns a 1D array of 1D arrays.
     Each entry in the upper level array represents a single face
     Each face-array contains the indices of the points that make up that face
@@ -202,7 +202,7 @@ end
 
     Example return value:
         [ [face1_pt1Index, face1_pt2Index, face1_pt3Index], [face2_pt1Index, face2_pt2Index, face2_pt3Index, face2_pt4Index], ... ]
-"""
+=#
 function readOFFacesFile(filePath)
     f = open(filePath)
     facesLines = readlines(f)
@@ -227,11 +227,11 @@ function readOFFacesFile(filePath)
     return faces
 end
 
-"""
+#=
     Takes the file path to an OpenFOAM 'owner' file, returns a 1D array of owner cell indices
     Example return value:
         [ face1_ownerCellIndex, face2_ownerCellIndex, ...  ]
-"""
+=#
 function readOFOwnerFile(filePath)
     f = open(filePath)
     ownerLines = readlines(f)
@@ -246,13 +246,13 @@ function readOFOwnerFile(filePath)
     return faceOwnerCells
 end
 
-"""
+#=
     Takes the file path to an OpenFOAM 'neighbour' file, returns a 1D array of neighbour cell indices
     Note that all indices from the file are incremented by 1, to switch from OpenFOAM's 0-based indexing to Julia's 1-based indexing
 
     Example return value:
         [ face1_neighbourCellIndex, face2_neighbourCellIndex, ...  ]
-"""
+=#
 function readOFNeighbourFile(filePath)
     f = open(filePath)
     neighbourLines = readlines(f)
@@ -267,10 +267,10 @@ function readOFNeighbourFile(filePath)
     return faceNeighbourCells
 end
 
-"""
+#=
     Returns index of first line containing str
     Otherwise returns -1
-"""
+=#
 function findInLines(str, lines, startLine)
     nLines = size(lines, 1)
     for i in startLine:nLines
@@ -281,12 +281,12 @@ function findInLines(str, lines, startLine)
     return -1
 end
 
-"""
+#=
     Takes the file path to an OpenFOAM 'boundary' file, returns 3 arrays:
     boundaryNames:          Array of boundary names (strings)
     boundaryNumFaces:       Array containing the number of faces in each boundary
     boundaryStartFaces:     Array containing the index of the first face in the boundary (boundaries always occupy a continuous sequence of face indices, and are usually numbered last)
-"""
+=#
 function readOFBoundaryFile(filePath)
     f = open(filePath)
     bLines = readlines(f)
@@ -312,10 +312,10 @@ function readOFBoundaryFile(filePath)
     return boundaryNames, boundaryNumFaces, boundaryStartFaces
 end
 
-"""
+#=
     Input: Path to an OpenFOAM mesh FOLDER.
     Output: Calls readOFPoints/Faces/Owner/NeighbourFile and returns all of their results (reads all OpenFOAM's mesh file data into arrays)
-"""
+=#
 function readOpenFOAMMesh(polyMeshPath)
     pointsFilePath = "$polyMeshPath/points"
     points = readOFPointsFile(pointsFilePath)
@@ -331,7 +331,7 @@ function readOpenFOAMMesh(polyMeshPath)
     return points, faces, owner, neighbour, boundaryNames, boundaryNumFaces, boundaryStartFaces
 end
 
-"""
+#=
     Function used to find all the points in each cell.
     Not required for CFD, which is face-based, but required for cell-based .vtk file output.
 
@@ -339,7 +339,7 @@ end
     Returns:
         points:         Array of points obtained from readOFPoints()
         cellPtIndices:  Array of arrays, where each subarrary represents a cell, and each entry in a cell's array is the index of one of its points
-"""
+=#
 function OpenFOAMMesh_findCellPts(polyMeshPath)
     points, OFfaces, owner, neighbour, boundaryNames, boundaryNumFaces, boundaryStartFaces = readOpenFOAMMesh(polyMeshPath)
     nCells = maximum(owner)
@@ -421,11 +421,11 @@ function OpenFOAMMesh_findCellPts(polyMeshPath)
     return points, cellPtIndices
 end
 
-"""
+#=
     Reads an OpenFOAM mesh and returns a Mesh object suitable for calculations in JuliaCFD.
 
     Mesh defined in dataStructures.jl, documented in dataStructureDefintions.md
-"""
+=#
 function OpenFOAMMesh(polyMeshPath)
     points, OFfaces, owner, neighbour, boundaryNames, boundaryNumFaces, boundaryStartFaces = readOpenFOAMMesh(polyMeshPath)
     nCells = maximum(owner)
