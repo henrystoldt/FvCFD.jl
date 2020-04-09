@@ -27,7 +27,7 @@ U = [ 694.44, 0, 0 ]
 # meshPath = "Test/OFcoarseWedgeMesh"
 # boundaryConditions = [ emptyBoundary, [], supersonicInletBoundary, [P, T, U..., 1005], zeroGradientBoundary, [], symmetryBoundary, [], zeroGradientBoundary, [], wallBoundary, [] ]
 meshPath = "Test/OFmemesWedgeMesh"
-boundaryConditions = [ symmetryBoundary, [], emptyBoundary, [], supersonicInletBoundary, [P, T, U..., 1005], wallBoundary, [], zeroGradientBoundary, [], zeroGradientBoundary, [] ]
+boundaryConditions = [ symmetryBoundary!, [], emptyBoundary!, [], supersonicInletBoundary!, [P, T, U..., 1005], wallBoundary!, [], zeroGradientBoundary!, [], zeroGradientBoundary!, [] ]
 
 mesh = OpenFOAMMesh(meshPath)
 cellPrimitives = initializeUniformSolution3D(mesh, P, T, U...)

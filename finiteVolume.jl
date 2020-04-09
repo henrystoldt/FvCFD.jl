@@ -462,7 +462,7 @@ end
 # The JST method only calculates fluxes at internal faces, then these conditions are applied to calculate them at the boundaries
 
 # InletConditions: [ Static Pressure, Static Temperture, Ux, Uy, Uz, Cp ]
-function supersonicInletBoundary(mesh::Mesh, sln::SolutionState, boundaryNumber, inletConditions)
+function supersonicInletBoundary!(mesh::Mesh, sln::SolutionState, boundaryNumber, inletConditions)
     P, T, Ux, Uy, Uz, Cp = inletConditions
     rho = idealGasRho(T, P)
     xMom, yMom, zMom = [Ux, Uy, Uz] .* rho
@@ -481,7 +481,7 @@ end
 # Where n is the unit vector representing the direction of inlet velocity
 # Using method from FUN3D solver
 # TODO: Allow for variation of R and gamma
-function subsonicInletBoundary(mesh, sln::SolutionState, boundaryNumber, inletConditions)
+function subsonicInletBoundary!(mesh, sln::SolutionState, boundaryNumber, inletConditions)
     Pt, Tt, nx, ny, nz, gamma, R, Cp = inletConditions
 
     boundaryFluxes = Vector{Float64}(undef, 15)
@@ -509,7 +509,7 @@ function subsonicInletBoundary(mesh, sln::SolutionState, boundaryNumber, inletCo
     end
 end
 
-function pressureOutletBoundary(mesh, sln::SolutionState, boundaryNumber, outletPressure)
+function pressureOutletBoundary!(mesh, sln::SolutionState, boundaryNumber, outletPressure)
     nFluxes = size(sln.cellFluxes, 2)
 
     # Directly extrapolate cell center flux to boundary (zero gradient between the cell center and the boundary)
@@ -533,7 +533,7 @@ function pressureOutletBoundary(mesh, sln::SolutionState, boundaryNumber, outlet
     end
 end
 
-function zeroGradientBoundary(mesh::Mesh, sln::SolutionState, boundaryNumber, _)
+function zeroGradientBoundary!(mesh::Mesh, sln::SolutionState, boundaryNumber, _)
     nFluxes = size(sln.cellFluxes, 2)
 
     # Directly extrapolate cell center flux to boundary (zero gradient between the cell center and the boundary)
@@ -546,7 +546,7 @@ function zeroGradientBoundary(mesh::Mesh, sln::SolutionState, boundaryNumber, _)
     end
 end
 
-function wallBoundary(mesh::Mesh, sln::SolutionState, boundaryNumber, _)
+function wallBoundary!(mesh::Mesh, sln::SolutionState, boundaryNumber, _)
     currentBoundary = mesh.boundaryFaces[boundaryNumber]
     @inbounds for f in currentBoundary
         ownerCell = max(mesh.faces[f][1], mesh.faces[f][2]) #One of these will be -1 (no cell), the other is the boundary cell we want
@@ -563,9 +563,9 @@ function wallBoundary(mesh::Mesh, sln::SolutionState, boundaryNumber, _)
         sln.faceFluxes[f, 13:15] .= 0.0
     end
 end
-symmetryBoundary = wallBoundary
+symmetryBoundary! = wallBoundary!
 
-function emptyBoundary(mesh::Mesh, sln::SolutionState, boundaryNumber, _)
+function emptyBoundary!(mesh::Mesh, sln::SolutionState, boundaryNumber, _)
     return
 end
 
