@@ -47,7 +47,8 @@ function CFL!(CFL, mesh::Mesh, sln::SolutionState, dt=1, gamma=1.4, R=287.05)
     fill!(CFL, 0.0)
     #faceRhoT = linInterp_3D(mesh, hcat(sln.cellState[:,1], sln.cellPrimitives[:,2]))
     sln.faceState[1:nFaces-nBdryFaces,1] = linInterpToFace_3D(mesh, sln, 1, 1)
-    facesT = linInterpToFace_3D(mesh, sln, 3, 2)
+    sln.facePrimitives[1:nFaces-nBdryFaces,2] = linInterpToFace_3D(mesh, sln, 3, 2)
+
     for f in 1:nFaces
         ownerCell = mesh.faces[f][1]
         neighbourCell = mesh.faces[f][2]
@@ -55,26 +56,30 @@ function CFL!(CFL, mesh::Mesh, sln::SolutionState, dt=1, gamma=1.4, R=287.05)
         #faceRho = faceRhoT[f, 1]
         #faceT = faceRhoT[f, 2]
         faceRho = sln.faceState[f,1]
-        faceT = facesT[f,1]
+        faceT = sln.facePrimitives[f,2]
 
 
         # Use cell center values on the boundary
-        if neighbourCell == -1
-            faceRho = sln.cellState[ownerCell, 1]
-            faceT = sln.cellPrimitives[ownerCell, 2]
-        end
+        #if neighbourCell == -1
+        #    faceRho = sln.cellState[ownerCell, 1]
+        #    faceT = sln.cellPrimitives[ownerCell, 2]
+        #end
 
         @views faceVel = sln.faceFluxes[f, 1:3] ./ faceRho
         @views flux = abs(dot(faceVel, mesh.fAVecs[f]))*dt
 
-        if faceT <= 0.0
+        if faceT < 0.0 #Empty boundary will always have a T value of 0
             println("Found it!")
         end
 
         a = sqrt(gamma * R * faceT)
         flux += mag(mesh.fAVecs[f])*a*dt
 
-        CFL[ownerCell] += flux
+        if faceT != 0
+            CFL[ownerCell] += flux
+        end
+
+
         if neighbourCell > -1
             CFL[neighbourCell] += flux
         end
@@ -353,16 +358,14 @@ function unstructured_JSTEps(mesh::Mesh, sln::SolutionState, k2=0.5, k4=(1/32), 
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
 
     # Calc Pressure Gradient
-    #@views P = sln.cellPrimitives[:,1]
-    #P = reshape(P, nCells, :)
-    facesP = linInterpToFace_3D(mesh, sln, 3, 1)
+    @views P = sln.cellPrimitives[:,1]
+    P = reshape(P, nCells, :)
+    sln.facePrimitives[1:nFaces-nBdryFaces,1] = linInterpToFace_3D(mesh, sln, 3, 1)
 
-    boundaryFacesPrimitives = zeros(nBdryFaces, 5)
-    boundaryFacesState = sln.faceState[nFaces-nBdryFaces:nFaces, :]
-    decodePrimitives3D!(boundaryFacesPrimitives, boundaryFacesState)
-    facesP_all = vcat(facesP, boundaryFacesPrimitives[:,1])
+    facesP = zeros(nFaces,1)
+    facesP[:,:] = sln.facePrimitives[:,1]
 
-    gradP = greenGaussGrad(mesh, facesP_all, true)
+    gradP = greenGaussGrad(mesh, facesP, true)
     gradP = reshape(gradP, nCells, 3)
 
     sj = zeros(nCells) # 'Sensor' used to detect shock waves and apply second-order artificial diffusion to stabilize solution in their vicinity
@@ -429,7 +432,7 @@ function unstructured_JSTFlux(mesh::Mesh, sln::SolutionState, boundaryConditions
     #### 2. Centrally differenced fluxes ####
     #linInterp_3D(mesh, sln.cellFluxes, sln.faceFluxes)
     #sln.faceFluxes = linInterp_3D(mesh, sln.cellFluxes, sln.faceFluxes)
-    sln.faceFluxes = linInterpToFace_3D(mesh, sln, 2, -1)
+    sln.faceFluxes[1:nFaces-nBdryFaces,:] = linInterpToFace_3D(mesh, sln, 2, -1)
 
     #### 3. Add JST artificial Diffusion ####
     fDeltas = faceDeltas(mesh, sln)
@@ -532,6 +535,7 @@ function supersonicInletBoundary!(mesh::Mesh, sln::SolutionState, boundaryNumber
     @inbounds for face in currentBoundary
         sln.faceFluxes[face,:] = boundaryFluxes
         sln.faceState[face,:] = [rho, xMom, yMom, zMom, eV2]
+        sln.facePrimitives[face,:] = [P, T, Ux, Uy, Uz]
     end
 end
 
@@ -565,6 +569,7 @@ function subsonicInletBoundary!(mesh, sln::SolutionState, boundaryNumber, inletC
         calculateFluxes3D!(boundaryFluxes, primitives, state)
         sln.faceFluxes[face, :] = boundaryFluxes
         sln.faceState[face, :] = state
+        sln.facePrimitives[face, :] = primitives
     end
 end
 
@@ -596,6 +601,7 @@ function pressureOutletBoundary!(mesh, sln::SolutionState, boundaryNumber, outle
         prims[1,:] = sln.cellPrimitives[ownerCell, :]
         prims[1,1] = outletPressure
         sln.faceState[face,:] = encodePrimitives3D(prims)
+        sln.facePrimitives[face,:] = prims
     end
 end
 
@@ -614,6 +620,7 @@ function zeroGradientBoundary!(mesh::Mesh, sln::SolutionState, boundaryNumber, _
         prims = zeros(1,5)
         prims[1,:] = sln.cellPrimitives[ownerCell,:]
         sln.faceState[face, :] = encodePrimitives3D(prims)
+        sln.facePrimitives[face, :] = prims
     end
 end
 
@@ -651,6 +658,7 @@ function wallBoundary!(mesh::Mesh, sln::SolutionState, boundaryNumber, _)
         prims[1,3:5] = faceTangVelo
 
         sln.faceState[f, :] = encodePrimitives3D(prims)
+        sln.facePrimitives[f, :] = prims
 
     end
 end
@@ -743,6 +751,13 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
         dt = zeros(nCells)
     end
 
+    ## Inital solve of boundary conditions, to prevent CFL from failing on them
+    for b in 1:nBoundaries
+        bFunctionIndex = 2*b-1
+        boundaryConditions[bFunctionIndex](mesh, sln, b, boundaryConditions[bFunctionIndex+1])
+    end
+
+
     currTime = 0
     timeStepCounter = 0
     nextOutputTime = outputInterval
@@ -764,6 +779,7 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
             dt[1] = CFL
         else
             CFL!(CFLvec, mesh, sln, dt, gamma, R)
+
             CFL = maximum(CFLvec)
 
             # If CFL too high, attempt to preserve stability by cutting timestep size in half
