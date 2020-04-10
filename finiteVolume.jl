@@ -45,13 +45,18 @@ function CFL!(CFL, mesh::Mesh, sln::SolutionState, dt=1, gamma=1.4, R=287.05)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
 
     fill!(CFL, 0.0)
-    faceRhoT = linInterp_3D(mesh, hcat(sln.cellState[:,1], sln.cellPrimitives[:,2]))
+    #faceRhoT = linInterp_3D(mesh, hcat(sln.cellState[:,1], sln.cellPrimitives[:,2]))
+    sln.faceState[1:nFaces-nBdryFaces,1] = linInterpToFace_3D(mesh, sln, 1, 1)
+    facesT = linInterpToFace_3D(mesh, sln, 3, 2)
     for f in 1:nFaces
         ownerCell = mesh.faces[f][1]
         neighbourCell = mesh.faces[f][2]
 
-        faceRho = faceRhoT[f, 1]
-        faceT = faceRhoT[f, 2]
+        #faceRho = faceRhoT[f, 1]
+        #faceT = faceRhoT[f, 2]
+        faceRho = sln.faceState[f,1]
+        faceT = facesT[f,1]
+
 
         # Use cell center values on the boundary
         if neighbourCell == -1
@@ -178,7 +183,9 @@ function greenGaussGrad(mesh::Mesh, matrix::AbstractArray{Float64, 2}, valuesAtF
 
     #Interpolate values to faces if necessary
     if valuesAtFaces != true
-        faceVals = linInterp_3D(mesh, matrix)
+        #faceVals = linInterp_3D(mesh, matrix)
+        println("Interpolating inside GG grad is depracated! Please only input matrix of face values!")
+        #faceVals = linInterpToFace_3D(mesh, sln, 3, 1)
     else
         faceVals = matrix
     end
@@ -231,6 +238,44 @@ end
     Face 2    x1_f2    x2_f2    x3_f2
     ...
 =#
+# Rewrite so that it accepts the sln structure, and then writes results into sln.faceState or sln.faceFluxes (or whatever required??)
+#Always writes to sln face. No longer mutates inputs.
+function linInterpToFace_3D(mesh::Mesh, sln::SolutionState, slnPointer, slnPointerCols=-1)
+    nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
+    slnArray = [sln.cellState, sln.cellFluxes, sln.cellPrimitives, sln.fluxResiduals, sln.faceState, sln.faceFluxes]
+
+    matrix = slnArray[slnPointer]
+
+    if slnPointerCols != -1
+        matrix = matrix[:,slnPointerCols]
+    end
+
+    nVars = size(matrix, 2)
+
+    # Make a new matrix if one is not passed in
+    #targetSize = size(sln_array[slnPointer],1)
+
+    faceVals = zeros(nFaces-nBdryFaces, nVars)
+
+    # Boundary face fluxes must be set separately
+    @inbounds @fastmath for f in 1:nFaces-nBdryFaces
+        # Find value at face using linear interpolation
+        c1 = mesh.faces[f][1]
+        c2 = mesh.faces[f][2]
+
+        #TODO: Precompute these distances?
+        c1Dist = mag(mesh.cCenters[c1] .- mesh.fCenters[f])
+        c2Dist = mag(mesh.cCenters[c2] .- mesh.fCenters[f])
+        totalDist = c1Dist + c2Dist
+
+        for v in 1:nVars
+            faceVals[f, v] = matrix[c1, v]*(c2Dist/totalDist) + matrix[c2, v]*(c1Dist/totalDist)
+        end
+    end
+
+    return faceVals
+end
+#=
 function linInterp_3D(mesh::Mesh, matrix::AbstractArray{Float64, 2}, faceVals=zeros(2,2))
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     nVars = size(matrix, 2)
@@ -258,6 +303,7 @@ function linInterp_3D(mesh::Mesh, matrix::AbstractArray{Float64, 2}, faceVals=ze
 
     return faceVals
 end
+=#
 
 # Similar to linInterp_3D. Instead of linearly interpolating, selects the maximum value of the two adjacent cell centers as the face value
 function maxInterp(mesh::Mesh, vars...)
@@ -307,9 +353,16 @@ function unstructured_JSTEps(mesh::Mesh, sln::SolutionState, k2=0.5, k4=(1/32), 
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
 
     # Calc Pressure Gradient
-    @views P = sln.cellPrimitives[:,1]
-    P = reshape(P, nCells, :)
-    gradP = greenGaussGrad(mesh, P, false)
+    #@views P = sln.cellPrimitives[:,1]
+    #P = reshape(P, nCells, :)
+    facesP = linInterpToFace_3D(mesh, sln, 3, 1)
+
+    boundaryFacesPrimitives = zeros(nBdryFaces, 5)
+    boundaryFacesState = sln.faceState[nFaces-nBdryFaces:nFaces, :]
+    decodePrimitives3D!(boundaryFacesPrimitives, boundaryFacesState)
+    facesP_all = vcat(facesP, boundaryFacesPrimitives[:,1])
+
+    gradP = greenGaussGrad(mesh, facesP_all, true)
     gradP = reshape(gradP, nCells, 3)
 
     sj = zeros(nCells) # 'Sensor' used to detect shock waves and apply second-order artificial diffusion to stabilize solution in their vicinity
@@ -375,7 +428,8 @@ function unstructured_JSTFlux(mesh::Mesh, sln::SolutionState, boundaryConditions
 
     #### 2. Centrally differenced fluxes ####
     #linInterp_3D(mesh, sln.cellFluxes, sln.faceFluxes)
-    sln.faceFluxes = linInterp_3D(mesh, sln.cellFluxes, sln.faceFluxes)
+    #sln.faceFluxes = linInterp_3D(mesh, sln.cellFluxes, sln.faceFluxes)
+    sln.faceFluxes = linInterpToFace_3D(mesh, sln, 2, -1)
 
     #### 3. Add JST artificial Diffusion ####
     fDeltas = faceDeltas(mesh, sln)
@@ -673,8 +727,9 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
     fluxResiduals = zeros(nCells, nVars)
     faceState = zeros(nFaces, nVars)
     faceFluxes = zeros(nFaces, nFluxes)
+    facePrimitives = zeros(nFaces, nVars)
     # Initialize solution state
-    sln = SolutionState(cellState, cellFluxes, cellPrimitives, fluxResiduals, faceState, faceFluxes)
+    sln = SolutionState(cellState, cellFluxes, cellPrimitives, fluxResiduals, faceState, faceFluxes, facePrimitives)
 
     # Calculates cell fluxes, primitives from cell state
     decodeSolution_3D(sln, R, Cp)

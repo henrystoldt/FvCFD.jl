@@ -8,6 +8,7 @@ mutable struct SolutionState
     fluxResiduals::Matrix{Float64}
     faceState::Matrix{Float64}
     faceFluxes::Matrix{Float64}
+    facePrimitives::Matrix{Float64}
 end
 
 struct Mesh
