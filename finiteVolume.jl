@@ -367,10 +367,16 @@ function unstructured_JSTFlux(mesh::Mesh, sln::SolutionState, boundaryConditions
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     nVars = size(sln.cellState, 2)
 
-    #### 1. Centrally differenced fluxes ####
+    #### 1. Apply boundary conditions ####
+    for b in 1:nBoundaries
+        bFunctionIndex = 2*b-1
+        boundaryConditions[bFunctionIndex](mesh, sln, b, boundaryConditions[bFunctionIndex+1])
+    end
+
+    #### 2. Centrally differenced fluxes ####
     linInterp_3D(mesh, sln.cellFluxes, sln.faceFluxes)
 
-    #### 2. Add JST artificial Diffusion ####
+    #### 3. Add JST artificial Diffusion ####
     fDeltas = faceDeltas(mesh, sln)
     fDGrads = greenGaussGrad(mesh, fDeltas, false)
     eps2, eps4 = unstructured_JSTEps(mesh, sln, 0.5, (1.2/32), 1, gamma, R)
@@ -396,11 +402,7 @@ function unstructured_JSTFlux(mesh::Mesh, sln::SolutionState, boundaryConditions
         end
     end
 
-    #### 3. Apply boundary conditions ####
-    for b in 1:nBoundaries
-        bFunctionIndex = 2*b-1
-        boundaryConditions[bFunctionIndex](mesh, sln, b, boundaryConditions[bFunctionIndex+1])
-    end
+
 
     #### 4. Integrate fluxes at in/out of each cell (sln.faceFluxes) to get change in cell center values (sln.fluxResiduals) ####
     return integrateFluxes_unstructured3D(mesh, sln, boundaryConditions)
@@ -474,6 +476,7 @@ function supersonicInletBoundary!(mesh::Mesh, sln::SolutionState, boundaryNumber
     currentBoundary = mesh.boundaryFaces[boundaryNumber]
     @inbounds for face in currentBoundary
         sln.faceFluxes[face,:] = boundaryFluxes
+        sln.faceState[face,:] = [rho, xMom, yMom, zMom, eV2]
     end
 end
 
@@ -506,6 +509,7 @@ function subsonicInletBoundary!(mesh, sln::SolutionState, boundaryNumber, inletC
 
         calculateFluxes3D!(boundaryFluxes, primitives, state)
         sln.faceFluxes[face, :] = boundaryFluxes
+        sln.faceState[face, :] = state
     end
 end
 
@@ -530,6 +534,13 @@ function pressureOutletBoundary!(mesh, sln::SolutionState, boundaryNumber, outle
         for d in 1:3
             sln.faceFluxes[face, 12+d] += sln.cellPrimitives[ownerCell, 2+d]*(outletPressure - origP)
         end
+
+
+        #Use cell center values for non-pressure. Alternative is to interpolate and use fluxes?
+        prims = zeros(1,5)
+        prims[1,:] = sln.cellPrimitives[ownerCell, :]
+        prims[1,1] = outletPressure
+        sln.faceState[face,:] = encodePrimitives3D(prims)
     end
 end
 
@@ -543,6 +554,11 @@ function zeroGradientBoundary!(mesh::Mesh, sln::SolutionState, boundaryNumber, _
         for flux in 1:nFluxes
             sln.faceFluxes[face, flux] = sln.cellFluxes[ownerCell, flux]
         end
+
+        #Zero grad, so all cell center values should be the same at the face
+        prims = zeros(1,5)
+        prims[1,:] = sln.cellPrimitives[ownerCell,:]
+        sln.faceState[face, :] = encodePrimitives3D(prims)
     end
 end
 
@@ -552,6 +568,7 @@ function wallBoundary!(mesh::Mesh, sln::SolutionState, boundaryNumber, _)
         ownerCell = max(mesh.faces[f][1], mesh.faces[f][2]) #One of these will be -1 (no cell), the other is the boundary cell we want
 
         faceP = sln.cellPrimitives[ownerCell, 1]
+        faceT = sln.cellPrimitives[ownerCell, 2]
         # Momentum flux is Pressure in each of the normal directions (dot product)
         sln.faceFluxes[f, 4] = faceP
         sln.faceFluxes[f, 8] = faceP
@@ -561,6 +578,25 @@ function wallBoundary!(mesh::Mesh, sln::SolutionState, boundaryNumber, _)
         sln.faceFluxes[f, 1:3] .= 0.0
         # Energy Flux is zero
         sln.faceFluxes[f, 13:15] .= 0.0
+
+        # For states, want to find conserved quantities with normal velocity = 0
+        unitFA = normalize(mesh.fAVecs[f])
+        cellVelo = sln.cellPrimitives[ownerCell, 3:5]
+
+        faceNormalVelo = zeros(3)
+        faceTangVelo = zeros(3)
+        for d in 1:3
+            faceNormalVelo[d] = dot(cellVelo, unitFA) * mesh.fAVecs[f][d]
+            faceTangVelo[d] = cellVelo[d] - faceNormalVelo[d]
+        end
+
+        prims = zeros(1,5)
+        prims[1,1] = faceP
+        prims[1,2] = faceT
+        prims[1,3:5] = faceTangVelo
+
+        sln.faceState[f, :] = encodePrimitives3D(prims)
+
     end
 end
 symmetryBoundary! = wallBoundary!
