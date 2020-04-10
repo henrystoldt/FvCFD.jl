@@ -378,7 +378,7 @@ function unstructured_JSTFlux(mesh::Mesh, sln::SolutionState, boundaryConditions
 
     #### 3. Add JST artificial Diffusion ####
     fDeltas = faceDeltas(mesh, sln)
-    fDGrads = greenGaussGrad(mesh, fDeltas, false)
+    fDGrads = greenGaussGrad(mesh, fDeltas, true)
     eps2, eps4 = unstructured_JSTEps(mesh, sln, 0.5, (1.2/32), 1, gamma, R)
 
     diffusionFlux = zeros(nVars)
