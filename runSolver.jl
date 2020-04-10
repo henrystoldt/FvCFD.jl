@@ -21,17 +21,17 @@ T = 300
 U = [ 694.44, 0, 0 ]
 
 #meshPath = "Test/OFunstructuredWedgeMesh"
-#boundaryConditions = [ emptyBoundary, [], supersonicInletBoundary, [P, T, U..., 1005], zeroGradientBoundary, [], symmetryBoundary, [], zeroGradientBoundary, [], wallBoundary, [] ]
+#boundaryConditions = [ emptyBoundary!, [], supersonicInletBoundary!, [P, T, U..., 1005], zeroGradientBoundary!, [], symmetryBoundary!, [], zeroGradientBoundary!, [], wallBoundary!, [] ]
 # meshPath = "Test/OFwedgeMesh"
 # boundaryConditions = [ supersonicInletBoundary, [P, T, U..., 1005], zeroGradientBoundary, [], symmetryBoundary, [], zeroGradientBoundary, [], wallBoundary, [], emptyBoundary, [] ]
-# meshPath = "Test/OFcoarseWedgeMesh"
-# boundaryConditions = [ emptyBoundary, [], supersonicInletBoundary, [P, T, U..., 1005], zeroGradientBoundary, [], symmetryBoundary, [], zeroGradientBoundary, [], wallBoundary, [] ]
+#meshPath = "Test/OFcoarseWedgeMesh"
+#boundaryConditions = [ emptyBoundary!, [], supersonicInletBoundary!, [P, T, U..., 1005], zeroGradientBoundary!, [], symmetryBoundary!, [], zeroGradientBoundary!, [], wallBoundary!, [] ]
 meshPath = "Test/OFmemesWedgeMesh"
 boundaryConditions = [ symmetryBoundary!, [], emptyBoundary!, [], supersonicInletBoundary!, [P, T, U..., 1005], wallBoundary!, [], zeroGradientBoundary!, [], zeroGradientBoundary!, [] ]
 
 mesh = OpenFOAMMesh(meshPath)
 cellPrimitives = initializeUniformSolution3D(mesh, P, T, U...)
-unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00000001, endTime=0.0001, outputInterval=0.005, targetCFL=0.5, silent=false)
+unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00000001, endTime=0.005, outputInterval=0.005, targetCFL=0.5, silent=false)
 
 ### Forward Step ###
 # Freestream Conditions (Mach 3)
@@ -102,22 +102,22 @@ unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.0
 # gamma = 1.4
 # R = 287.05
 # Cp = 1005
-
+#
 # a = sqrt(gamma*R*T)
 # machNum = mag(U)/a
 # Pt = P*(1 + ((gamma-1)/2)*machNum^2)^(gamma/(gamma-1))
 # Tt = T*(1 + ((gamma-1)/2)*machNum^2)
-
-# Choose a mesh
+#
+# #Choose a mesh
 # meshPath = "Test/OFairfoilMesh"
-# boundaryConditions = [ wallBoundary, [], emptyBoundary, [], subsonicInletBoundary, [Pt, Tt, UunitVec..., gamma, R, Cp], pressureOutletBoundary, P ]
-# meshPath = "Test/OFmemesAirfoilMesh"
-# boundaryConditions = [ wallBoundary, [], emptyBoundary, [], subsonicInletBoundary, [Pt, Tt, UunitVec..., gamma, R, Cp], pressureOutletBoundary, P ]
+# boundaryConditions = [ wallBoundary!, [], emptyBoundary!, [], subsonicInletBoundary!, [Pt, Tt, UunitVec..., gamma, R, Cp], pressureOutletBoundary!, P ]
+# #meshPath = "Test/OFmemesAirfoilMesh"
+# #boundaryConditions = [ wallBoundary, [], emptyBoundary, [], subsonicInletBoundary, [Pt, Tt, UunitVec..., gamma, R, Cp], pressureOutletBoundary, P ]
 #
 # # Solve
 # mesh = OpenFOAMMesh(meshPath)
 # cellPrimitives = initializeUniformSolution3D(mesh, P, T, U...)
-# unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.0000001, endTime=0.00002, outputInterval=0.00002, targetCFL=0.5, silent=false, restart=true)
+# unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.0000001, endTime=0.005, outputInterval=0.00002, targetCFL=0.5, silent=false, restart=false)
 
 
 # ### Delta Wing ###

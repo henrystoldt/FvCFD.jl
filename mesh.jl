@@ -396,7 +396,7 @@ function OpenFOAMMesh_findCellPts(polyMeshPath)
         # First face to add to the pts array. Changing the index of this face (which must be <= Number of faces in smallest cell) can change in which order points are added to the array.
             # This sometimes happens to put points in the correct order for nice-looking .vtk output
             # Current best options for each mesh: Wedge - 3
-        addFace(cells[c][1])
+        addFace(cells[c][3])
 
         # Add any disjoint faces
         for f in cells[c]
