@@ -374,7 +374,8 @@ function unstructured_JSTFlux(mesh::Mesh, sln::SolutionState, boundaryConditions
     end
 
     #### 2. Centrally differenced fluxes ####
-    linInterp_3D(mesh, sln.cellFluxes, sln.faceFluxes)
+    #linInterp_3D(mesh, sln.cellFluxes, sln.faceFluxes)
+    sln.faceFluxes = linInterp_3D(mesh, sln.cellFluxes, sln.faceFluxes)
 
     #### 3. Add JST artificial Diffusion ####
     fDeltas = faceDeltas(mesh, sln)
