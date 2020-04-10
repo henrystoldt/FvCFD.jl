@@ -90,17 +90,22 @@ end
 
 ######################### Gradient Computation #######################
 #TODO: make all these function return a single array if you pass in a single value
-#TODO: LSQ Gradient
-# Non-functional
-function leastSqGrad(mesh::Mesh, matrix::AbstractArray{Float64, 2}, stencil=zeros(2,2))
-    # Stencil should be a list of lists, with each sublist containing the cells contained in the stencil of the main cell
-
-
-    #cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = mesh
-    #bdryFaceIndices = Array(nFaces-nBdryFaces:nFaces)
-
+#TODO: Add variable stencils for WLS, instead of just face neighbours
+#TODO: Document
+function leastSqGrad(mesh::Mesh, sln::SolutionState, slnPointer, slnColPointer=-1)
+    # slnPointer MUST be 1:3 for boundaries to work
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
-    nVars = size(matrix, 2) # Returns the length of the second dimension of "matrix"
+    slnArray = [sln.cellState, sln.cellFluxes, sln.cellPrimitives, sln.fluxResiduals, sln.faceState, sln.faceFluxes, sln.facePrimitives]
+
+    matrix = slnArray[slnPointer]
+    faceMatrix = slnArray[slnPointer+4]
+
+    if slnColPointer != -1
+        matrix = matrix[:,slnColPointer]
+        faceMatrix = faceMatrix[:,slnColPointer]
+    end
+
+    nVars = size(matrix, 2)
 
     grad = zeros(nCells, nVars, 3)
 
@@ -119,9 +124,9 @@ function leastSqGrad(mesh::Mesh, matrix::AbstractArray{Float64, 2}, stencil=zero
         c1 = mesh.faces[f][1]
         c2 = mesh.faces[f][2]
 
-        dx = mesh.cCenter[c2][1] - mesh.cCenter[c1][1]
-        dy = mesh.cCenter[c2][2] - mesh.cCenter[c1][2]
-        dz = mesh.cCenter[c2][3] - mesh.cCenter[c1][3]
+        dx = mesh.cCenters[c2][1] - mesh.cCenters[c1][1]
+        dy = mesh.cCenters[c2][2] - mesh.cCenters[c1][2]
+        dz = mesh.cCenters[c2][3] - mesh.cCenters[c1][3]
 
         weight = 1 / sqrt(dx*dx + dy*dy + dz*dz)
 
@@ -133,38 +138,112 @@ function leastSqGrad(mesh::Mesh, matrix::AbstractArray{Float64, 2}, stencil=zero
             dv = matrix[c2,v] - matrix[c1,v]
             wdv = weight * dv
 
-            L11[c1,v] += wdx^2
-            L12[c1,v] += wdx * wdy
-            L13[c1,v] += wdx * wdz
-            L22[c1,v] += wdy^2
-            L23[c1,v] += wdy * wdz
-            L33[c1,v] += wdz^2
+            computeLeastSqMat!(L11,L12,L13,L22,L23,L33,L1f,L2f,L3f, wdx, wdy, wdz, wdv, c1, c2, v)
+        end
+    end
 
-            L1f[c1,v] += wdx * wdv
-            L2f[c1,v] += wdy * wdv
-            L3f[c1,v] += wdz * wdv
 
-            L11[c2,v] += wdx^2
-            L12[c2,v] += wdx * wdy
-            L13[c2,v] += wdx * wdz
-            L22[c2,v] += wdy^2
-            L23[c2,v] += wdy * wdz
-            L33[c2,v] += wdz^2
+    # Deal with boundary faces, and add them to the matrix vectors
+    @fastmath for f in nFaces-nBdryFaces+1:nFaces
+        c1 = mesh.faces[f][1]
+        c2 = -1
 
-            L1f[c2,v] += wdx * wdv
-            L2f[c2,v] += wdy * wdv
-            L3f[c2,v] += wdz * wdv
+        # Use a pseudo "mirror" cell for each boundary cell
+        dx = (mesh.fCenters[f][1] - mesh.cCenters[c1][1]) * 2
+        dy = (mesh.fCenters[f][2] - mesh.cCenters[c1][2]) * 2
+        dz = (mesh.fCenters[f][3] - mesh.cCenters[c1][3]) * 2
 
+        weight = 1 / sqrt(dx^2 + dy^2 + dz^2)
+
+        wdx = weight * dx
+        wdy = weight * dy
+        wdz = weight * dz
+
+
+        for v in 1:nVars
+            #For all variables, just linearly interpolate what the value  would be at the pseudocell
+            #I THINK that should work for everything
+            slope = faceMatrix[f,v] - matrix[c1,v]
+            pseudoVal = matrix[c1,v] + 2*slope # No distances b/c pseudocell is mirrored, so face is always exactly halfway
+
+            dv = pseudoVal - matrix[c1,v]
+            wdv = weight * dv
+
+            computeLeastSqMat!(L11,L12,L13,L22,L23,L33,L1f,L2f,L3f, wdx, wdy, wdz, wdv, c1, c2, v)
+        end
+    end
+
+    L = zeros(3,3)
+    R = zeros(3,1)
+
+    for c in 1:nCells
+        for v in 1:nVars
+            fillLeastSqMat!(L, R, L11[c,v], L12[c,v], L13[c,v], L22[c,v], L23[c,v], L33[c,v], L1f[c,v], L2f[c,v], L3f[c,v])
+            x = inv(L) * R
+
+            grad[c,v, :] = x
         end
 
     end
 
-    # Deal with boundary faces, and add them to the matrix vectors
-
-
-
     return grad
 end
+
+# Updates the elements in the least squares matrix
+function computeLeastSqMat!(L11, L12, L13, L22, L23, L33, L1f, L2f, L3f, wdx, wdy, wdz, wdv, c1, c2, v)
+    if c2 != -1
+        L11[c1,v] += wdx^2
+        L12[c1,v] += wdx * wdy
+        L13[c1,v] += wdx * wdz
+        L22[c1,v] += wdy^2
+        L23[c1,v] += wdy * wdz
+        L33[c1,v] += wdz^2
+
+        L1f[c1,v] += wdx * wdv
+        L2f[c1,v] += wdy * wdv
+        L3f[c1,v] += wdz * wdv
+
+        L11[c2,v] += wdx^2
+        L12[c2,v] += wdx * wdy
+        L13[c2,v] += wdx * wdz
+        L22[c2,v] += wdy^2
+        L23[c2,v] += wdy * wdz
+        L33[c2,v] += wdz^2
+
+        L1f[c2,v] += wdx * wdv
+        L2f[c2,v] += wdy * wdv
+        L3f[c2,v] += wdz * wdv
+    else
+        L11[c1,v] += wdx^2
+        L12[c1,v] += wdx * wdy
+        L13[c1,v] += wdx * wdz
+        L22[c1,v] += wdy^2
+        L23[c1,v] += wdy * wdz
+        L33[c1,v] += wdz^2
+
+        L1f[c1,v] += wdx * wdv
+        L2f[c1,v] += wdy * wdv
+        L3f[c1,v] += wdz * wdv
+    end
+end
+
+function fillLeastSqMat!(L, R, L11, L12, L13, L22, L23, L33, R1, R2, R3)
+    L[1,1] = L11
+    L[1,2] = L12
+    L[1,3] = L13
+    L[2,1] = L12
+    L[2,2] = L22
+    L[2,3] = L23
+    L[3,1] = L13
+    L[3,2] = L23
+    L[3,3] = L33
+
+    R[1,1] = R1
+    R[2,1] = R2
+    R[3,1] = R3
+end
+
+
 
 #=
     Takes the gradient of (scalar) data provided in matrix form (passed into arugment 'matrix'):
@@ -247,7 +326,7 @@ end
 #Always writes to sln face. No longer mutates inputs.
 function linInterpToFace_3D(mesh::Mesh, sln::SolutionState, slnPointer, slnPointerCols=-1)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
-    slnArray = [sln.cellState, sln.cellFluxes, sln.cellPrimitives, sln.fluxResiduals, sln.faceState, sln.faceFluxes]
+    slnArray = [sln.cellState, sln.cellFluxes, sln.cellPrimitives, sln.fluxResiduals, sln.faceState, sln.faceFluxes, sln.facePrimitives]
 
     matrix = slnArray[slnPointer]
 
@@ -435,7 +514,7 @@ function unstructured_JSTFlux(mesh::Mesh, sln::SolutionState, boundaryConditions
     sln.faceFluxes[1:nFaces-nBdryFaces,:] = linInterpToFace_3D(mesh, sln, 2, -1)
 
     #### 3. Add JST artificial Diffusion ####
-    fDeltas = faceDeltas(mesh, sln)
+    fDeltas = faceDeltas(mesh, sln) # TODO: Figure out how to deal with boundaries, as currently they are not included here
     fDGrads = greenGaussGrad(mesh, fDeltas, true)
     eps2, eps4 = unstructured_JSTEps(mesh, sln, 0.5, (1.2/32), 1, gamma, R)
 
@@ -701,7 +780,7 @@ end
         .vtk files (is specified)
 =#
 function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}, boundaryConditions, timeIntegrationFn=forwardEuler,
-        fluxFunction=unstructured_JSTFlux; initDt=0.001, endTime=0.14267, outputInterval=0.01, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005,
+        fluxFunction=unstructured_JSTFlux; initDt=0.001, endTime=0.14267, outputInterval=0.01, adaptInterval=0.001,targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005,
         silent=true, restart=false, createRestartFile=true, createVTKOutput=true, restartFile="JuliaCFDRestart.txt")
 
     if !silent
@@ -761,7 +840,9 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
     currTime = 0
     timeStepCounter = 0
     nextOutputTime = outputInterval
+    nextAdaptTime = adaptInterval
     writeOutputThisIteration = false
+    adaptMeshThisIteration = false
     CFLvec = zeros(nCells)
     while currTime < endTime
         ############## Timestep adjustment #############
@@ -797,10 +878,16 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
                 dt = nextOutputTime - currTime
                 writeOutputThisIteration = true
             end
+
+            if (nextAdaptTime - currTime) < dt
+                adaptMeshThisIteration = true
+            end
         end
 
         ############## Take a timestep #############
         sln = timeIntegrationFn(mesh, fluxFunction, sln, boundaryConditions, gamma, R, Cp, dt)
+
+
 
         if timeIntegrationFn == LTSEuler
             currTime += CFL
@@ -820,6 +907,17 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
             updateSolutionOutput(sln.cellPrimitives, restartFile, meshPath, createRestartFile, createVTKOutput)
             writeOutputThisIteration = false
             nextOutputTime += outputInterval
+        end
+
+        if adaptMeshThisIteration
+            println("Adapting Mesh!")
+
+            gradP = leastSqGrad(mesh, sln, 3, 1)
+
+            adaptMeshThisIteration = false
+            nextAdaptTime += adaptInterval
+
+
         end
     end
 
