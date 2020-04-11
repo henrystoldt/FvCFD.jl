@@ -533,3 +533,27 @@ function OpenFOAMMesh(polyMeshPath)
 
     return Mesh(cells, cVols, cCenters, cellSizes, faces, fAVecs, fCenters, boundaryFaces)
 end
+
+function OpenFOAMMeshAdapt(mesh::Mesh, polyMeshPath)
+    points, OFfaces, owner, neighbour, boundaryNames, boundaryNumFaces, boundaryStartFaces = readOpenFOAMMesh(polyMeshPath)
+    nFaces = size(OFfaces, 1)
+    nPoints = size(points, 1)
+
+    fPoints = Array{Array{Int64, 1},1}(undef, nFaces)
+    fPointLocs = Matrix{Float64}(undef, nPoints, 3)
+
+
+    # Fills face point and face point location data structures
+    for f in 1:nFaces
+        fPts = []
+        for pt in OFfaces[f]
+            push!(fPts, pt)
+            fPointLocs[pt,:] = points[pt,:]
+        end
+        fPoints[f] = fPts
+
+    end
+
+    return AdaptMesh(mesh.cells, mesh.cVols, mesh.cCenters, mesh.cellSizes, mesh.faces, mesh.fAVecs, mesh.fCenters, mesh.boundaryFaces, fPoints, fPointLocs)
+
+end
