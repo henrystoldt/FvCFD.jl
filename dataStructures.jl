@@ -22,3 +22,17 @@ struct Mesh
     fCenters::Vector{Vector{Float64}}
     boundaryFaces::Vector{Vector{Int64}}
 end
+
+mutable struct AdaptMesh
+    cells::Vector{Vector{Int64}}
+    cVols::Vector{Float64}
+    cCenters::Vector{Vector{Float64}}
+    cellSizes::Matrix{Float64}
+
+    faces::Vector{Vector{Int64}}
+    fAVecs::Vector{Vector{Float64}}
+    fCenters::Vector{Vector{Float64}}
+    boundaryFaces::Vector{Vector{Int64}}
+    fPoints::Vector{Vector{Int64}}
+    fPointLocs::Matrix{Float64}
+end

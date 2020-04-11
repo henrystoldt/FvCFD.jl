@@ -26,6 +26,37 @@ mesh =
 OpenFOAM meshes can be parsed into the format above using the "OpenFOAMMesh" function in "mesh.jl".
 The current parse is slightly less flexible than OpenFOAM in terms of formatting, so if problems occur, try running the OpenFOAM utility "renumberMesh -overwrite" to ensure the mesh format is exactly as expected by mesh.jl.
 
+# Unstructured FVM AdaptMesh Format Definition
+Mutable struct
+Created by passing in Mesh and mesh path to function  
+Same as Mesh, but holds face point locations, and is mutable to allow addition of points
+Defined as follows:  
+```julia
+mesh =
+[
+   cells,           #(list of lists, each containing the indices of the faces that make up the cell)  
+   cVols,           #(list of scalar cell volumes)  
+   cCenters,        #(list of position vectors of cell centers)  
+   cellSizes,       #(Matrix: rows are cells, columns are x-, y-, and z-direction sizes of the cell)
+   faces,           #(list of lists, each sublist containing two cell indices: the owner cell and the neighbour cell)  
+   fAVecs,          #(list of face area vectors)  
+   fCenters,        #(list of position vectors of face centers)  
+   boundaryFaces,    #(list of lists, each containing the indices of faces on the ith boundary)  
+   fPoints,         #(list of lists, each sublist containing the indices of points on the ith face Each matrix corresponds to a face)
+   fPointLocs,      #(Matrix: rows are points, columns are x/y/z location)
+]
+```
+
+## Notes
+- Cells and faces are numbered according to their storage location in the mesh arrays
+- Faces are numbered such that boundary faces come last
+- Face area vectors point outward from the owner cells, into the neighbour cell
+- Cells must be composed of planar faces
+- "List" above, in the context of Julia, means a 1-D Array  
+
+OpenFOAM meshes can be parsed into the format above using the "OpenFOAMMesh" function in "mesh.jl".
+The current parse is slightly less flexible than OpenFOAM in terms of formatting, so if problems occur, try running the OpenFOAM utility "renumberMesh -overwrite" to ensure the mesh format is exactly as expected by mesh.jl.
+
 # Solution State Definition
 Mutable (modifiable) struct.  
 Passed around FVM functions, intended to contain all universally-applicable info for FVM computations  
