@@ -747,6 +747,82 @@ function emptyBoundary!(mesh::Mesh, sln::SolutionState, boundaryNumber, _)
     return
 end
 
+######################### Numerical Integration #########
+
+# xFcn should be the gradients at every cell
+function gaussQuadrature(mesh::AdaptMesh, sln::SolutionState, xFcn, points=15, )
+    nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
+    if points == 15
+        eta = [0.0000,-0.2011940939974345, 0.2011940939974345,-0.3941513470775634, 0.3941513470775634, -0.5709721726085388, 0.5709721726085388, -0.7244177313601701, 0.7244177313601701, -0.8482065834104272, 0.8482065834104272, -0.9372733924007060, 0.9372733924007060, -0.9879925180204854, 0.9879925180204854]
+        w = [0.2025782419255613, 0.1984314853271116, 0.1984314853271116, 0.1861610000155622, 0.1861610000155622, 0.1662692058169939, 0.1662692058169939, 0.1395706779261543, 0.1395706779261543, 0.1071592204671719, 0.1071592204671719, 0.0703660474881081, 0.0703660474881081, 0.0307532419961173, 0.0307532419961173]
+    else
+        println("Need to add abscissa and weights for other points!")
+    end
+
+    sum = zeros(nCells)
+
+    #Need to set it to a mesh value at initiliaze so that it doesn't mistakenly just stick with a non mesh value
+    xMin = mesh.fPoints[1,1]
+    xMax = mesh.fPoints[1,1]
+    yMin = mesh.fPoints[1,2]
+    yMax = mesh.fPoints[1,2]
+    zMin = mesh.fPoints[1,3]
+    zMax = mesh.fPoints[1,3]
+
+    # For each cell, go through each
+    for c in 1:nCells
+        nFacesCel = size(mesh.cells[c], 1)
+
+        xMin, xMax, yMin, yMax, zMin, zMax =setCellScalingLims!(xMin, xMax, yMin, yMax, zMin, zMax, mesh, c)
+
+        limits = [xMin, yMin, zMin, xMax, yMax, zMax]
+
+        for d in 1:3
+            for i in 1:points
+                dim = convertEtaToDim(eta[i], limits[d], limits[d+3])
+                sum[c] += xFcn[c,1,d]*(d_d)
+            end
+        end
+
+
+
+
+    end
+
+end
+
+function setCellScalingLims!(xMin, xMax, yMin, yMax, zMin, zMax, mesh::AdaptMesh, c)
+    for f in mesh.cells[c]
+        for p in mesh.fPoints[f]
+            if mesh.fPointLocs[p,1] < xMin
+                xMin = mesh.fPointLocs[p,1]
+            elseif mesh.fPointLocs[p,1] > xMax
+                xMax = mesh.fPointLocs[p,1]
+            end
+            if mesh.fPointLocs[p,2] < yMin
+                yMin = mesh.fPointLocs[p,2]
+            elseif mesh.fPointLocs[p,2] > yMax
+                yMax = mesh.fPointLocs[p,2]
+            end
+            if mesh.fPointLocs[p,3] < zMin
+                zMin = mesh.fPointLocs[p,3]
+            elseif mesh.fPointLocs[p,3] > zMax
+                zMax = mesh.fPointLocs[p,3]
+            end
+        end
+    end
+
+    return xMin, xMax, yMin, yMax, zMin, zMax
+end
+
+function convertEtaToDim(eta, l, u)
+
+end
+
+function convertDimToEta()
+
+
+
 ######################### Solvers #######################
 #=
     This is where the magic happens!
@@ -912,7 +988,56 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
         if adaptMeshThisIteration
             println("Adapting Mesh!")
 
-            gradP = leastSqGrad(mesh, sln, 3, 1)
+            gradP_LS = leastSqGrad(mesh, sln, 3, 1)
+
+            facesP = zeros(nFaces,1)
+            facesP[:,:] = sln.facePrimitives[:,1]
+
+            gradP_GG = greenGaussGrad(mesh, facesP, true)
+
+            adaptMesh = OpenFOAMMeshAdapt(mesh, meshPath)
+
+            println("Returned from adapting!")
+            print("$breakdown")
+
+            # sln.cellPrimitives[:,1] = gradP_LS[:,:,1]
+            # sln.cellPrimitives[:,2] = gradP_GG[:,:,1]
+            # sln.cellPrimitives[:,3] = gradP_LS[:,:,1]-gradP_GG[:,:,1]
+            #
+            # updateSolutionOutput(sln.cellPrimitives, restartFile, meshPath, createRestartFile, createVTKOutput)
+
+            # println("Wrote new sln file!")
+            #
+            # println("This is how you $break")
+
+            size1 = size(gradP_LS)
+            size2 = size(gradP_GG)
+
+            display(size1)
+            display(size2)
+
+            dif_sum = 0
+            max_dif = 0
+
+            for i in 1:3
+                for j in 1:888
+                    #c1 = max(mesh.cells[j]) #Make sure interior cell by checking all it's faces are interior
+                    #if c1 <= nFaces-nBdryFaces
+                    new_dif = abs(gradP_GG[j,1,i] - gradP_LS[j,1,i])
+
+                    dif_sum += new_dif
+                    if new_dif > max_dif
+                        max_dif = new_dif
+                    end
+                    #end
+
+                end
+                avg_dif = dif_sum / 888
+                println("For dimension $i, the average dif is: $avg_dif")
+                dif_sum = 0
+            end
+
+            println("For this adapt step, largest difference between gradients is: $max_dif")
 
             adaptMeshThisIteration = false
             nextAdaptTime += adaptInterval
