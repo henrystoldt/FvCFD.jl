@@ -29,10 +29,10 @@ The current parse is slightly less flexible than OpenFOAM in terms of formatting
 # Unstructured FVM AdaptMesh Format Definition
 Mutable struct
 Created by passing in Mesh and mesh path to function  
-Same as Mesh, but holds face point locations, and is mutable to allow addition of points
+Same as Mesh, but holds face point locations, and is mutable to allow addition of points and faces
 Defined as follows:  
 ```julia
-mesh =
+adaptMesh =
 [
    cells,           #(list of lists, each containing the indices of the faces that make up the cell)  
    cVols,           #(list of scalar cell volumes)  
@@ -56,6 +56,21 @@ mesh =
 
 OpenFOAM meshes can be parsed into the format above using the "OpenFOAMMesh" function in "mesh.jl".
 The current parse is slightly less flexible than OpenFOAM in terms of formatting, so if problems occur, try running the OpenFOAM utility "renumberMesh -overwrite" to ensure the mesh format is exactly as expected by mesh.jl.
+
+# FacesData Format Defintion
+Mutable struct
+Created by passing info into createFacesDataStruct() function
+Designed to be used for tracking changes to mesh during adaption process
+```julia
+faces =
+[
+   nFaces,        #(Integer, tracking the total number of faces in the mesh)
+   nIntFaces,     #(Integer, tracking the number of internal faces in the mesh)
+   nBdry,         #(Integer, tracking the number of boundary types)
+   nBdryTypes,    #(list of type Any, holding the types of boundaries)
+   nBdryIndices,  #(list of integers, holding the indices at which each boundary type begins in the faces list)
+]
+```
 
 # Solution State Definition
 Mutable (modifiable) struct.  

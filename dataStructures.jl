@@ -36,3 +36,11 @@ mutable struct AdaptMesh
     fPoints::Vector{Vector{Int64}}
     fPointLocs::Matrix{Float64}
 end
+
+mutable struct FacesData
+    nFaces::Int64
+    nIntFaces::Int64
+    nBdry::Int64
+    bdryTypes::Vector{Any}
+    bdryIndices::Vector{Int64}
+end
