@@ -780,6 +780,8 @@ function gaussQuadrature(mesh::AdaptMesh, sln::SolutionState, xFcn, points=15, )
         for d in 1:3
             for i in 1:points
                 dim = convertEtaToDim(eta[i], limits[d], limits[d+3])
+
+                # ?????????????????????????
                 sum[c] += xFcn[c,1,d]*(d_d)
             end
         end
@@ -820,6 +822,21 @@ function convertEtaToDim(eta, l, u)
 end
 
 function convertDimToEta()
+end
+
+function findCellsToAdapt(error, adaptPercent=0.05)
+    nCells = size(error, 1)
+    nCellsAdapt = floor(Int, nCells * adaptPercent)
+
+    nAdaptList = zeros(Int, nCellsAdapt)
+
+    for i in 1:nCellsAdapt
+        (x, index) = findmax(error)
+        nAdaptList[i] = index
+        error[index] = 0
+    end
+    return nAdaptList
+end
 
 
 
@@ -990,54 +1007,32 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
 
             gradP_LS = leastSqGrad(mesh, sln, 3, 1)
 
-            facesP = zeros(nFaces,1)
-            facesP[:,:] = sln.facePrimitives[:,1]
-
-            gradP_GG = greenGaussGrad(mesh, facesP, true)
-
-            adaptMesh = OpenFOAMMeshAdapt(mesh, meshPath)
-
-            println("Returned from adapting!")
-            print("$breakdown")
-
-            # sln.cellPrimitives[:,1] = gradP_LS[:,:,1]
-            # sln.cellPrimitives[:,2] = gradP_GG[:,:,1]
-            # sln.cellPrimitives[:,3] = gradP_LS[:,:,1]-gradP_GG[:,:,1]
-            #
-            # updateSolutionOutput(sln.cellPrimitives, restartFile, meshPath, createRestartFile, createVTKOutput)
-
-            # println("Wrote new sln file!")
-            #
-            # println("This is how you $break")
-
-            size1 = size(gradP_LS)
-            size2 = size(gradP_GG)
-
-            display(size1)
-            display(size2)
-
-            dif_sum = 0
-            max_dif = 0
-
-            for i in 1:3
-                for j in 1:888
-                    #c1 = max(mesh.cells[j]) #Make sure interior cell by checking all it's faces are interior
-                    #if c1 <= nFaces-nBdryFaces
-                    new_dif = abs(gradP_GG[j,1,i] - gradP_LS[j,1,i])
-
-                    dif_sum += new_dif
-                    if new_dif > max_dif
-                        max_dif = new_dif
-                    end
-                    #end
-
-                end
-                avg_dif = dif_sum / 888
-                println("For dimension $i, the average dif is: $avg_dif")
-                dif_sum = 0
+            gradP_mag = zeros(nCells)
+            for i in 1:nCells
+                gradP_mag[i] = mag(gradP_LS[i, 1, :])
             end
 
-            println("For this adapt step, largest difference between gradients is: $max_dif")
+            nAdaptList = findCellsToAdapt(gradP_mag)
+
+            adaptMesh = createMeshAdaptStruct(mesh, meshPath)
+
+            newMesh = adaptNewMesh(adaptMesh, nAdaptList, boundaryConditions)
+
+            writeNewOpenFoamMesh()
+
+            #println("Returned from adapting!")
+            #print("$breakdown")
+
+            #sln.cellPrimitives[:,1] = gradP_LS[:,:,1]
+            #sln.cellPrimitives[:,2] = gradP_GG[:,:,1]
+            #sln.cellPrimitives[:,3] = 100 * (gradP_LS[:,:,1]-gradP_GG[:,:,1]) ./ gradP_LS[:,:,1]
+
+            updateSolutionOutput(sln.cellPrimitives, restartFile, meshPath, createRestartFile, createVTKOutput)
+
+            println("Wrote new sln file!")
+
+            println("This is how you $break")
+
 
             adaptMeshThisIteration = false
             nextAdaptTime += adaptInterval

@@ -127,6 +127,20 @@ function unstructuredMeshInfo(mesh::Mesh)
     return nCells, nFaces, nBoundaries, nBdryFaces
 end
 
+function unstructuredMeshAdaptInfo(mesh::AdaptMesh)
+    nCells = size(mesh.cells, 1)
+    nFaces = size(mesh.faces, 1)
+    nBoundaries = size(mesh.boundaryFaces, 1)
+
+    # Count boundary faces
+    nBdryFaces = 0
+    for bdry in 1:nBoundaries
+        nBdryFaces += size(mesh.boundaryFaces[bdry], 1)
+    end
+
+    return nCells, nFaces, nBoundaries, nBdryFaces
+end
+
 # Checks whether a string represents a number (using a regular expression)
 function isNumber(str)
     re = r"^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)$"
@@ -534,7 +548,10 @@ function OpenFOAMMesh(polyMeshPath)
     return Mesh(cells, cVols, cCenters, cellSizes, faces, fAVecs, fCenters, boundaryFaces)
 end
 
-function OpenFOAMMeshAdapt(mesh::Mesh, polyMeshPath)
+
+######## Mesh adaption functions ########
+
+function createMeshAdaptStruct(mesh::Mesh, polyMeshPath)
     points, OFfaces, owner, neighbour, boundaryNames, boundaryNumFaces, boundaryStartFaces = readOpenFOAMMesh(polyMeshPath)
     nFaces = size(OFfaces, 1)
     nPoints = size(points, 1)
@@ -556,4 +573,142 @@ function OpenFOAMMeshAdapt(mesh::Mesh, polyMeshPath)
 
     return AdaptMesh(mesh.cells, mesh.cVols, mesh.cCenters, mesh.cellSizes, mesh.faces, mesh.fAVecs, mesh.fCenters, mesh.boundaryFaces, fPoints, fPointLocs)
 
+end
+
+function createFacesDataStruct(mesh::AdaptMesh, boundaryConditions)
+    nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshAdaptInfo(mesh)
+
+    nIntFaces = nFaces-nBdryFaces
+
+    nBoundaryTypes = []
+
+    for i in 1:nBoundaries
+        bb = 2*i-1
+        push!(nBoundaryTypes, boundaryConditions[bb])
+    end
+
+    nBoundaryIndices = zeros(Int64, nBoundaries)
+    nBoundaryIndices[1] = nIntFaces + 1
+
+    for b in 1:nBoundaries-1
+        nBoundaryIndices[b+1] = nBoundaryIndices[b] + size(mesh.boundaryFaces[b],1)
+    end
+
+    return FacesData(nFaces, nIntFaces, nBoundaries, nBoundaryTypes, nBoundaryIndices)
+end
+
+function adaptNewMesh(mesh::AdaptMesh, nList, boundaryConditions)
+    #Pull out required lists
+    facesData = createFacesDataStruct(mesh, boundaryConditions)
+
+    cells = mesh.cells
+    faces = mesh.faces
+    fCenters = mesh.fCenters
+
+    fPoints = mesh.fPoints
+    fPLocs = mesh.fPointLocs
+
+    #println("$breakdown")
+
+    listLength = size(nList,1)
+
+
+    for i in 1:listLength
+        #Evaluate for PA or bisection
+        adaptMethods = [pointAddition, bisection]
+
+        usePointAddition = true
+
+        if usePointAddition
+            cells, faces, fCenters, fPoints, fPLocs, facesData, nList = adaptMethods[1](cells, faces, fCenters, fPoints, fPLocs, facesData, nList, i)
+        else
+            cells, faces, fCenters, fPoints, fPLocs, facesData, nList = adaptMethods[2](cells, faces, fCenters, fPoints, fPLocs, facesData, nList, i)
+        end
+
+
+
+
+
+    end
+
+end
+
+function pointAddition(cells, faces, fCen, fPoints, fPLocs, fData, nList, index)
+    cell = nList[index]
+    cellFaces = cells[cell]
+
+    #Find the empty face boundary limits
+
+    workingFaces = findEmptyBdryFaces(fData, cellFaces) #Implicit assumption: Mesh is 2D, so empty boundaries are mirror of each other
+
+    if size(workingFaces,1) != 2 #Some error checking
+        println("Error: wrong number of empty boundary faces found!!")
+        println("$breakdown")
+    end
+
+    #Find number of points in face
+    p = size(fPoints[workingFaces[1]], 1)
+
+    workingCen = zeros(2,3)
+    for i in 1:2 #Pull out face centroids
+        workingCen[i,:] = fCen[workingFaces[i]]
+    end
+
+    #Pick + and - mirror faces
+    (x, indexMax) = findmax(workingCen[:,3])
+    (y, indexMin) = findmin(workingCen[:,3])
+
+    posFacePts = fPoints[workingFaces[indexMax]]
+    negFacePts = fPoints[workingFaces[indexMin]]
+
+    display(posFacePts)
+    display(negFacePts)
+
+    println("$breakdown")
+
+
+    #Add points to fPLocs
+
+
+
+
+
+
+
+    # Now perform final updates on these lists for this iteration
+
+    return cell, faces, fCen, fPoints, fPLocs, fData, nList
+end
+
+function bisection(cells, faces, fCen, fPoints, fPLocs, fData, nList, index)
+
+end
+
+
+#=
+    This function finds the empty boundary faces attached to a specific cell
+=#
+function findEmptyBdryFaces(fData::FacesData, cellFaces)
+    emptyLower = zeros(Int, 1)
+    emptyUpper = zeros(Int, 1)
+
+    for b in 1:fData.nBdry
+        if fData.bdryTypes[b] == emptyBoundary!  #This will get messed up if there's two separate sets of emptyBoundary!
+            emptyLower = fData.bdryIndices[b]
+            if b != fData.nBdry
+                emptyUpper = fData.bdryIndices[b+1] - 1
+            else
+                emptyUpper = fData.nFaces
+            end
+        end
+    end
+
+    workingFaces = [] #Track the indices of the empty boundary faces
+
+    for face in cellFaces
+        if (face >= emptyLower) && (face <= emptyUpper)
+            push!(workingFaces, face)
+        end
+    end
+    return workingFaces
 end
