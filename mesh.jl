@@ -637,9 +637,12 @@ function pointAddition(cells, faces, fCen, fPoints, fPLocs, fData, nList, index)
     cell = nList[index]
     cellFaces = cells[cell]
 
+    nPoints = size(fPLocs,1)
+    nCells = size(cells,1)
+
     #Find the empty face boundary limits
 
-    workingFaces = findEmptyBdryFaces(fData, cellFaces) #Implicit assumption: Mesh is 2D, so empty boundaries are mirror of each other
+    workingFaces, internalFaces = findEmptyBdryFaces(fData, cellFaces) #Implicit assumption: Mesh is 2D, so empty boundaries are mirror of each other
 
     if size(workingFaces,1) != 2 #Some error checking
         println("Error: wrong number of empty boundary faces found!!")
@@ -661,13 +664,99 @@ function pointAddition(cells, faces, fCen, fPoints, fPLocs, fData, nList, index)
     posFacePts = fPoints[workingFaces[indexMax]]
     negFacePts = fPoints[workingFaces[indexMin]]
 
-    display(posFacePts)
-    display(negFacePts)
+    workingPointLocs = zeros(p*2, 3)
 
-    println("$breakdown")
+    offset = 0
+
+    for j in 1:p
+        workingPointLocs[j,:] = fPLocs[posFacePts[j],:]
+        if (workingPointLocs[j,1] == fPLocs[negFacePts[1],1]) && (workingPointLocs[j,2] == fPLocs[negFacePts[1],2])
+            offset = j - 1
+        end
+        #workingPointLocs[j+p,:] = fPLocs[negFacePts[j],:]
+    end
+
+    newNegFacePts = zeros(Int, p)
+
+    for j in 1:p
+        new_j = p-(j+1)+offset
+        new_j -= 1
+        #new_j = j + offset
+        if new_j < 1
+            new_j = new_j + p
+        end
+        workingPointLocs[j+p,:] = fPLocs[negFacePts[new_j],:]
+        newNegFacePts[j] = negFacePts[new_j]
+    end
+    negFacePts = newNegFacePts #If looping neg points to get vector out, have to loop backwards because ordering reversed
+
+    # display(posFacePts)
+    # display(negFacePts)
+    #
+    # display(workingPointLocs)
+
+    newEmptyFaces = []
+
+    for i in 1:p #Make new positive faces for boundary
+        iPlus = i+1
+        if iPlus > p
+            iPlus -= p
+        end
+        newFace = [nPoints+1, posFacePts[i], posFacePts[iPlus]]
+        push!(newEmptyFaces, newFace)
+    end
+
+    for i in 1:p #Now add new negative faces for boudary
+        iPlus = i + 1
+        if iPlus > p
+            iPlus -= p
+        end
+        newFace = [nPoints+2, negFacePts[iPlus], negFacePts[i]]
+        push!(newEmptyFaces, newFace)
+    end
+
+    newIntFaces = [[]]
+
+    for i in 1:p
+        newFace = [nPoints+1, posFacePts[i], negFacePts[i], nPoints+2]
+        push!(newIntFaces, newFace)
+    end
+
+    # display(newEmptyFaces)
+    # display(newIntFaces)
+
 
 
     #Add points to fPLocs
+    newPoints = zeros(nPoints+2,3)
+    newPoints[1:nPoints,:] = fPLocs
+    newPoints[nPoints+1,:] = workingCen[indexMax,:] #Note: Doing it like this messes up the normal points ordering, by putting z+ points at the end instead of in the middle/first half. I don't THINK it matters though
+    newPoints[nPoints+2,:] = workingCen[indexMin,:]
+
+
+
+    # Add boundary faces first to mesh
+
+    delFaces = workingFaces
+    delCell = cell
+
+    addFacesAndCellsToMesh(cells, faces, fCen, fPoints, fData, nList, newIntFaces, newEmptyFaces, delFaces, delCell)
+
+    # Now add internal faces
+
+
+    #All, intFaces, bFaces, intIndex, bFacesIndex, deleteIndexes(list)
+
+    println("$breakdown")
+
+    #Add boundary faces, internal faces, and new cells. Update all required additions (Update new cell numbers as well)
+    # This should be actively tracking index changes on list of lists (cells + faces)
+
+    #Remove old faces, old cells. Decrement all references to them by the amount that are above them
+
+    #   - Make sure faces to be deleted were accurately tracked after addition of new faces
+    #   - References to faces: fPoints (delete rows), fData (update counters as required. Update indices trackers as required),fCen (delete rows), faces (deleting elements in list corresponding to the row), cells (references to this face should've been deleted in addtion. References above this face should've been decremented then too)
+    #   - References to cells: cells (cell in question should be deleted. Neighbouring cells should've already been updated), faces (indices should've already been dealt with), nList (don't delete top?, because of outer loop, just make sure cell indices on list are still accurate)
 
 
 
@@ -676,6 +765,8 @@ function pointAddition(cells, faces, fCen, fPoints, fPLocs, fData, nList, index)
 
 
     # Now perform final updates on these lists for this iteration
+
+    fPLocs = newPoints
 
     return cell, faces, fCen, fPoints, fPLocs, fData, nList
 end
@@ -704,11 +795,79 @@ function findEmptyBdryFaces(fData::FacesData, cellFaces)
     end
 
     workingFaces = [] #Track the indices of the empty boundary faces
+    internalFaces = []
 
     for face in cellFaces
         if (face >= emptyLower) && (face <= emptyUpper)
             push!(workingFaces, face)
+        else
+            push!(internalFaces, face)
         end
     end
-    return workingFaces
+    return workingFaces, internalFaces
+end
+
+function addFacesAndCellsToMesh(cells, faces, fCen, fPoints, fData, nList, intFaces, bdryFaces, delFaces, delCell)
+    #delIndexes = keep track of where the cells and faces to delete go
+
+    #Start with adding the boundary faces
+    emptyIndexEnd = 0
+    emptyBdry = 0
+
+    for b in 1:fData.nBdry
+        if fData.bdryTypes[b] == emptyBoundary!
+            emptyBdry = b
+            if b != fData.nBdry
+                emptyIndexEnd = fData.bdryIndices[b+1]
+            else
+                emptyIndexEnd = fData.nFaces
+            end
+        end
+    end
+
+    # fPoints
+    println("About to add faces to fPoints!")
+    display(typeof(fPoints))
+    display(typeof(bdryFaces))
+    display(typeof(emptyIndexEnd))
+
+    println("Printing!")
+
+    display(fPoints[1][1])
+    display(bdryFaces[:][:])
+
+    insertArray!(fPoints[:], emptyIndexEnd, bdryFaces)
+
+    println("$breakdown")
+
+
+    #Placeholder fCen for now
+end
+
+function removeFacesAndCellsFromMesh(cells, faces, fCen, fPoints, fPLocs, fData, nList, index)
+
+end
+
+function insertArray!(array::AbstractArray, splitIndex, newArray)
+    arraySize = size(array,1)
+    topArray = array[1:splitIndex-1, :]
+    botArray = array[splitIndex:arraySize, :]
+
+    newArraySize = size(newArray, 1)
+
+    #display(newArray)
+
+    #holderArray = zeros(Int64, newArraySize, 3)
+
+    #push!(topArray, newArray[:][:])
+
+    for i in 1:newArraySize
+        holderArray = zeros(Int, 1,3)
+        holderArray[1,:] = newArray[i][:]
+        push!(topArray, holderArray)
+    end
+
+    array = vcat(topArray, botArray)
+
+
 end
