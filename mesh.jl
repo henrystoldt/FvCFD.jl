@@ -626,7 +626,7 @@ function adaptNewMesh(mesh::AdaptMesh, nList, boundaryConditions)
         # holder4 = size(fPLocs,1)
         # holder5 = size(nList,1)
         # holder6 = cells[631:635]
-        #
+
         # println("Debug statement: cells $holder1, faces $holder2, fPoints $holder3, fPLocs $holder4, nList $holder5")
 
         if usePointAddition
@@ -655,6 +655,9 @@ end
 function pointAddition(cells, faces, fCen, fPoints, fPLocs, fData, nList, index, newCellsList)
     cell = nList[index]
     cellFaces = cells[cell]
+
+    # println("Cell is: $cell ")
+
 
     #println("Faces are: $cellFaces")
 
@@ -759,6 +762,15 @@ function pointAddition(cells, faces, fCen, fPoints, fPLocs, fData, nList, index,
     #Add boundary faces, internal faces, and new cells. Update all required additions (Update new cell numbers in faces list as well)
     # This is also actively tracking index changes on list of lists (delCell + delFaces) - although delCell isn't changed in point addition
 
+    #display(fPLocs[25231-6:25230])
+    # fPLocs = newPoints
+    # display(fPLocs[81,:])
+    # display(fPLocs[3829,:])
+    # #display(fPLocs[4297,:])
+    # #display(fPLocs[549,:])
+    # display(fPLocs[266,:])
+    # display(fPLocs[4014,:])
+    # println("$breakdown")
     cells, faces, fCen, fPoints, fData, delFaces, newCellsList = addFacesAndCellsToMesh(cells, faces, fCen, fPoints, fData, internalFaces, newIntFaces, newEmptyFaces, delFaces, delCell, newCellsList)
 
     # Now delete the required faces and cells from the mesh
@@ -811,6 +823,7 @@ end
 function addFacesAndCellsToMesh(cells, faces, fCen, fPoints, fData, internalFaces, intFaces, bdryFaces, delFaces, delCell ,newCellsList)
     #delIndexes = keep track of where the cells and faces to delete go
     nCells = size(cells, 1)
+
 
     #Start with adding the boundary faces
     emptyIndexEnd = 0
@@ -1132,22 +1145,57 @@ function findNeighbouringFace(fPoints, internalFaces, fData, b, i)
     p = size(internalFaces, 1)
     index = fData.bdryIndices[b+1]
 
-    faceEmpty1 = fPoints[index-(2*p)+i-1]
-    faceEmpty2 = fPoints[index-p+i-1]
+    # TODO: Fix it so that triangles number consistently, because I don't know if it's lining up with the cell numbering properly
+    if p == 4 # This is a filthy hack, until I find out why triangles are numbering there points differently
+        faceEmpty1 = fPoints[index-(2*p)+i-1]
+        faceEmpty2 = fPoints[index-p+i-1]
 
-    faceEmptyIndex1 = index-(2*p) +i - 1
-    faceEmptyIndex2 = index - p +i -1
+        faceEmptyIndex1 = index-(2*p) +i - 1
+        faceEmptyIndex2 = index - p +i -1
+    elseif p==3
+        faceEmpty1 = fPoints[index-(2*p)+i-1]
+
+        faceEmptyIndex1 = index-(2*p) +i - 1
+
+        if i == 1
+            faceEmpty2 = fPoints[index-1]
+            faceEmptyIndex2 = index-1
+        elseif i == 2
+            faceEmpty2 = fPoints[index-3]
+            faceEmptyIndex2 = index-3
+        elseif i == 3
+            faceEmpty2 = fPoints[index-2]
+            faceEmptyIndex2 = index-2
+        else
+            println("I really didn't think this through!")
+            println("$breakdown")
+        end
+    end
+
 
     targetPts = vcat(faceEmpty1[2:3], faceEmpty2[2:3])
+
+    # println("Printing in findNeighbour")
+    # display(p)
+    # display(i)
+    # display(b)
+    # display(index)
+    # display(faceEmpty1)
+    # display(faceEmpty2)
+    # display(targetPts)
+    # display(fPoints[index-6:index-1])
+    # println("$breakdown")
 
     faceIndex = -1
 
     for face in internalFaces
         counter = 0
         checkPts = fPoints[face]
+        # println("Check pts is: $checkPts")
         for i in 1:size(checkPts,1)
             for j in 1:size(targetPts,1)
                 if checkPts[i] == targetPts[j]
+                    #println("Inside count, $i, $j, target is: $targetPts")
                     counter += 1
                 end
             end
@@ -1158,12 +1206,40 @@ function findNeighbouringFace(fPoints, internalFaces, fData, b, i)
         end
     end
 
+    # for face in 1:size(fPoints,1)
+    #     counter = 0
+    #     checkPts = fPoints[face]
+    #     for i in 1:size(checkPts,1)
+    #         for j in 1:size(targetPts,1)
+    #             if checkPts[i] == targetPts[j]
+    #                 counter += 1
+    #             end
+    #         end
+    #     end
+    #
+    #     if counter == size(checkPts,1)
+    #         faceIndex = face
+    #         println("Found a face that does work!: $face")
+    #         println("$breakdown")
+    #     end
+    # end
 
+    #println("Target is: $targetPts")
     # println("Internal faces are: $internalFaces")
     # display(fData.bdryIndices[2])
 
     if faceIndex == -1
         println("Could not find matching face!")
+        println("internalFaces, fData, b, i, targetPts")
+        display(internalFaces)
+        #display(fData)
+        display(b)
+        display(i)
+        display(targetPts)
+
+        #display(fPoints[8028])
+
+
         println("$breakdown")
     end
 
