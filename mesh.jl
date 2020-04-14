@@ -648,7 +648,7 @@ function adaptNewMesh(mesh::AdaptMesh, nList, boundaryConditions)
     # TODO: Error check to make sure the correct number of cells remain - seems to be right on coarse wedge mesh
     # TODO: Add a list of new cells to make the sln interpolationg possible for the future
 
-    return newMesh, newCellsList
+    return newMesh, newCellsList, facesData
 
 end
 
@@ -922,7 +922,7 @@ function addFacesAndCellsToMesh(cells, faces, fCen, fPoints, fData, internalFace
         if iPlus > (size(intFaces,1))
             iPlus -= size(intFaces,1)
         end
-        newCells = [i+nCells, iPlus]
+        newCells = [i+nCells, iPlus+nCells]
         push!(newIntFaceCells, newCells)
     end
 

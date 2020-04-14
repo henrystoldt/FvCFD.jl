@@ -139,3 +139,288 @@ function updateSolutionOutput(cellPrimitives, restartFile, meshPath, createResta
         outputVTK(meshPath, cellPrimitives, solnName)
     end
 end
+
+function writeNewOpenFOAMMesh(mesh::AdaptMesh, facesData; meshNewPath="./adapt/")
+    home = pwd()
+    #Find number for mesh
+    cd(meshNewPath)
+
+    maxNum = 0
+
+    files = readdir()
+    for item in files
+        if occursin("mesh_", item)
+            slnNumber = parse(Int, item[6:end])
+            maxNum = max(maxNum, slnNumber)
+        end
+    end
+    meshCount = maxNum + 1
+
+    meshName = "mesh_$meshCount"
+    newMeshPath = "./adapt/mesh_$meshCount/"
+    println("Writing new mesh to $newMeshPath")
+    mkdir(meshName)
+    cd(meshName)
+
+    cells = mesh.cells
+    pointLocs = mesh.fPointLocs
+    fPoints = mesh.fPoints
+    faces = mesh.faces
+
+    nPoints = size(pointLocs, 1)
+    nCells = size(cells,1)
+    nFaces = size(fPoints,1)
+    nInternalFaces = facesData.nIntFaces
+
+    note = "    note        \"nPoints:$nPoints  nCells:$nCells  nFaces:$nFaces  nInternalFaces:$nInternalFaces\";"
+
+
+    writePointsFile(pointLocs)
+    writeFacesFile(fPoints)
+    writeOwnerFile(faces, note=note)
+    writeNeighbourFile(faces, nInternalFaces, note=note)
+    writeBoundaryFile(facesData)
+
+    cd(home)
+
+    return newMeshPath
+end
+
+function writePointsFile(pointLocs; fileName="points")
+    open(fileName, "w") do f
+        writeOpenFOAMHeader(f)
+        write(f, "\r\n")
+
+        nPoints = size(pointLocs, 1)
+        write(f, "$nPoints\r\n")
+        write(f, "(\r\n")
+
+        for i in 1:nPoints
+            x = pointLocs[i,1]
+            y = pointLocs[i,2]
+            z = pointLocs[i,3]
+            write(f, "($x $y $z)\r\n")
+        end
+
+        write(f, ")\r\n")
+        write(f, "\r\n")
+        write(f, "\r\n")
+        write(f, "// ************************************************************************* //")
+    end
+
+    return
+end
+
+function writeFacesFile(fPoints; fileName="faces")
+    open(fileName, "w") do f
+        writeOpenFOAMHeader(f, class="faceList", object="faces")
+        write(f, "\r\n")
+
+        nFaces = size(fPoints, 1)
+        write(f, "$nFaces\r\n")
+        write(f, "(\r\n")
+
+        for i in 1:nFaces
+            sizeOfFace = size(fPoints[i],1)
+            if sizeOfFace == 3
+                f1 = fPoints[i][1]
+                f2 = fPoints[i][2]
+                f3 = fPoints[i][3]
+                write(f, "$sizeOfFace($f1 $f2 $f3)\r\n")
+            elseif sizeOfFace == 4
+                f1 = fPoints[i][1]
+                f2 = fPoints[i][2]
+                f3 = fPoints[i][3]
+                f4 = fPoints[i][4]
+                write(f, "$sizeOfFace($f1 $f2 $f3 $f4)\r\n")
+            elseif sizeOfFace == 5
+                f1 = fPoints[i][1]
+                f2 = fPoints[i][2]
+                f3 = fPoints[i][3]
+                f4 = fPoints[i][4]
+                f5 = fPoints[i][5]
+                write(f, "$sizeOfFace($f1 $f2 $f3 $f4 $f5)\r\n")
+            else
+                println("Unexpected size of face while writing mesh files!")
+                println("$breakdown")
+            end
+        end
+
+        write(f, ")\r\n")
+        write(f, "\r\n")
+        write(f, "\r\n")
+        write(f, "// ************************************************************************* //")
+    end
+
+    return
+end
+
+function writeOwnerFile(faces; note="", fileName="owner")
+    open(fileName, "w") do f
+
+        class = "labelList"
+        object = "owner"
+        writeOpenFOAMHeader(f, class="labelList", note=note, object="owner")
+        write(f, "\r\n")
+
+        nFaces = size(faces, 1)
+        write(f, "$nFaces\r\n")
+        write(f, "(\r\n")
+
+        for i in 1:nFaces
+            owner = faces[i][1]
+            write(f, "$owner\r\n")
+        end
+
+        write(f, ")\r\n")
+        write(f, "\r\n")
+        write(f, "\r\n")
+        write(f, "// ************************************************************************* //")
+    end
+
+    return
+end
+
+function writeNeighbourFile(faces, nInternalFaces; note="", fileName="neighbour")
+    open(fileName, "w") do f
+        class = "labelList"
+        object = "neighbour"
+        writeOpenFOAMHeader(f, class="labelList", note=note, object="neighbour")
+        write(f, "\r\n")
+
+        nFaces = size(faces, 1)
+        write(f, "$nInternalFaces\r\n")
+        write(f, "(\r\n")
+
+        counter = 0
+
+        for i in 1:nInternalFaces
+            neighbour = faces[i][2]
+            if neighbour == 1
+                counter += 1
+            end
+            if neighbour == -1
+                println("Cell values have been applied incorrectly! Found a boundary cell in the neighbours file!")
+                # println("Internal faces: $nInternalFaces")
+                # println("Face at break $i")
+                # display("Counter at break $counter")
+                println("$breakdown")
+            end
+            write(f, "$neighbour\r\n")
+        end
+
+        write(f, ")\r\n")
+        write(f, "\r\n")
+        write(f, "\r\n")
+        write(f, "// ************************************************************************* //")
+    end
+
+    return
+end
+
+function writeBoundaryFile(facesData; fileName="boundary")
+    open(fileName, "w") do f
+        class = "polyBoundaryMesh"
+        object = "boundary"
+        writeOpenFOAMHeader(f, class="polyBoundaryMesh", object="boundary")
+
+        nBdry = facesData.nBdry
+        write(f, "$nBdry\r\n")
+        write(f, "(\r\n")
+        nFaces = 0
+        zeroGradCounter = 0
+
+        for b in 1:nBdry
+            nStart = facesData.bdryIndices[b]
+            if b == nBdry
+                nFaces = facesData.nFaces - nStart
+            else
+                nFaces = facesData.bdryIndices[b+1] - nStart
+            end
+
+            if facesData.bdryTypes[b] == emptyBoundary!
+                write(f, "    defaultFaces\r\n")
+                write(f, "    {\r\n")
+                write(f, "        type            empty;\r\n")
+                write(f, "        inGroups        1(empty);\r\n")
+                write(f, "        nFaces          $nFaces;\r\n")
+                write(f, "        startFace       $nStart;\r\n")
+                write(f, "    }\r\n")
+            elseif facesData.bdryTypes[b] == supersonicInletBoundary!
+                write(f, "    inlet\r\n")
+                write(f, "    {\r\n")
+                write(f, "        type            patch;\r\n")
+                write(f, "        nFaces          $nFaces;\r\n")
+                write(f, "        startFace       $nStart;\r\n")
+                write(f, "    }\r\n")
+            elseif facesData.bdryTypes[b] == zeroGradientBoundary! && zeroGradCounter == 0
+                write(f, "    outlet\r\n")
+                write(f, "    {\r\n")
+                write(f, "        type            patch;\r\n")
+                write(f, "        nFaces          $nFaces;\r\n")
+                write(f, "        startFace       $nStart;\r\n")
+                write(f, "    }\r\n")
+                zeroGradCounter += 1
+            elseif facesData.bdryTypes[b] == symmetryBoundary!
+                write(f, "    bottom\r\n")
+                write(f, "    {\r\n")
+                write(f, "        type            symmetryPlane;\r\n")
+                write(f, "        inGroups        1(symmetryPlane);\r\n")
+                write(f, "        nFaces          $nFaces;\r\n")
+                write(f, "        startFace       $nStart;\r\n")
+                write(f, "    }\r\n")
+            elseif facesData.bdryTypes[b] == wallBoundary!
+                write(f, "    obstacle\r\n")
+                write(f, "    {\r\n")
+                write(f, "        type            patch;\r\n")
+                write(f, "        nFaces          $nFaces;\r\n")
+                write(f, "        startFace       $nStart;\r\n")
+                write(f, "    }\r\n")
+
+            elseif facesData.bdryTypes[b] == zeroGradientBoundary! && zeroGradCounter == 1
+                write(f, "    top\r\n")
+                write(f, "    {\r\n")
+                write(f, "        type            patch;\r\n")
+                write(f, "        nFaces          $nFaces;\r\n")
+                write(f, "        startFace       $nStart;\r\n")
+                write(f, "    }\r\n")
+                zeroGradCounter += 1
+            #elseif facesData.bdryTypes[b] == supersonicInletBoundary!
+            else
+                println("Boundary type not recognized when writing boundary file! Update list of boundary types!")
+                println("$breakdown")
+            end
+        end
+
+        write(f, ")\r\n")
+        write(f, "\r\n")
+        write(f, "\r\n")
+        write(f, "// ************************************************************************* //")
+    end
+
+    return
+end
+
+function writeOpenFOAMHeader(f; class="vectorField", note="", object="points")
+    write(f, "/*--------------------------------*- C++ -*----------------------------------*\\\n")
+    write(f, "  =========                 |\n")
+    write(f, "  \\\\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox\n")
+    write(f, "   \\\\    /   O peration     | Website:  https://openfoam.org\n")
+    write(f, "    \\\\  /    A nd           | Version:  6\n")
+    write(f, "     \\\\/     M anipulation  |\n")
+    write(f, "\\*---------------------------------------------------------------------------*/\n")
+    write(f, "FoamFile\n")
+    write(f, "{\n")
+    write(f, "    version     2.0;\n")
+    write(f, "    format      ascii;\n")
+    write(f, "    class       $class;\n")
+    if note != ""
+        write(f, "$note\n")
+    end
+    write(f, "    location    \"constant/polyMesh\";\r\n")
+    write(f, "    object      $object;\r\n")
+    write(f, "}\r\n")
+    write(f, "// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //\r\n")
+    write(f, "\r\n")
+
+end
