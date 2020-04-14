@@ -223,22 +223,22 @@ function writeFacesFile(fPoints; fileName="faces")
         for i in 1:nFaces
             sizeOfFace = size(fPoints[i],1)
             if sizeOfFace == 3
-                f1 = fPoints[i][1]
-                f2 = fPoints[i][2]
-                f3 = fPoints[i][3]
+                f1 = fPoints[i][1] - 1
+                f2 = fPoints[i][2] - 1
+                f3 = fPoints[i][3] - 1
                 write(f, "$sizeOfFace($f1 $f2 $f3)\r\n")
             elseif sizeOfFace == 4
-                f1 = fPoints[i][1]
-                f2 = fPoints[i][2]
-                f3 = fPoints[i][3]
-                f4 = fPoints[i][4]
+                f1 = fPoints[i][1] - 1
+                f2 = fPoints[i][2] - 1
+                f3 = fPoints[i][3] - 1
+                f4 = fPoints[i][4] - 1
                 write(f, "$sizeOfFace($f1 $f2 $f3 $f4)\r\n")
             elseif sizeOfFace == 5
-                f1 = fPoints[i][1]
-                f2 = fPoints[i][2]
-                f3 = fPoints[i][3]
-                f4 = fPoints[i][4]
-                f5 = fPoints[i][5]
+                f1 = fPoints[i][1] - 1
+                f2 = fPoints[i][2] - 1
+                f3 = fPoints[i][3] - 1
+                f4 = fPoints[i][4] - 1
+                f5 = fPoints[i][5] - 1
                 write(f, "$sizeOfFace($f1 $f2 $f3 $f4 $f5)\r\n")
             else
                 println("Unexpected size of face while writing mesh files!")
@@ -268,7 +268,7 @@ function writeOwnerFile(faces; note="", fileName="owner")
         write(f, "(\r\n")
 
         for i in 1:nFaces
-            owner = faces[i][1]
+            owner = faces[i][1] - 1
             write(f, "$owner\r\n")
         end
 
@@ -292,13 +292,8 @@ function writeNeighbourFile(faces, nInternalFaces; note="", fileName="neighbour"
         write(f, "$nInternalFaces\r\n")
         write(f, "(\r\n")
 
-        counter = 0
-
         for i in 1:nInternalFaces
-            neighbour = faces[i][2]
-            if neighbour == 1
-                counter += 1
-            end
+            neighbour = faces[i][2] - 1
             if neighbour == -1
                 println("Cell values have been applied incorrectly! Found a boundary cell in the neighbours file!")
                 # println("Internal faces: $nInternalFaces")
@@ -331,11 +326,11 @@ function writeBoundaryFile(facesData; fileName="boundary")
         zeroGradCounter = 0
 
         for b in 1:nBdry
-            nStart = facesData.bdryIndices[b]
+            nStart = facesData.bdryIndices[b] - 1
             if b == nBdry
                 nFaces = facesData.nFaces - nStart
             else
-                nFaces = facesData.bdryIndices[b+1] - nStart
+                nFaces = facesData.bdryIndices[b+1] - nStart - 1
             end
 
             if facesData.bdryTypes[b] == emptyBoundary!
