@@ -601,6 +601,8 @@ function adaptNewMesh(mesh::AdaptMesh, nList, boundaryConditions)
     #Pull out required lists
     facesData = createFacesDataStruct(mesh, boundaryConditions)
 
+    newCellsList = Array{Array{Int64, 1}, 1}(undef, 0)
+
     cells = mesh.cells
     faces = mesh.faces
     fCenters = mesh.fCenters
@@ -612,15 +614,23 @@ function adaptNewMesh(mesh::AdaptMesh, nList, boundaryConditions)
 
     listLength = size(nList,1)
 
-
     for i in 1:listLength
         #Evaluate for PA or bisection
         adaptMethods = [pointAddition, bisection]
 
         usePointAddition = true
 
+        # holder1 = size(cells,1)
+        # holder2 = size(faces,1)
+        # holder3 = size(fPoints,1)
+        # holder4 = size(fPLocs,1)
+        # holder5 = size(nList,1)
+        # holder6 = cells[631:635]
+        #
+        # println("Debug statement: cells $holder1, faces $holder2, fPoints $holder3, fPLocs $holder4, nList $holder5")
+
         if usePointAddition
-            cells, faces, fCenters, fPoints, fPLocs, facesData, nList = adaptMethods[1](cells, faces, fCenters, fPoints, fPLocs, facesData, nList, i)
+            cells, faces, fCenters, fPoints, fPLocs, facesData, nList, newCellsList = adaptMethods[1](cells, faces, fCenters, fPoints, fPLocs, facesData, nList, i, newCellsList)
         else
             cells, faces, fCenters, fPoints, fPLocs, facesData, nList = adaptMethods[2](cells, faces, fCenters, fPoints, fPLocs, facesData, nList, i)
         end
@@ -634,16 +644,21 @@ function adaptNewMesh(mesh::AdaptMesh, nList, boundaryConditions)
 
     newMesh = mesh
 
-    # TODO: Error check to make sure the correct number of cells remain
+    #println("$breakdown")
+    # TODO: Error check to make sure the correct number of cells remain - seems to be right on coarse wedge mesh
     # TODO: Add a list of new cells to make the sln interpolationg possible for the future
 
-    return newMesh
+    return newMesh, newCellsList
 
 end
 
-function pointAddition(cells, faces, fCen, fPoints, fPLocs, fData, nList, index)
+function pointAddition(cells, faces, fCen, fPoints, fPLocs, fData, nList, index, newCellsList)
     cell = nList[index]
     cellFaces = cells[cell]
+
+    #println("Faces are: $cellFaces")
+
+
 
     nPoints = size(fPLocs,1)
     nCells = size(cells,1)
@@ -744,17 +759,17 @@ function pointAddition(cells, faces, fCen, fPoints, fPLocs, fData, nList, index)
     #Add boundary faces, internal faces, and new cells. Update all required additions (Update new cell numbers in faces list as well)
     # This is also actively tracking index changes on list of lists (delCell + delFaces) - although delCell isn't changed in point addition
 
-    cells, faces, fCen, fPoints, fData, delFaces = addFacesAndCellsToMesh(cells, faces, fCen, fPoints, fData, internalFaces, newIntFaces, newEmptyFaces, delFaces, delCell)
+    cells, faces, fCen, fPoints, fData, delFaces, newCellsList = addFacesAndCellsToMesh(cells, faces, fCen, fPoints, fData, internalFaces, newIntFaces, newEmptyFaces, delFaces, delCell, newCellsList)
 
     # Now delete the required faces and cells from the mesh
 
-    cells, faces, fCen, fPoints, fData, nList = removeFacesAndCellsFromMesh(cells, faces, fCen, fPoints, fData, nList, delFaces, delCell)
+    cells, faces, fCen, fPoints, fData, nList, newCellsList = removeFacesAndCellsFromMesh(cells, faces, fCen, fPoints, fData, nList, delFaces, delCell, newCellsList)
 
     # Now updates points
 
     fPLocs = newPoints
 
-    return cell, faces, fCen, fPoints, fPLocs, fData, nList
+    return cells, faces, fCen, fPoints, fPLocs, fData, nList, newCellsList
 end
 
 function bisection(cells, faces, fCen, fPoints, fPLocs, fData, nList, index)
@@ -793,7 +808,7 @@ function findEmptyBdryFaces(fData::FacesData, cellFaces)
     return workingFaces, internalFaces
 end
 
-function addFacesAndCellsToMesh(cells, faces, fCen, fPoints, fData, internalFaces, intFaces, bdryFaces, delFaces, delCell)
+function addFacesAndCellsToMesh(cells, faces, fCen, fPoints, fData, internalFaces, intFaces, bdryFaces, delFaces, delCell ,newCellsList)
     #delIndexes = keep track of where the cells and faces to delete go
     nCells = size(cells, 1)
 
@@ -903,7 +918,8 @@ function addFacesAndCellsToMesh(cells, faces, fCen, fPoints, fData, internalFace
 
     # internalFaces
 
-    # - shouldn't need any adjustment
+    # - shouldn't need any adjustment -
+    # - thats where you're wrong bucko!!
 
     # fData
 
@@ -929,11 +945,26 @@ function addFacesAndCellsToMesh(cells, faces, fCen, fPoints, fData, internalFace
 
     newCells = Array{Array{Int64, 1}, 1}(undef, 0)
 
+    # Fix internal face indexes if any of them are boundaries
+
+    facesAdded = size(intFaces,1) + size(bdryFaces,1)
+    for i in 1:size(internalFaces, 1)
+        if (internalFaces[i] > intIndexEnd) && (internalFaces[i] <= emptyIndexEnd)
+            internalFaces[i] += size(intFaces,1)
+        elseif internalFaces[i] > emptyIndexEnd
+            internalFaces[i] += facesAdded
+        end
+    end
+
+
     for i in 1:size(intFaces, 1)
         iMod = i - 1
         if iMod < 1
             iMod += size(intFaces,1)
         end
+
+        # println("Cells attached to face 3590: ")
+        # display(faces[3590])
         neighbourCellFace, empty1, empty2 = findNeighbouringFace(fPoints, internalFaces, fData, emptyBdry, iMod)
         startPoint = fData.nIntFaces - size(intFaces,1)
         internalNew1 = startPoint + i
@@ -951,7 +982,15 @@ function addFacesAndCellsToMesh(cells, faces, fCen, fPoints, fData, internalFace
         end
     end
 
+    # newCellsList
 
+    newCellsListHolder = []
+
+    for i in 1:size(intFaces,1)
+        push!(newCellsListHolder, nCells+i)
+    end
+
+    push!(newCellsList, newCellsListHolder)
 
     # delFaces
 
@@ -961,10 +1000,10 @@ function addFacesAndCellsToMesh(cells, faces, fCen, fPoints, fData, internalFace
         end
     end
 
-    return cells, faces, fCen, fPoints, fData, delFaces
+    return cells, faces, fCen, fPoints, fData, delFaces, newCellsList
 end
 
-function removeFacesAndCellsFromMesh(cells, faces, fCen, fPoints, fData, nList, delFaces, delCell)
+function removeFacesAndCellsFromMesh(cells, faces, fCen, fPoints, fData, nList, delFaces, delCell, newCellsList)
     # Actions to each input
     #
     #   cells   - decrement all faces by the amount of deleted cells in front of them (increments already done)
@@ -1025,9 +1064,15 @@ function removeFacesAndCellsFromMesh(cells, faces, fCen, fPoints, fData, nList, 
         end
     end
 
+    for i in 1:size(newCellsList,1)
+        for j in 1:size(newCellsList[i],1)
+            newCellsList[i][j] -= 1
+        end
+    end
+
     deleteat!(cells, delCell)
 
-    return cells, faces, fCen, fPoints, fData, nList
+    return cells, faces, fCen, fPoints, fData, nList, newCellsList
 
 end
 
@@ -1113,8 +1158,13 @@ function findNeighbouringFace(fPoints, internalFaces, fData, b, i)
         end
     end
 
+
+    # println("Internal faces are: $internalFaces")
+    # display(fData.bdryIndices[2])
+
     if faceIndex == -1
         println("Could not find matching face!")
+        println("$breakdown")
     end
 
     return faceIndex, faceEmptyIndex1, faceEmptyIndex2
