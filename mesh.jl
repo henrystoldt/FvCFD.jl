@@ -624,12 +624,20 @@ function adaptNewMesh(mesh::AdaptMesh, nList, boundaryConditions)
         else
             cells, faces, fCenters, fPoints, fPLocs, facesData, nList = adaptMethods[2](cells, faces, fCenters, fPoints, fPLocs, facesData, nList, i)
         end
-
-
-
-
-
     end
+
+    #### NOTE: In its current form, this does not update cVols, cCenters, cellSizes, fAVecs, fCenters, or boundaryFaces, because this is intended to be immediately used to write a new mesh file, and they are not required
+    mesh.cells = cells
+    mesh.faces = faces
+    mesh.fPoints = fPoints
+    mesh.fPointLocs = fPLocs
+
+    newMesh = mesh
+
+    # TODO: Error check to make sure the correct number of cells remain
+    # TODO: Add a list of new cells to make the sln interpolationg possible for the future
+
+    return newMesh
 
 end
 
@@ -690,12 +698,7 @@ function pointAddition(cells, faces, fCen, fPoints, fPLocs, fData, nList, index)
     end
     negFacePts = newNegFacePts #If looping neg points to get vector out, have to loop backwards because ordering reversed
 
-    # display(posFacePts)
-    # display(negFacePts)
-    #
-    # display(workingPointLocs)
-
-    newEmptyFaces = []
+    newEmptyFaces = Array{Array{Int64, 1}}(undef, 0)
 
     for i in 1:p #Make new positive faces for boundary
         iPlus = i+1
@@ -703,6 +706,7 @@ function pointAddition(cells, faces, fCen, fPoints, fPLocs, fData, nList, index)
             iPlus -= p
         end
         newFace = [nPoints+1, posFacePts[i], posFacePts[iPlus]]
+        #newEmptyFaces[i] = newFace
         push!(newEmptyFaces, newFace)
     end
 
@@ -712,19 +716,16 @@ function pointAddition(cells, faces, fCen, fPoints, fPLocs, fData, nList, index)
             iPlus -= p
         end
         newFace = [nPoints+2, negFacePts[iPlus], negFacePts[i]]
+        #newEmptyFaces[i+p][:] = newFace
         push!(newEmptyFaces, newFace)
     end
 
-    newIntFaces = [[]]
+    newIntFaces = Array{Array{Int64, 1}}(undef,0)
 
     for i in 1:p
         newFace = [nPoints+1, posFacePts[i], negFacePts[i], nPoints+2]
         push!(newIntFaces, newFace)
     end
-
-    # display(newEmptyFaces)
-    # display(newIntFaces)
-
 
 
     #Add points to fPLocs
@@ -735,36 +736,21 @@ function pointAddition(cells, faces, fCen, fPoints, fPLocs, fData, nList, index)
 
 
 
-    # Add boundary faces first to mesh
+    # Add boundary and internal faces first to mesh
 
     delFaces = workingFaces
     delCell = cell
 
-    addFacesAndCellsToMesh(cells, faces, fCen, fPoints, fData, nList, newIntFaces, newEmptyFaces, delFaces, delCell)
+    #Add boundary faces, internal faces, and new cells. Update all required additions (Update new cell numbers in faces list as well)
+    # This is also actively tracking index changes on list of lists (delCell + delFaces) - although delCell isn't changed in point addition
 
-    # Now add internal faces
+    cells, faces, fCen, fPoints, fData, delFaces = addFacesAndCellsToMesh(cells, faces, fCen, fPoints, fData, internalFaces, newIntFaces, newEmptyFaces, delFaces, delCell)
 
+    # Now delete the required faces and cells from the mesh
 
-    #All, intFaces, bFaces, intIndex, bFacesIndex, deleteIndexes(list)
+    cells, faces, fCen, fPoints, fData, nList = removeFacesAndCellsFromMesh(cells, faces, fCen, fPoints, fData, nList, delFaces, delCell)
 
-    println("$breakdown")
-
-    #Add boundary faces, internal faces, and new cells. Update all required additions (Update new cell numbers as well)
-    # This should be actively tracking index changes on list of lists (cells + faces)
-
-    #Remove old faces, old cells. Decrement all references to them by the amount that are above them
-
-    #   - Make sure faces to be deleted were accurately tracked after addition of new faces
-    #   - References to faces: fPoints (delete rows), fData (update counters as required. Update indices trackers as required),fCen (delete rows), faces (deleting elements in list corresponding to the row), cells (references to this face should've been deleted in addtion. References above this face should've been decremented then too)
-    #   - References to cells: cells (cell in question should be deleted. Neighbouring cells should've already been updated), faces (indices should've already been dealt with), nList (don't delete top?, because of outer loop, just make sure cell indices on list are still accurate)
-
-
-
-
-
-
-
-    # Now perform final updates on these lists for this iteration
+    # Now updates points
 
     fPLocs = newPoints
 
@@ -807,8 +793,9 @@ function findEmptyBdryFaces(fData::FacesData, cellFaces)
     return workingFaces, internalFaces
 end
 
-function addFacesAndCellsToMesh(cells, faces, fCen, fPoints, fData, nList, intFaces, bdryFaces, delFaces, delCell)
+function addFacesAndCellsToMesh(cells, faces, fCen, fPoints, fData, internalFaces, intFaces, bdryFaces, delFaces, delCell)
     #delIndexes = keep track of where the cells and faces to delete go
+    nCells = size(cells, 1)
 
     #Start with adding the boundary faces
     emptyIndexEnd = 0
@@ -826,48 +813,309 @@ function addFacesAndCellsToMesh(cells, faces, fCen, fPoints, fData, nList, intFa
     end
 
     # fPoints
-    println("About to add faces to fPoints!")
-    display(typeof(fPoints))
-    display(typeof(bdryFaces))
-    display(typeof(emptyIndexEnd))
+    fPoints = insertArrayInt(fPoints, emptyIndexEnd, bdryFaces)
 
-    println("Printing!")
+    # fCen
 
-    display(fPoints[1][1])
-    display(bdryFaces[:][:])
+    newFCen = Array{Array{Float64,1} ,1}(undef,0)
+    for i in 1:size(bdryFaces,1)
+        push!(newFCen, [0.0, 0.0, 0.0])
+    end
 
-    insertArray!(fPoints[:], emptyIndexEnd, bdryFaces)
+    fCen = insertArray(fCen, emptyIndexEnd, newFCen)
 
-    println("$breakdown")
+    # faces
+
+    newBdryFaceCells = Array{Array{Int64,1} , 1}(undef, 0)
+    for i in 1:size(bdryFaces,1)
+        iNew = i+1
+        if iNew > (size(intFaces,1))
+            iNew -= size(intFaces,1)
+        end
+        newCells = [iNew+nCells, -1]
+        push!(newBdryFaceCells, newCells)
+    end
+
+    faces = insertArrayInt(faces, emptyIndexEnd, newBdryFaceCells)
+
+    # internalFaces
+
+    # - shouldn't need any adjustment
+
+    # fData
+
+    fData.nFaces += size(bdryFaces, 1)
+
+    for c in emptyBdry+1:fData.nBdry
+        fData.bdryIndices[c] += size(bdryFaces, 1)
+    end
+
+    # cells - just updating indices for now
+
+    for cell in 1:nCells
+        for face in 1:size(cells[cell],1)
+            if cells[cell][face] >= emptyIndexEnd
+                cells[cell][face] += size(bdryFaces, 1)
+            end
+        end
+    end
+
+    # delFaces (check)
+
+    for i in 1:size(delFaces,1)
+        if delFaces[i] >= emptyIndexEnd
+            delFaces[i] += size(bdryFaces, 1)
+        end
+    end
 
 
-    #Placeholder fCen for now
+    ####### Interior faces now #################
+
+    intIndexEnd = fData.bdryIndices[1]
+
+    # fPoints
+
+    fPoints = insertArrayInt(fPoints, intIndexEnd, intFaces)
+
+    # fCen
+
+    newFCen = Array{Array{Float64,1} ,1}(undef,0)
+    for i in 1:size(intFaces,1)
+        push!(newFCen, [0.0, 0.0, 0.0])
+    end
+
+    fCen = insertArray(fCen, intIndexEnd, newFCen)
+
+    # faces
+
+    newIntFaceCells = Array{Array{Int64,1} , 1}(undef, 0)
+    for i in 1:size(intFaces,1)
+        iPlus = i+1
+        if iPlus > (size(intFaces,1))
+            iPlus -= size(intFaces,1)
+        end
+        newCells = [i+nCells, iPlus]
+        push!(newIntFaceCells, newCells)
+    end
+
+    faces = insertArrayInt(faces, intIndexEnd, newIntFaceCells)
+
+
+    # internalFaces
+
+    # - shouldn't need any adjustment
+
+    # fData
+
+    fData.nFaces += size(intFaces, 1)
+    fData.nIntFaces += size(intFaces, 1)
+
+    for b in 1:fData.nBdry
+        fData.bdryIndices[b] += size(intFaces, 1)
+    end
+
+    # cells - different treatment
+
+    for cell in 1:nCells
+        for face in 1:size(cells[cell],1)
+            if cells[cell][face] >= intIndexEnd
+                cells[cell][face] += size(intFaces, 1)
+            end
+        end
+    end
+
+    # - add new cells - with new face indices
+    ## Each new cell will have five faces - four new ones, and one existing
+
+    newCells = Array{Array{Int64, 1}, 1}(undef, 0)
+
+    for i in 1:size(intFaces, 1)
+        iMod = i - 1
+        if iMod < 1
+            iMod += size(intFaces,1)
+        end
+        neighbourCellFace, empty1, empty2 = findNeighbouringFace(fPoints, internalFaces, fData, emptyBdry, iMod)
+        startPoint = fData.nIntFaces - size(intFaces,1)
+        internalNew1 = startPoint + i
+        internalNew2 = startPoint + iMod
+        newCellFaces = [neighbourCellFace, internalNew1, internalNew2, empty1, empty2]
+
+        push!(cells, newCellFaces)
+
+        #Update neighbour cell face in faces as well
+
+        if faces[neighbourCellFace][1] == delCell
+            faces[neighbourCellFace][1] = nCells+i
+        elseif faces[neighbourCellFace][2] == delCell
+            faces[neighbourCellFace][2] = nCells+i
+        end
+    end
+
+
+
+    # delFaces
+
+    for i in 1:size(delFaces,1)
+        if delFaces[i] >= intIndexEnd
+            delFaces[i] += size(intFaces, 1)
+        end
+    end
+
+    return cells, faces, fCen, fPoints, fData, delFaces
 end
 
-function removeFacesAndCellsFromMesh(cells, faces, fCen, fPoints, fPLocs, fData, nList, index)
+function removeFacesAndCellsFromMesh(cells, faces, fCen, fPoints, fData, nList, delFaces, delCell)
+    # Actions to each input
+    #
+    #   cells   - decrement all faces by the amount of deleted cells in front of them (increments already done)
+    #           - then delete the list/element corresponding to the deleted cell
+    #   faces   - decrement all indices in the list above delCell by one
+    #           - then delete lists/elements corresponding to deleted faces
+    #   fCen    - delete rows/elements corresponding to deleted faces
+    #   fPoints - delete rows/elements corresponding to deleted faces
+    #   fData   - update relevent trackers while updating faces
+    #   nList   - cells numbered above the deleted cell should be decremented by one (don't touch the decremented cell for now, we should be done with it after this)
+
+    ##### Deal with faces first
+    delFacesSorted = sort(delFaces, rev=true) #Sort so that we start from the highest and never have to touch this list
+    for f in delFacesSorted
+        for i in 1:size(cells,1)
+            for j in 1:size(cells[i],1)
+                if cells[i][j] > f # The cells[i][j] == f occurs only for the cell list we are going to delete, because other cases have already been updated. NOTE: not sure if true for bisection as well??
+                    cells[i][j] -= 1
+                end
+            end
+        end
+
+        # faces, fCen, fPoints
+
+        deleteat!(faces, f)
+        deleteat!(fCen, f)
+        deleteat!(fPoints, f)
+
+        # fData
+        fData.nFaces -= 1
+        if f <= fData.nIntFaces
+            fData.nIntFaces -= 1
+        end
+        for b in 1:fData.nBdry
+            if f <= fData.bdryIndices[b]   # I think this is the right conditional?
+                fData.bdryIndices[b] -= 1
+            end
+        end
+    end
+
+    ##### Now deal with cell
+
+    for f in 1:size(faces,1)
+        #If any reference is deleted cell I've done it wrong
+        for cell in 1:size(faces[f],1)
+            if faces[f][cell] > delCell
+                faces[f][cell] -= 1
+            elseif faces[f][cell] == delCell
+                println("You fucked up removing faces references to dead cell!")
+                println("$breakdown")
+            end
+        end
+    end
+
+    for i in 1:size(nList,1)
+        if nList[i] > delCell
+            nList[i] -= 1
+        end
+    end
+
+    deleteat!(cells, delCell)
+
+    return cells, faces, fCen, fPoints, fData, nList
 
 end
 
-function insertArray!(array::AbstractArray, splitIndex, newArray)
+function insertArrayInt(array::AbstractArray, splitIndex, newArray)
     arraySize = size(array,1)
     topArray = array[1:splitIndex-1, :]
-    botArray = array[splitIndex:arraySize, :]
 
     newArraySize = size(newArray, 1)
 
-    #display(newArray)
+    hArraySize = newArraySize + size(array,1)
+    holderArray = Array{Array{Int64,1}}(undef, hArraySize)
 
-    #holderArray = zeros(Int64, newArraySize, 3)
-
-    #push!(topArray, newArray[:][:])
-
-    for i in 1:newArraySize
-        holderArray = zeros(Int, 1,3)
-        holderArray[1,:] = newArray[i][:]
-        push!(topArray, holderArray)
+    for i in 1:splitIndex-1
+        holderArray[i] = array[i]
     end
 
-    array = vcat(topArray, botArray)
+    for i in 1:newArraySize
+        iPlus = i + splitIndex -1
+        holderArray[iPlus] = newArray[i]
+    end
 
+    for i in splitIndex+newArraySize:arraySize+newArraySize
+        iMin = i - newArraySize
+        holderArray[i] = array[iMin]
+    end
 
+    return holderArray
+end
+
+function insertArray(array::AbstractArray, splitIndex, newArray)
+    arraySize = size(array,1)
+    topArray = array[1:splitIndex-1, :]
+
+    newArraySize = size(newArray, 1)
+
+    hArraySize = newArraySize + size(array,1)
+    holderArray = Array{Array{Float64,1}}(undef, hArraySize)
+
+    for i in 1:splitIndex-1
+        holderArray[i] = array[i]
+    end
+
+    for i in 1:newArraySize
+        iPlus = i + splitIndex -1
+        holderArray[iPlus] = newArray[i]
+    end
+
+    for i in splitIndex+newArraySize:arraySize+newArraySize
+        iMin = i - newArraySize
+        holderArray[i] = array[iMin]
+    end
+
+    return holderArray
+end
+
+function findNeighbouringFace(fPoints, internalFaces, fData, b, i)
+    p = size(internalFaces, 1)
+    index = fData.bdryIndices[b+1]
+
+    faceEmpty1 = fPoints[index-(2*p)+i-1]
+    faceEmpty2 = fPoints[index-p+i-1]
+
+    faceEmptyIndex1 = index-(2*p) +i - 1
+    faceEmptyIndex2 = index - p +i -1
+
+    targetPts = vcat(faceEmpty1[2:3], faceEmpty2[2:3])
+
+    faceIndex = -1
+
+    for face in internalFaces
+        counter = 0
+        checkPts = fPoints[face]
+        for i in 1:size(checkPts,1)
+            for j in 1:size(targetPts,1)
+                if checkPts[i] == targetPts[j]
+                    counter += 1
+                end
+            end
+        end
+
+        if counter == size(checkPts,1)
+            faceIndex = face
+        end
+    end
+
+    if faceIndex == -1
+        println("Could not find matching face!")
+    end
+
+    return faceIndex, faceEmptyIndex1, faceEmptyIndex2
 end

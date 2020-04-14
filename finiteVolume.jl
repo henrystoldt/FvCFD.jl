@@ -1016,7 +1016,10 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
 
             adaptMesh = createMeshAdaptStruct(mesh, meshPath)
 
-            newMesh = adaptNewMesh(adaptMesh, nAdaptList, boundaryConditions)
+            adaptedMesh = adaptNewMesh(adaptMesh, nAdaptList, boundaryConditions) # NOTE: adaptedMesh needs to be written to OF file and then read back in to be used 
+
+
+
 
             writeNewOpenFoamMesh()
 
