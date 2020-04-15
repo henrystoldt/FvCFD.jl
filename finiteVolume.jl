@@ -914,7 +914,7 @@ end
         .vtk files (is specified)
 =#
 function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}, boundaryConditions, timeIntegrationFn=forwardEuler,
-        fluxFunction=unstructured_JSTFlux; initDt=0.001, endTime=0.14267, outputInterval=0.01, adaptInterval=0.001,targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005,
+        fluxFunction=unstructured_JSTFlux; initDt=0.001, endTime=0.14267, outputInterval=0.01, adaptInterval=0.005,targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005,
         silent=true, restart=false, createRestartFile=true, createVTKOutput=true, restartFile="JuliaCFDRestart.txt")
 
     if !silent
@@ -1100,6 +1100,8 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
             # rho, xMom, total energy from P, T, Ux, Uy, Uz
             newCellPrims = initializeUniformSolution3D(newMesh, initP, initT, initU...)
 
+
+
             cellState = encodePrimitives3D(newCellPrims)
             cellFluxes = zeros(newNCells, nFluxes)
             fluxResiduals = zeros(newNCells, nVars)
@@ -1107,7 +1109,10 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
             faceFluxes = zeros(newNFaces, nFluxes)
             facePrimitives = zeros(newNFaces, nVars)
             # Initialize solution state
-            newSln = SolutionState(cellState, cellFluxes, cellPrimitives, fluxResiduals, faceState, faceFluxes, facePrimitives)
+            newSln = SolutionState(cellState, cellFluxes, newCellPrims, fluxResiduals, faceState, faceFluxes, facePrimitives)
+
+            nCPS = size(newSln.cellPrimitives, 1)
+            println("The new CP size is: $nCPS")
 
             #Replace all the old variables
             meshPath = newPath
@@ -1130,6 +1135,8 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
             #
             # display(mesh.cells[1000:end])
             #println("$breakdown")
+            nCells = size(sln.cellPrimitives,1)
+            println("New solution size: $nCells")
 
 
             #TODO: I don't think this interpolation to the faces is required - check if it's redundant
