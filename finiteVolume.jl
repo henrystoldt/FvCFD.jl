@@ -1048,6 +1048,7 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
         end
 
         if adaptMeshThisIteration
+            #updateSolutionOutput(sln.cellPrimitives, restartFile, meshPath, createRestartFile, createVTKOutput)
             println("Adapting mesh...")
 
             gradP_LS = leastSqGrad(mesh, sln, 3, 1)
@@ -1111,13 +1112,11 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
             # Initialize solution state
             newSln = SolutionState(cellState, cellFluxes, newCellPrims, fluxResiduals, faceState, faceFluxes, facePrimitives)
 
-            nCPS = size(newSln.cellPrimitives, 1)
-            println("The new CP size is: $nCPS")
-
             #Replace all the old variables
             meshPath = newPath
             sln = interpSlnToNewMesh(sln, newSln, mesh, newMesh, origAdaptList, newCellsList)
             mesh = newMesh
+            CFLvec = zeros(size(sln.cellState,1))
 
             nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
 
@@ -1135,8 +1134,8 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
             #
             # display(mesh.cells[1000:end])
             #println("$breakdown")
-            nCells = size(sln.cellPrimitives,1)
-            println("New solution size: $nCells")
+            # nCells = size(sln.cellPrimitives,1)
+            # println("New solution size: $nCells")
 
 
             #TODO: I don't think this interpolation to the faces is required - check if it's redundant
@@ -1173,7 +1172,7 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
 
             println("Wrote new sln file!")
 
-            println("This is how you $break")
+            #println("This is how you $break")
 
 
             adaptMeshThisIteration = false
