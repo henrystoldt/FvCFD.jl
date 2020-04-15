@@ -410,6 +410,7 @@ function OpenFOAMMesh_findCellPts(polyMeshPath)
         # First face to add to the pts array. Changing the index of this face (which must be <= Number of faces in smallest cell) can change in which order points are added to the array.
             # This sometimes happens to put points in the correct order for nice-looking .vtk output
             # Current best options for each mesh: Wedge - 3
+        #println("We made it to cell $c")
         addFace(cells[c][3])
 
         # Add any disjoint faces
@@ -636,6 +637,22 @@ function adaptNewMesh(mesh::AdaptMesh, nList, boundaryConditions)
         end
     end
 
+    # display(cells[1000:end])
+    # nCells = size(cells,1)
+    # nFaces = size(faces,1)
+    # println("There are $nCells cells leaving adaptation, and $nFaces faces")
+    # #println("$breakdown")
+    #
+    # holder1 = size(cells,1)
+    # holder2 = size(faces,1)
+    # holder3 = size(fPoints,1)
+    # holder4 = size(fPLocs,1)
+    # holder5 = size(nList,1)
+    # #holder6 = cells[631:635]
+    #
+    # display(faces[3931])
+    # println("Debug statement: cells $holder1, faces $holder2, fPoints $holder3, fPLocs $holder4, nList $holder5")
+
     #### NOTE: In its current form, this does not update cVols, cCenters, cellSizes, fAVecs, fCenters, or boundaryFaces, because this is intended to be immediately used to write a new mesh file, and they are not required
     mesh.cells = cells
     mesh.faces = faces
@@ -853,16 +870,24 @@ function addFacesAndCellsToMesh(cells, faces, fCen, fPoints, fData, internalFace
     fCen = insertArray(fCen, emptyIndexEnd, newFCen)
 
     # faces
+    nBdryFacesHold = size(bdryFaces,1)
+    nIntFacesHold = size(intFaces, 1)
 
     newBdryFaceCells = Array{Array{Int64,1} , 1}(undef, 0)
     for i in 1:size(bdryFaces,1)
-        iNew = i+1
+        iNew = i + 1                    # Overflow bug TODO: Write a decent fix and for the one around line ~947
         if iNew > (size(intFaces,1))
+            iNew -= size(intFaces,1)
+        end
+        if iNew > (size(intFaces,1))    #This fixes the bug if it's still too high!!
             iNew -= size(intFaces,1)
         end
         newCells = [iNew+nCells, -1]
         push!(newBdryFaceCells, newCells)
     end
+
+    # println("New bdry face cells!")
+    # display(newBdryFaceCells)
 
     faces = insertArrayInt(faces, emptyIndexEnd, newBdryFaceCells)
 
@@ -919,7 +944,7 @@ function addFacesAndCellsToMesh(cells, faces, fCen, fPoints, fData, internalFace
     newIntFaceCells = Array{Array{Int64,1} , 1}(undef, 0)
     for i in 1:size(intFaces,1)
         iPlus = i+1
-        if iPlus > (size(intFaces,1))
+        if iPlus > (size(intFaces,1))       # Don't need it because you're only looping over it the same times as the size
             iPlus -= size(intFaces,1)
         end
         newCells = [i+nCells, iPlus+nCells]
@@ -1064,6 +1089,7 @@ function removeFacesAndCellsFromMesh(cells, faces, fCen, fPoints, fData, nList, 
         for cell in 1:size(faces[f],1)
             if faces[f][cell] > delCell
                 faces[f][cell] -= 1
+
             elseif faces[f][cell] == delCell
                 println("You fucked up removing faces references to dead cell!")
                 println("$breakdown")
