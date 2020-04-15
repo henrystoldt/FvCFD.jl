@@ -838,27 +838,28 @@ function findCellsToAdapt(error; adaptPercent=0.05)
     return nAdaptList
 end
 
-function interpSlnToNewMesh(sln::SolutionState, newSln::SolutionState, mesh::Mesh, newMesh::Mesh, nAdaptList, newCellsList)
-    oldNCells = size(mesh.cells,1)
-
-    # println("nAdapt list is:")
-    # display(nAdaptList)
-
+function interpSlnToNewMesh(sln::SolutionState, newSln::SolutionState, oldNCells, nAdaptList, newCellsList)
+    #oldNCells = size(mesh.cells,1)
+    
     # Then loop through all the old cells (full loop, but exclude adapted cells) and map prims and conserved to new sln file
     #   need a way to map the old cell numbers to the new ones? I think it's newCellIndex = oldIndex- cellsDeletedInFrontOfIt
     for i in 1:oldNCells
+        if !any(j->(j==i), nAdaptList) #Skip the cells we deleted for now, they will have a different treatment
 
-        if !any(j->(j==i), nAdaptList) #Skip the faces we deleted for now, they will have a different treatment
             iNew = i
+            counter = 0
             for j in 1:size(nAdaptList,1)
-                if iNew >= nAdaptList[j]
+                if i >= nAdaptList[j]
                     iNew -= 1
+                    counter += 1
                 end
             end
-            newSln.cellState[iNew] = sln.cellState[i]
-            newSln.cellFluxes[iNew] = sln.cellFluxes[i]
-            newSln.cellPrimitives[iNew] = sln.cellPrimitives[i]
-            newSln.fluxResiduals[iNew] = sln.fluxResiduals[i]
+
+
+            newSln.cellState[iNew,:] = sln.cellState[i,:]
+            newSln.cellFluxes[iNew,:] = sln.cellFluxes[i,:]
+            newSln.cellPrimitives[iNew,:] = sln.cellPrimitives[i,:]
+            newSln.fluxResiduals[iNew,:] = sln.fluxResiduals[i,:]
         end
     end
 
@@ -866,10 +867,10 @@ function interpSlnToNewMesh(sln::SolutionState, newSln::SolutionState, mesh::Mes
         oldCell = nAdaptList[i]
         for j in 1:size(newCellsList[i],1)
             newCell = newCellsList[i][j]
-            newSln.cellState[newCell] = sln.cellState[oldCell]
-            newSln.cellFluxes[newCell] = sln.cellFluxes[oldCell]
-            newSln.cellPrimitives[newCell] = sln.cellPrimitives[oldCell]
-            newSln.fluxResiduals[newCell] = sln.fluxResiduals[oldCell]
+            newSln.cellState[newCell,:] = sln.cellState[oldCell,:]
+            newSln.cellFluxes[newCell,:] = sln.cellFluxes[oldCell,:]
+            newSln.cellPrimitives[newCell,:] = sln.cellPrimitives[oldCell,:]
+            newSln.fluxResiduals[newCell,:] = sln.fluxResiduals[oldCell,:]
         end
     end
 
@@ -1049,6 +1050,7 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
 
         if adaptMeshThisIteration
             #updateSolutionOutput(sln.cellPrimitives, restartFile, meshPath, createRestartFile, createVTKOutput)
+            oldNCells = nCells
             println("Adapting mesh...")
 
             gradP_LS = leastSqGrad(mesh, sln, 3, 1)
@@ -1114,7 +1116,7 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
 
             #Replace all the old variables
             meshPath = newPath
-            sln = interpSlnToNewMesh(sln, newSln, mesh, newMesh, origAdaptList, newCellsList)
+            sln = interpSlnToNewMesh(sln, newSln, oldNCells, origAdaptList, newCellsList)
             mesh = newMesh
             CFLvec = zeros(size(sln.cellState,1))
 
