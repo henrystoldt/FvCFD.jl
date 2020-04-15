@@ -824,7 +824,7 @@ end
 function convertDimToEta()
 end
 
-function findCellsToAdapt(error, adaptPercent=0.05)
+function findCellsToAdapt(error; adaptPercent=0.05)
     nCells = size(error, 1)
     nCellsAdapt = floor(Int, nCells * adaptPercent)
 
@@ -1058,7 +1058,7 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
                 gradP_mag[i] = mag(gradP_LS[i, 1, :])
             end
 
-            nAdaptList = findCellsToAdapt(gradP_mag)
+            nAdaptList = findCellsToAdapt(gradP_mag, adaptPercent=0.15)
 
             origAdaptList = copy(nAdaptList)
 
