@@ -39,6 +39,9 @@ function outputVTK(meshPath, cellPrimitives, fileName="solution.vtk")
 
         #### Output all POINTS in the mesh, one per line ####
         points, cellPtIndices = OpenFOAMMesh_findCellPts(meshPath)
+        # display(points)
+        # display(cellPtIndices)
+        # println("$breakdown")
         nCells = size(cellPtIndices, 1)
         nPts = size(points, 1)
         write(f, "\nPOINTS $nPts float\n")

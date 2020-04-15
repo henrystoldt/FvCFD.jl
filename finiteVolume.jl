@@ -1066,6 +1066,25 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
             println("Writing new mesh...")
 
             adaptedMesh, newCellsList, facesData = adaptNewMesh(adaptMesh, nAdaptList, boundaryConditions) # NOTE: adaptedMesh needs to be written to OF file and then read back in to be used
+            # println("Cell 1020")
+            # display(adaptedMesh.cells[1010:end])
+            # #println("$breakdown")
+            # nCells = size(adaptedMesh.cells, 1)
+            # counter = 0
+            # maxCell = 0
+            # faces = adaptedMesh.faces
+            # for face in faces
+            #     for i in 1:2
+            #         if face[i] > nCells
+            #             counter += 1
+            #         end
+            #         if face[i] > maxCell
+            #             maxCell = face[i]
+            #         end
+            #     end
+            # end
+            # println("Extent of problem: $counter count and $maxCell max")
+            # println("FacesData: $facesData")
 
             newPath = writeNewOpenFOAMMesh(adaptedMesh, facesData)
 
@@ -1096,6 +1115,21 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
             mesh = newMesh
 
             nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
+
+            println("After adaptation, we have $nCells cells, and $nFaces faces")
+
+            # holder1 = size(mesh.cells,1)
+            # holder2 = size(mesh.faces,1)
+            # #holder3 = size(mesh.fPoints,1)
+            # #holder4 = size(mesh.fPLocs,1)
+            # #holder5 = size(nList,1)
+            # #holder6 = cells[631:635]
+            #
+            # display(mesh.faces[3931])
+            # println("Debug statement: cells $holder1, faces $holder2,")# fPoints $holder3, fPLocs $holder4, nList $holder5")
+            #
+            # display(mesh.cells[1000:end])
+            #println("$breakdown")
 
 
             #TODO: I don't think this interpolation to the faces is required - check if it's redundant
