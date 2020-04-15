@@ -838,6 +838,47 @@ function findCellsToAdapt(error, adaptPercent=0.05)
     return nAdaptList
 end
 
+function interpSlnToNewMesh(sln::SolutionState, newSln::SolutionState, mesh::Mesh, newMesh::Mesh, nAdaptList, newCellsList)
+    oldNCells = size(mesh.cells,1)
+
+    # println("nAdapt list is:")
+    # display(nAdaptList)
+
+    # Then loop through all the old cells (full loop, but exclude adapted cells) and map prims and conserved to new sln file
+    #   need a way to map the old cell numbers to the new ones? I think it's newCellIndex = oldIndex- cellsDeletedInFrontOfIt
+    for i in 1:oldNCells
+
+        if !any(j->(j==i), nAdaptList) #Skip the faces we deleted for now, they will have a different treatment
+            iNew = i
+            for j in 1:size(nAdaptList,1)
+                if iNew >= nAdaptList[j]
+                    iNew -= 1
+                end
+            end
+            newSln.cellState[iNew] = sln.cellState[i]
+            newSln.cellFluxes[iNew] = sln.cellFluxes[i]
+            newSln.cellPrimitives[iNew] = sln.cellPrimitives[i]
+            newSln.fluxResiduals[iNew] = sln.fluxResiduals[i]
+        end
+    end
+
+    for i in 1:size(nAdaptList,1)
+        oldCell = nAdaptList[i]
+        for j in 1:size(newCellsList[i],1)
+            newCell = newCellsList[i][j]
+            newSln.cellState[newCell] = sln.cellState[oldCell]
+            newSln.cellFluxes[newCell] = sln.cellFluxes[oldCell]
+            newSln.cellPrimitives[newCell] = sln.cellPrimitives[oldCell]
+            newSln.fluxResiduals[newCell] = sln.fluxResiduals[oldCell]
+        end
+    end
+
+
+    # Map to faces done from BCs outside this, and linInterp_3D (after BCs)
+
+    return newSln
+end
+
 
 
 ######################### Solvers #######################
@@ -886,6 +927,10 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
     nVars = 2+nDims
     # Each dimension adds a flux for each conserved quantity
     nFluxes = nVars*nDims
+
+    initP = cellPrimitives[1,1]
+    initT = cellPrimitives[1,2]
+    initU = cellPrimitives[1,3:5]
 
     if restart
         if !silent
@@ -1003,7 +1048,7 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
         end
 
         if adaptMeshThisIteration
-            println("Adapting Mesh!")
+            println("Adapting mesh...")
 
             gradP_LS = leastSqGrad(mesh, sln, 3, 1)
 
@@ -1014,18 +1059,63 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
 
             nAdaptList = findCellsToAdapt(gradP_mag)
 
+            origAdaptList = copy(nAdaptList)
+
             adaptMesh = createMeshAdaptStruct(mesh, meshPath)
+
+            println("Writing new mesh...")
 
             adaptedMesh, newCellsList, facesData = adaptNewMesh(adaptMesh, nAdaptList, boundaryConditions) # NOTE: adaptedMesh needs to be written to OF file and then read back in to be used
 
+            newPath = writeNewOpenFOAMMesh(adaptedMesh, facesData)
 
-            #nInternalFaces = facesData.nIntFaces
+            newMesh = OpenFOAMMesh(newPath)
+
+            #Interp to new cells
+
+            println("Interpolating solution to new mesh...")
+
+            newNCells = size(newMesh.cells,1)
+            newNFaces = size(newMesh.faces,1)
+
+            # rho, xMom, total energy from P, T, Ux, Uy, Uz
+            newCellPrims = initializeUniformSolution3D(newMesh, initP, initT, initU...)
+
+            cellState = encodePrimitives3D(newCellPrims)
+            cellFluxes = zeros(newNCells, nFluxes)
+            fluxResiduals = zeros(newNCells, nVars)
+            faceState = zeros(newNFaces, nVars)
+            faceFluxes = zeros(newNFaces, nFluxes)
+            facePrimitives = zeros(newNFaces, nVars)
+            # Initialize solution state
+            newSln = SolutionState(cellState, cellFluxes, cellPrimitives, fluxResiduals, faceState, faceFluxes, facePrimitives)
+
+            #Replace all the old variables
+            meshPath = newPath
+            sln = interpSlnToNewMesh(sln, newSln, mesh, newMesh, origAdaptList, newCellsList)
+            mesh = newMesh
+
+            nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
 
 
-            writeNewOpenFOAMMesh(adaptedMesh, facesData)
+            #TODO: I don't think this interpolation to the faces is required - check if it's redundant
+            # Apply BCs to sln
+            #### 1. Apply boundary conditions ####
+            for b in 1:nBoundaries
+                bFunctionIndex = 2*b-1
+                boundaryConditions[bFunctionIndex](mesh, sln, b, boundaryConditions[bFunctionIndex+1])
+            end
 
-            println("Wrote a new mesh!")
-            println("$breakdown")
+            #### 2. Interp all values to faces ####
+            sln.faceState[1:nFaces-nBdryFaces,:] = linInterpToFace_3D(mesh,sln, 1, -1)
+            sln.faceFluxes[1:nFaces-nBdryFaces,:] = linInterpToFace_3D(mesh, sln, 2, -1)
+            sln.facePrimitives[1:nFaces-nBdryFaces,:] = linInterpToFace_3D(mesh, sln, 3, -1)
+
+
+            #Interp from cells to faces
+
+            #println("Wrote a new mesh!")
+            #println("$breakdown")
 
             #println("Returned from adapting!")
             #print("$breakdown")
@@ -1033,6 +1123,10 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
             #sln.cellPrimitives[:,1] = gradP_LS[:,:,1]
             #sln.cellPrimitives[:,2] = gradP_GG[:,:,1]
             #sln.cellPrimitives[:,3] = 100 * (gradP_LS[:,:,1]-gradP_GG[:,:,1]) ./ gradP_LS[:,:,1]
+
+            createRestartFile = false
+
+
 
             updateSolutionOutput(sln.cellPrimitives, restartFile, meshPath, createRestartFile, createVTKOutput)
 
