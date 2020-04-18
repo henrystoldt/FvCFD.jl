@@ -711,13 +711,32 @@ function pointAddition(cells, faces, fCen, fPoints, fPLocs, fData, nList, index,
 
     offset = 0
 
+    offsetTrigger = false
+
     for j in 1:p
         workingPointLocs[j,:] = fPLocs[posFacePts[j],:]
-        if (workingPointLocs[j,1] == fPLocs[negFacePts[1],1]) && (workingPointLocs[j,2] == fPLocs[negFacePts[1],2])
+        #if (workingPointLocs[j,1] == fPLocs[negFacePts[1],1]) && (workingPointLocs[j,2] == fPLocs[negFacePts[1],2]) #TODO: Fix this implementation - I think it's causing the vtk writing issues
+        if checkMirrorPoints(workingPointLocs[j,:], fPLocs[negFacePts[1],:])
             offset = j - 1
+            offsetTrigger = true
         end
         #workingPointLocs[j+p,:] = fPLocs[negFacePts[j],:]
     end
+
+    if p == 4 && firstPassFlag
+        offset = 2
+    end
+
+    println("Offset is $offset")
+    negPoints = fPLocs[negFacePts[:],:]
+
+    if !offsetTrigger
+        println("Unable to find a matching points in cell $cell !")
+        println("working points locs: $workingPointLocs")
+        println("neg point locs: $negPoints")
+        println("$breakdown")
+    end
+
 
     newNegFacePts = zeros(Int, p)
 
@@ -1169,7 +1188,12 @@ end
 
 function findNeighbouringFace(fPoints, internalFaces, fData, b, i)
     p = size(internalFaces, 1)
-    index = fData.bdryIndices[b+1]
+    nBdry = fData.nBdry
+    if b == nBdry
+        index = fData.nFaces
+    else
+        index = fData.bdryIndices[b+1]
+    end
 
     # TODO: Fix it so that triangles number consistently, because I don't know if it's lining up with the cell numbering properly
     if p == 4 # This is a filthy hack, until I find out why triangles are numbering there points differently
@@ -1270,4 +1294,19 @@ function findNeighbouringFace(fPoints, internalFaces, fData, b, i)
     end
 
     return faceIndex, faceEmptyIndex1, faceEmptyIndex2
+end
+
+
+# Added this function because re writing the meshes is causing some numerical precision issues
+function checkMirrorPoints(workingPts, checkPts; tol=1e-6)
+    xDif = workingPts[1] - checkPts[1]
+    yDif = workingPts[2] - checkPts[2]
+
+    if (xDif < tol) && (yDif < tol)
+        println("Returning true!")
+        return true
+    else
+        println("Returning false!")
+        return false
+    end
 end

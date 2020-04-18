@@ -307,7 +307,81 @@ function greenGaussGrad(mesh::Mesh, matrix::AbstractArray{Float64, 2}, valuesAtF
     return grad
 end
 
+
+############ Limiters ###################
+
+function vanAlbeda(q_ip, q_i, q_im, dx; direc=0)
+    #=Impplements the vanAlbeda flux limiter, with a delta value of dx^3
+    =#
+    delta = dx.*dx.*dx
+    #delta = dx
+    #delta = 1.0
+    if direc ==0
+        r = (q_i - q_im)/(q_ip - q_i + delta)
+    else
+        r = (q_ip - q_i)/(q_i - q_im + delta)
+        #r = (q_i - q_im)/(q_ip - q_i + delta)
+    end
+    if r > 0
+        #s = 2*r / (r^2 + 1)
+        s = (r^2 + r)/(r^2 + 1)
+    else
+        s = 0
+    end
+    #s = (2 * (q_ip-q_i)*(q_i-q_im) + delta )/( (q_ip-q_i)^2 * (q_i-q_im)^2 + delta )
+    return s
+end
+
+
+
 ####################### Face value interpolation ######################
+
+function MUSCL_difference(mesh::Mesh, sln::SolutionState; sigma=-1)
+    nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
+    println("THeres $nCells cells, $nFaces faces, $nBdryFaces bdryfaces")
+
+    nVars = size(sln.cellState, 2)
+
+    interpOwner = zeros(nFaces-nBdryFaces, nVars)
+    interpNeighbour = zeros(nFaces-nBdryFaces, nVars)
+
+    sln.faceState[1:nFaces-nBdryFaces,:] = linInterpToFace_3D(mesh, sln, 1)
+
+    for v in 1:nVars
+        #@views P = sln.cellPrimitives[:,1]
+        #P = reshape(P, nCells, :)
+
+
+        facesCons = zeros(nFaces,1)
+        facesCons[:,:] = sln.faceState[:,v]
+
+        gradCons = greenGaussGrad(mesh, facesCons, true)
+
+        for f in 1:nFaces-nBdryFaces
+            ownerCell = mesh.faces[f][1]
+            neighbourCell = mesh.faces[f][2]
+            d = mesh.cCenters[neighbourCell] .- mesh.cCenters[ownerCell]
+
+            # 1. Find variable at owner/neighbour cells
+            qOwner = sln.cellState[ownerCell, v]
+            qNeighbour = sln.cellState[neighbourCell, v]
+
+            # 2. Calculate conserved quants at 'virtual' far-owner and far-neighbour cells using the pressure gradient (2nd-order)
+            @views farOwnerQ = qOwner - 2*dot(d, gradCons[ownerCell, 1, :])
+            @views farNeighbourQ = qNeighbour + 2*dot(d, gradCons[neighbourCell, 1, :])
+
+            dx = 0.1
+            sLeft = vanAlbeda(qNeighbour, qOwner, farOwnerQ, dx)
+            sRight = vanAlbeda(qOwner, qNeighbour, farNeighbourQ, dx)
+
+            interpOwner[f,v] = qOwner + sLeft*0.25*( (1-sigma*sLeft)*(qOwner-farOwnerQ) + (1+sigma*sLeft)*(qNeighbour-qOwner) ) * qOwner
+            interpNeighbour[f,v] = qNeighbour - sRight*0.25*( (1-sigma*sRight)*(farNeighbourQ-qNeighbour) + (1+sigma*sRight)*(qNeighbour-qOwner) )*qNeighbour
+        end
+    end
+
+    return interpOwner, interpNeighbour
+end
+
 #=
     Interpolates to all INTERIOR faces
     Arbitrary value matrix interpolation
@@ -431,6 +505,172 @@ end
 
 # TODO: MUSCL Interp
 
+######### Flux vectors
+
+function findFluxVectors(mesh::Mesh, sln::SolutionState, roeAveraged, eig1, eig2, eig3, ownerPrims, neighbourPrims, ownerCons, neighbourCons; gamma=1.4)
+    nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
+    #nVars = size(sln.cellFluxes, 1)
+    nVars = 5
+
+    nIntFaces = nFaces-nBdryFaces
+
+    FL = zeros(nIntFaces, nVars)
+    FR = zeros(nIntFaces, nVars)
+
+    F1 = zeros(nIntFaces, nVars)
+    F2 = zeros(nIntFaces, nVars)
+    F3 = zeros(nIntFaces, nVars)
+
+    # cons: rho, rhoU, rhoV, rhoW, eV2
+    # prims: P, T, U, V, W
+    # roe: rho, U, V, W, H
+
+    for f in 1:nFaces-nBdryFaces
+
+        fL_1 = [ownerCons[f,2], ownerCons[f,3], ownerCons[f,4]]
+        fL_2 = [ownerCons[f,2]*ownerPrims[f,3]+ownerPrims[f,1], ownerCons[f,2]*ownerPrims[f,4], ownerCons[f,2]*ownerPrims[f,5]]
+        fL_3 = [ownerCons[f,3]*ownerPrims[f,3], ownerCons[f,3]*ownerPrims[f,4]+ownerPrims[f,1], ownerCons[f,3]*ownerPrims[f,5]]
+        fL_4 = [ownerCons[f,4]*ownerPrims[f,3], ownerCons[f,4]*ownerPrims[f,4], ownerCons[f,4]*ownerPrims[f,5] + ownerPrims[f,1]]
+        fL_5 = [ownerPrims[f,3]*( ownerCons[f,5]+ownerPrims[f,1]  ), ownerPrims[f,4]*( ownerCons[f,5]+ownerPrims[f,1]  ), ownerPrims[f,5]*( ownerCons[f,5]+ownerPrims[f,1]  )  ]
+        fL = [fL_1, fL_2, fL_3, fL_4, fL_5]
+        normFVec = mesh.fAVecs[f] / mag(mesh.fAVecs[f])
+
+
+        # FL[f,1] = dot(normFVec, fL_1)
+        # FL[f,2] = dot(normFVec, fL_2)
+        # FL[f,3] = dot(normFVec, fL_3)
+        # FL[f,4] = dot(normFVec, fL_4)
+        # FL[f,5] = dot(normFVec, fL_5)
+
+        fR_1 = [neighbourCons[f,2], neighbourCons[f,3], neighbourCons[f,4]]
+        fR_2 = [neighbourCons[f,2]*neighbourPrims[f,3]+neighbourPrims[f,1], neighbourCons[f,2]*neighbourPrims[f,4], neighbourCons[f,2]*neighbourPrims[f,5]]
+        fR_3 = [neighbourCons[f,3]*neighbourPrims[f,3], neighbourCons[f,3]*neighbourPrims[f,4]+neighbourPrims[f,1], neighbourCons[f,3]*neighbourPrims[f,5]]
+        fR_4 = [neighbourCons[f,4]*neighbourPrims[f,3], neighbourCons[f,4]*neighbourPrims[f,4], neighbourCons[f,4]*neighbourPrims[f,5] + neighbourPrims[f,1]]
+        fR_5 = [neighbourPrims[f,3]*( neighbourCons[f,5]+neighbourPrims[f,1]  ), neighbourPrims[f,4]*( neighbourCons[f,5]+neighbourPrims[f,1]  ), neighbourPrims[f,5]*( neighbourCons[f,5]+neighbourPrims[f,1]  )  ]
+        fR = [fR_1, fR_2, fR_3, fR_4, fR_5]
+        # FR[f,1] = dot(normFVec, fR_1)
+        # FR[f,2] = dot(normFVec, fR_2)
+        # FR[f,3] = dot(normFVec, fR_3)
+        # FR[f,4] = dot(normFVec, fR_4)
+        # FR[f,5] = dot(normFVec, fR_5)
+
+        # println("Owner vecs are:")
+        # display(ownerCons[f,:])
+        # display(ownerPrims[f,:])
+        # println("And neighbour vecs are:")
+        # display(neighbourCons[f,:])
+        # display(neighbourPrims[f,:])
+        # println("And flux vecs")
+        #
+        # display(normFVec)
+        # display(normFVec[2])
+
+
+        sound = sqrt( (gamma-1)*(roeAveraged[f,5] - 0.5*( mag(roeAveraged[f,2:4])^2 ) ) )
+        UBar = (neighbourPrims[f,3]-ownerPrims[f,3])*normFVec[1] + (neighbourPrims[f,4]-ownerPrims[f,4])*normFVec[2] + (neighbourPrims[f,5]-ownerPrims[f,5])*normFVec[3]
+        URoe = dot(normFVec, roeAveraged[f,2:4])
+
+        f_11 = (neighbourCons[f,1]-ownerCons[f,1])-(neighbourPrims[f,1]-ownerPrims[f,1])/(sound^2) #TODO: Some uncertainty about the sign +/- here
+        f_12 = roeAveraged[f,2]*( f_11 ) + roeAveraged[f,1]*( (neighbourPrims[f,3]-ownerPrims[f,3])-normFVec[1]*UBar )
+        f_13 = roeAveraged[f,3]*( f_11 ) + roeAveraged[f,1]*( (neighbourPrims[f,4]-ownerPrims[f,4])-normFVec[2]*UBar )
+        f_14 = roeAveraged[f,4]*( f_11 ) + roeAveraged[f,1]*( (neighbourPrims[f,5]-ownerPrims[f,5])-normFVec[3]*UBar )
+        f_15 = 0.5 * (mag(roeAveraged[f,2:4])^2) * (f_11) + roeAveraged[f,1]*( roeAveraged[f,2]*(neighbourPrims[f,3]-ownerPrims[f,3]) + roeAveraged[f,3]*(neighbourPrims[f,4]-ownerPrims[f,4]) + roeAveraged[f,4]*(neighbourPrims[f,5]-ownerPrims[f,5]) - URoe * UBar )
+        F_1 = [f_11, f_12, f_13, f_14, f_15]
+
+        # F1[f,1] = abs(eig1[f]) * f_11
+        # F1[f,2] = abs(eig1[f]) * f_12
+        # F1[f,3] = abs(eig1[f]) * f_13
+        # F1[f,4] = abs(eig1[f]) * f_14
+        # F1[f,5] = abs(eig1[f]) * f_15
+
+
+        f2Pre = (neighbourPrims[f,1]-ownerPrims[f,1])/(2*sound^2) + (roeAveraged[f,1]*UBar)/(2*sound) #TODO: Another place with +/- uncertainty
+
+        f_21 = 1
+        f_22 = roeAveraged[f,2] + normFVec[1] * sound
+        f_23 = roeAveraged[f,3] + normFVec[2] * sound
+        f_24 = roeAveraged[f,4] + normFVec[3] * sound
+        f_25 = roeAveraged[f,5] + URoe * sound
+        F_2 = [f_21, f_22, f_23, f_24, f_25]
+
+        f3Pre = (neighbourPrims[f,1]-ownerPrims[f,1])/(2*sound^2) - (roeAveraged[f,1]*UBar)/(2*sound)
+
+        f_31 = 1
+        f_32 = roeAveraged[f,2] - normFVec[1]*sound
+        f_33 = roeAveraged[f,3] - normFVec[2]*sound
+        f_34 = roeAveraged[f,4] - normFVec[3]*sound
+        f_35 = roeAveraged[f,5] - URoe*sound
+        F_3 = [f_31, f_32, f_33, f_34, f_35]
+
+
+
+        for i in 1:5
+            FL[f,i] = dot(normFVec, fL[i])
+            FR[f,i] = dot(normFVec, fR[i])
+            F1[f,i] = abs(eig1[f]) * F_1[i]
+            F2[f,i] = abs(eig2[f]) * f2Pre * F_2[i]
+            F3[f,i] = abs(eig3[f]) * f3Pre * F_3[i]
+        end
+
+        # display(fR_1)
+        # display(fR_2)
+        # display(fR_3)
+        # display(fR_4)
+        # display(fR_5)
+        # display(F3[f,:])
+
+        # println("$breakdown")
+    end
+
+    return FL, FR, F1, F2, F3
+
+end
+
+
+function findEigenvalues(roe, left, right; gamma=1.4, K=0.1)
+    nFaces = size(roe,1)
+
+    sound = zeros(nFaces)
+
+    eig1 = zeros(nFaces)
+    eig2 = zeros(nFaces)
+    eig3 = zeros(nFaces)
+
+    for f in 1:nFaces
+        sound = sqrt( (gamma-1)*(roe[f,5] - 0.5*( mag(roe[f,2:4])^2 ) ) )
+
+        eig1[f] = mag( roe[f,2:4] )
+        eig2[f] = mag( roe[f,2:4] ) + sound
+        eig2[f] = mag( roe[f,2:4] ) - sound
+
+        epsilon = K * max( ( mag(right[f,3:5])-mag(left[f,3:5]) ), 0)
+
+        if epsilon > abs(eig1[f])
+            eig1[f] = ( eig1[f]^2 + epsilon^2 )/(2*epsilon)
+            println("Replaced eig1")
+        end
+
+        if epsilon > abs(eig2[f])
+            eig2[f] = ( eig2[f]^2 + epsilon^2 )/(2*epsilon)
+            println("Replaced eig2")
+        end
+
+        if epsilon > abs(eig3[f])
+            println("Replaced eig3!")
+            # display(eig3[f])
+            eig3[f] = ( eig3[f]^2 + epsilon^2 )/(2*epsilon)
+            # println("Is now")
+            # display(eig3[f])
+
+        end
+    end
+
+    return eig1, eig2, eig3
+end
+
+
+
+
 ######################### Convective Term Things #######################
 # Calculates eps2 and eps4, the second and fourth-order artificial diffusion coefficients used in the JST method
 function unstructured_JSTEps(mesh::Mesh, sln::SolutionState, k2=0.5, k4=(1/32), c4=1, gamma=1.4, R=287.05)
@@ -544,6 +784,88 @@ function unstructured_JSTFlux(mesh::Mesh, sln::SolutionState, boundaryConditions
     #### 4. Integrate fluxes at in/out of each cell (sln.faceFluxes) to get change in cell center values (sln.fluxResiduals) ####
     return integrateFluxes_unstructured3D(mesh, sln, boundaryConditions)
 end
+
+
+######## ROE Flux ########################################
+#=
+    Inputs: Expects that sln.cellState, sln.cellPrimitives and sln.cellFluxes are up-to-date
+    Outputs: Updates sln.faceFluxes and sln.cellResiduals
+    Returns: Updated sln.cellResiduals
+
+    Applies classical JST method: central differencing + JST artificial diffusion. Each face treated as a 1D problem
+    http://aero-comlab.stanford.edu/Papers/jst_2015_updated_07_03_2015.pdf -  see especially pg.5-6
+=#
+function unstructured_ROEFlux(mesh::Mesh, sln::SolutionState, boundaryConditions, gamma, R)
+    nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
+    nVars = size(sln.cellState, 2)
+
+    display(sln.cellState[1:2,:])
+
+    #### 1. Apply boundary conditions ####
+    for b in 1:nBoundaries
+        bFunctionIndex = 2*b-1
+        boundaryConditions[bFunctionIndex](mesh, sln, b, boundaryConditions[bFunctionIndex+1])
+    end
+
+    #### 2. MUSCL difference fluxes ####
+    consOwner, consNeighbour = MUSCL_difference(mesh, sln)
+
+    #ownerPrims = zeros(nFaces-nBdryFaces, 5)
+    neighbourPrims = zeros(nFaces-nBdryFaces, 5)
+
+
+
+    ownerPrims = decodePrimitives3D(consOwner)
+    neighbourPrims = decodePrimitives3D(consNeighbour)
+
+    #### 3. Find ROE averaged quantites
+
+    roeAveraged = calculateROEAveraged(ownerPrims, neighbourPrims, consOwner, consNeighbour)
+
+    #### 4. Find (and correct) eigenvalues
+
+    eig1, eig2, eig3 = findEigenvalues(roeAveraged, ownerPrims, neighbourPrims)
+
+    FL, FR, F1, F2, F3 = findFluxVectors(mesh, sln, roeAveraged, eig1, eig2, eig3, ownerPrims, neighbourPrims, consOwner, consNeighbour) #TODO: Pretty sure this fcn isn't treating boundaries correctly
+
+    println("$breakdown")
+
+
+
+
+
+    #### 3. Add JST artificial Diffusion ####
+    fDeltas = faceDeltas(mesh, sln) # TODO: Figure out how to deal with boundaries, as currently they are not included here
+    fDGrads = greenGaussGrad(mesh, fDeltas, true)
+    eps2, eps4 = unstructured_JSTEps(mesh, sln, 0.5, (1.2/32), 1, gamma, R)
+
+    diffusionFlux = zeros(nVars)
+    @inbounds @fastmath for f in 1:nFaces-nBdryFaces
+        ownerCell = mesh.faces[f][1]
+        neighbourCell = mesh.faces[f][2]
+        d = mesh.cCenters[neighbourCell] .- mesh.cCenters[ownerCell]
+
+        @views fD = fDeltas[f,:]
+        @views farOwnerfD = fD .- dot(d, fDGrads[ownerCell,:,:])
+        @views farNeighbourfD = fD .+ dot(d, fDGrads[ownerCell,:,:])
+
+        diffusionFlux = eps2[f]*fD - eps4[f]*(farNeighbourfD - 2*fD + farOwnerfD)
+
+        # Add diffusion flux in component form
+        unitFA = normalize(mesh.fAVecs[f])
+        for v in 1:nVars
+            i1 = (v-1)*3+1
+            i2 = i1+2
+            sln.faceFluxes[f,i1:i2] .-= (diffusionFlux[v] .* unitFA)
+        end
+    end
+
+
+
+    #### 4. Integrate fluxes at in/out of each cell (sln.faceFluxes) to get change in cell center values (sln.fluxResiduals) ####
+    return integrateFluxes_unstructured3D(mesh, sln, boundaryConditions)
+end
+
 
 ######################### TimeStepping #################################
 # Calculate sln.cellPrimitives and sln.cellFluxes from sln.cellState
@@ -840,7 +1162,7 @@ end
 
 function interpSlnToNewMesh(sln::SolutionState, newSln::SolutionState, oldNCells, nAdaptList, newCellsList)
     #oldNCells = size(mesh.cells,1)
-    
+
     # Then loop through all the old cells (full loop, but exclude adapted cells) and map prims and conserved to new sln file
     #   need a way to map the old cell numbers to the new ones? I think it's newCellIndex = oldIndex- cellsDeletedInFrontOfIt
     for i in 1:oldNCells
@@ -914,8 +1236,8 @@ end
         restart file (if specified)
         .vtk files (is specified)
 =#
-function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}, boundaryConditions, timeIntegrationFn=forwardEuler,
-        fluxFunction=unstructured_JSTFlux; initDt=0.001, endTime=0.14267, outputInterval=0.01, adaptInterval=0.005,targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005,
+function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}, boundaryConditions; timeIntegrationFn=forwardEuler,
+        fluxFunction=unstructured_JSTFlux, initDt=0.001, endTime=0.14267, outputInterval=0.01, adaptInterval=0.005,targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005,
         silent=true, restart=false, createRestartFile=true, createVTKOutput=true, restartFile="JuliaCFDRestart.txt")
 
     if !silent
@@ -1069,6 +1391,17 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
             println("Writing new mesh...")
 
             adaptedMesh, newCellsList, facesData = adaptNewMesh(adaptMesh, nAdaptList, boundaryConditions) # NOTE: adaptedMesh needs to be written to OF file and then read back in to be used
+            if size(adaptedMesh.cells,1) > 1095
+                println("1095 debug")
+                println("Faces bdry indices")
+                display(facesData.bdryIndices)
+                println("Faces in cell 1095")
+                display(adaptedMesh.cells[1095])
+                for f in adaptedMesh.cells[1095]
+                    display(adaptMesh.fPoints[f])
+                end
+            end
+
             # println("Cell 1020")
             # display(adaptedMesh.cells[1010:end])
             # #println("$breakdown")
@@ -1169,6 +1502,21 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
             createRestartFile = false
 
 
+            adaptMesh = createMeshAdaptStruct(mesh, meshPath)
+
+            if nCells > 1095
+                println("1095 debug")
+                println("Faces bdry indices")
+                display(facesData.bdryIndices)
+                println("Faces in cell 1095")
+                display(mesh.cells[1095])
+                for f in mesh.cells[1095]
+                    display(adaptMesh.fPoints[f])
+                end
+            end
+
+
+
 
             updateSolutionOutput(sln.cellPrimitives, restartFile, meshPath, createRestartFile, createVTKOutput)
 
@@ -1176,7 +1524,7 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
 
             #println("This is how you $break")
 
-
+            firstPassFlag = false
             adaptMeshThisIteration = false
             nextAdaptTime += adaptInterval
 

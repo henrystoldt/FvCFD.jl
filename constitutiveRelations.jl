@@ -41,6 +41,34 @@ function decodePrimitives3D!(primitives, cellState, R=287.05, Cp=1005)
     primitives[1] = idealGasP(cellState[1], primitives[2], R)
 end
 
+function decodePrimitives3D(state, R=287.05, Cp=1005)
+    nSize = size(state,1)
+    #nVars = size(state,2)
+    newVec = zeros(nSize, 5)
+
+    for i in 1:nSize
+        ## Velocity ##
+        # Ux = xMom/rho
+        newVec[i,3] = state[i,2]/state[i,1]
+        # Uy = yMom/rho
+        newVec[i,4] = state[i,3]/state[i,1]
+        # Uz = zMom/rho
+        newVec[i,5] = state[i,4]/state[i,1]
+
+        ## Energy ##
+        # e = (eV2/rho) - (mag((Ux, Uy, Uz))^2)/2
+        e = (state[i,5]/state[i,1]) - (mag(newVec[i,3:5])^2)/2
+
+        ## Temperature ##
+        newVec[i,2] = calPerfectT(e, Cp, R)
+
+        ## Pressure ##
+        # P = idealGasP(rho, P, R)
+        newVec[i,1] = idealGasP(state[i,1], newVec[i,2], R)
+    end
+    return newVec
+end
+
 #=
     Calculate cellState from cellPrimitives
 
@@ -117,4 +145,45 @@ function calculateFluxes3D!(fluxes, prim, state)
     fluxes[14] = prim[4]*state[5] + prim[1]*prim[4]
     # eV2zFlux = Uz*eV2 + P*Uz
     fluxes[15] = prim[5]*state[5] + prim[1]*prim[5]
+end
+
+function calculateROEAveraged(leftPrims, rightPrims, leftCons, rightCons)
+    nVars = size(leftPrims,2)
+    nFaces = size(leftPrims,1)
+
+    #Cons are: rho, rhoU, rhoV, rhoW, eV2
+    #Prims are: P, T, u, v, w
+
+
+    # rho, u,v,w, H
+    roeAveraged = zeros(nFaces, nVars)
+
+    for f in 1:nFaces
+        #rho
+        roeAveraged[f,1] = sqrt(leftCons[f,1] * rightCons[f,1])
+
+        #u,v,w
+        roeAveraged[f,2] = (sqrt(leftCons[f,1])*leftPrims[f,3]+sqrt(rightCons[f,1])*rightPrims[f,3])/( sqrt(leftCons[f,1]) + sqrt(rightCons[f,1]) )
+        roeAveraged[f,3] = (sqrt(leftCons[f,1])*leftPrims[f,4]+sqrt(rightCons[f,1])*rightPrims[f,4])/( sqrt(leftCons[f,1]) + sqrt(rightCons[f,1]) )
+        roeAveraged[f,4] = (sqrt(leftCons[f,1])*leftPrims[f,5]+sqrt(rightCons[f,1])*rightPrims[f,5])/( sqrt(leftCons[f,1]) + sqrt(rightCons[f,1]) )
+
+        # H
+        eLeft = calPerfectEnergy(leftPrims[f,2])
+        eRight = calPerfectEnergy(rightPrims[f,2])
+
+        #rhoLeft = idealGasRho(leftPrims[f,2], leftPrims[f,1])
+        #rhoRight = idealGasRho(rightPrims[f,2], rightPrims[f,1])
+
+        eV2Left = leftCons[f,1]*(eLeft + (mag(leftPrims[f,3:5])^2)/2 )
+        eV2Right = rightCons[f,1]*(eRight + (mag(rightPrims[f,3:5])^2)/2 )
+
+        HLeft = eV2Left + leftPrims[f,1]/leftCons[f,1]
+        HRight = eV2Right + rightPrims[f,1]/rightCons[f,1]
+
+        roeAveraged[f,5] = ( sqrt(leftCons[f,1])*HLeft+sqrt(rightCons[f,1])*HRight )/( sqrt(leftCons[f,1]) + sqrt(rightCons[f,1]) )
+    end
+
+    return roeAveraged
+
+
 end

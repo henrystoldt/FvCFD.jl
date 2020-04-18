@@ -71,6 +71,7 @@ function outputVTK(meshPath, cellPrimitives, fileName="solution.vtk")
             write(f, str)
         end
 
+        breaker= false
         # Output the .vtk "type" of each cell, one per line
         cellType = [ "1", "3", "5", "10", "14", "13", "ERROR", "12" ] # This array maps from number of points in a cell to the .vtk numeric cell type. Example: 8 pts -> "12", which is .vtk code for "VTK_HEXAHEDRON"
             # Corresponding .vtk cell types: [ "VTK_VERTEX", "VTK_LINE", "VTK_TRIANGLE", "VTK_TETRA", "VTK_PYRAMID", "VTK_WEDGE", "ERROR", "VTK_HEXAHEDRON" ]
@@ -79,6 +80,24 @@ function outputVTK(meshPath, cellPrimitives, fileName="solution.vtk")
             nPts = size(cellPtIndices[c], 1)
             cT = cellType[nPts]
             write(f, "$cT\n")
+            if cT == "ERROR"
+                if c == 1095
+                    println("Cell $c is type error!")
+                    display(cellPtIndices[c])
+                    display(points[326,:])
+                    display(points[1276,:])
+                    display(points[1277,:])
+                    display(points[1911,:])
+                    display(points[1912,:])
+                    display(points[2167,:])
+                    display(points[2168,:])
+                end
+                breaker = true
+            end
+        end
+
+        if breaker
+            println("$breakdown")
         end
 
         #### Output SCALAR, VECTOR data at each cell center ####
