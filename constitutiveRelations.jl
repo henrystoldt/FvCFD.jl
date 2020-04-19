@@ -159,6 +159,12 @@ function calculateROEAveraged(leftPrims, rightPrims, leftCons, rightCons)
     roeAveraged = zeros(nFaces, nVars)
 
     for f in 1:nFaces
+        # if f == 2
+        #     println("Face is $f")
+        #     display(leftCons[f,:])
+        #     display(rightCons[f,:])
+        # end
+
         #rho
         roeAveraged[f,1] = sqrt(leftCons[f,1] * rightCons[f,1])
 

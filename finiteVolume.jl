@@ -329,6 +329,9 @@ function vanAlbeda(q_ip, q_i, q_im, dx; direc=0)
         s = 0
     end
     #s = (2 * (q_ip-q_i)*(q_i-q_im) + delta )/( (q_ip-q_i)^2 * (q_i-q_im)^2 + delta )
+    if s > 0.05
+        s = 0.05
+    end
     return s
 end
 
@@ -367,18 +370,26 @@ function MUSCL_difference(mesh::Mesh, sln::SolutionState; sigma=-1)
             qNeighbour = sln.cellState[neighbourCell, v]
 
             # 2. Calculate conserved quants at 'virtual' far-owner and far-neighbour cells using the pressure gradient (2nd-order)
-            @views farOwnerQ = qOwner - 2*dot(d, gradCons[ownerCell, 1, :])
-            @views farNeighbourQ = qNeighbour + 2*dot(d, gradCons[neighbourCell, 1, :])
+            @views farOwnerQ = qOwner - dot(d, gradCons[ownerCell, 1, :])
+            @views farNeighbourQ = qNeighbour + dot(d, gradCons[neighbourCell, 1, :])
 
             dx = 0.1
             sLeft = vanAlbeda(qNeighbour, qOwner, farOwnerQ, dx)
             sRight = vanAlbeda(qOwner, qNeighbour, farNeighbourQ, dx)
 
-            interpOwner[f,v] = qOwner + sLeft*0.25*( (1-sigma*sLeft)*(qOwner-farOwnerQ) + (1+sigma*sLeft)*(qNeighbour-qOwner) ) * qOwner
-            interpNeighbour[f,v] = qNeighbour - sRight*0.25*( (1-sigma*sRight)*(farNeighbourQ-qNeighbour) + (1+sigma*sRight)*(qNeighbour-qOwner) )*qNeighbour
+            # if f > 153 && f < 155 && v == 2
+            #     println("This is face $f, var $v, and limiters are: $sLeft, $sRight")
+            #     println("Owners is: $qOwner, $farOwnerQ")
+            #     println("Neighbours is: $qNeighbour, $farNeighbourQ")
+            # end
+
+            #TODO: Fix MUSCL differencing!
+            interpOwner[f,v] = qOwner + 0.5*dot(d,gradCons[ownerCell,1,:])
+            interpNeighbour[f,v] = qNeighbour - 0.5*dot(d, gradCons[neighbourCell,1,:])
+            # interpOwner[f,v] = qOwner + sLeft*0.25*( (1-sigma*sLeft)*(qOwner-farOwnerQ) + (1+sigma*sLeft)*(qNeighbour-qOwner) ) * qOwner
+            # interpNeighbour[f,v] = qNeighbour - sRight*0.25*( (1-sigma*sRight)*(farNeighbourQ-qNeighbour) + (1+sigma*sRight)*(qNeighbour-qOwner) )*qNeighbour
         end
     end
-
     return interpOwner, interpNeighbour
 end
 
@@ -603,7 +614,6 @@ function findFluxVectors(mesh::Mesh, sln::SolutionState, roeAveraged, eig1, eig2
         F_3 = [f_31, f_32, f_33, f_34, f_35]
 
 
-
         for i in 1:5
             FL[f,i] = dot(normFVec, fL[i])
             FR[f,i] = dot(normFVec, fR[i])
@@ -622,12 +632,13 @@ function findFluxVectors(mesh::Mesh, sln::SolutionState, roeAveraged, eig1, eig2
         # println("$breakdown")
     end
 
+
     return FL, FR, F1, F2, F3
 
 end
 
 
-function findEigenvalues(roe, left, right; gamma=1.4, K=0.1)
+function findEigenvalues(roe, left, right; gamma=1.4, K=1)
     nFaces = size(roe,1)
 
     sound = zeros(nFaces)
@@ -637,11 +648,13 @@ function findEigenvalues(roe, left, right; gamma=1.4, K=0.1)
     eig3 = zeros(nFaces)
 
     for f in 1:nFaces
+        #display(roe[f,5])
+        #println("Face is $f")
         sound = sqrt( (gamma-1)*(roe[f,5] - 0.5*( mag(roe[f,2:4])^2 ) ) )
 
         eig1[f] = mag( roe[f,2:4] )
         eig2[f] = mag( roe[f,2:4] ) + sound
-        eig2[f] = mag( roe[f,2:4] ) - sound
+        eig3[f] = mag( roe[f,2:4] ) - sound
 
         epsilon = K * max( ( mag(right[f,3:5])-mag(left[f,3:5]) ), 0)
 
@@ -656,12 +669,11 @@ function findEigenvalues(roe, left, right; gamma=1.4, K=0.1)
         end
 
         if epsilon > abs(eig3[f])
-            println("Replaced eig3!")
-            # display(eig3[f])
+            println("Replaced eig3 for face $f, sound is $sound !")
+            display(eig3[f])
             eig3[f] = ( eig3[f]^2 + epsilon^2 )/(2*epsilon)
-            # println("Is now")
-            # display(eig3[f])
-
+            println("Is now")
+            display(eig3[f])
         end
     end
 
@@ -780,7 +792,6 @@ function unstructured_JSTFlux(mesh::Mesh, sln::SolutionState, boundaryConditions
     end
 
 
-
     #### 4. Integrate fluxes at in/out of each cell (sln.faceFluxes) to get change in cell center values (sln.fluxResiduals) ####
     return integrateFluxes_unstructured3D(mesh, sln, boundaryConditions)
 end
@@ -799,7 +810,29 @@ function unstructured_ROEFlux(mesh::Mesh, sln::SolutionState, boundaryConditions
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     nVars = size(sln.cellState, 2)
 
-    display(sln.cellState[1:2,:])
+    # println("Cells for face 154")
+    # display(mesh.faces[154])
+    # #display(mesh.cell)
+    # println("Cell prims on 154 sides")
+    # display(sln.cellPrimitives[77,:])
+    # display(sln.cellPrimitives[90,:])
+    # println("Cell state on 154 sides")
+    # display(sln.cellState[77,:])
+    # display(sln.cellState[90,:])
+    # println("Face 2 owner is:")
+    # display(mesh.cells[1])
+
+    # println("Face 1 and 2 area vecs:")
+    # display(mesh.fAVecs[1,:])
+    # display(mesh.fAVecs[2,:])
+
+    #### 0. Reset all face fluxes
+    nLoop = size(sln.faceFluxes, 2)
+    for f in 1:nFaces-nBdryFaces
+        for flux in 1:nLoop
+            sln.faceFluxes[f,flux] = 0
+        end
+    end
 
     #### 1. Apply boundary conditions ####
     for b in 1:nBoundaries
@@ -810,55 +843,82 @@ function unstructured_ROEFlux(mesh::Mesh, sln::SolutionState, boundaryConditions
     #### 2. MUSCL difference fluxes ####
     consOwner, consNeighbour = MUSCL_difference(mesh, sln)
 
+    # println("Cons at face 154:")
+    # display(consOwner[154,:])
+    # display(consNeighbour[154,:])
+
     #ownerPrims = zeros(nFaces-nBdryFaces, 5)
-    neighbourPrims = zeros(nFaces-nBdryFaces, 5)
-
-
+    #neighbourPrims = zeros(nFaces-nBdryFaces, 5)
 
     ownerPrims = decodePrimitives3D(consOwner)
     neighbourPrims = decodePrimitives3D(consNeighbour)
+
+    # println("Prims at face 154:")
+    # display(ownerPrims[154,:])
+    # display(neighbourPrims[154,:])
 
     #### 3. Find ROE averaged quantites
 
     roeAveraged = calculateROEAveraged(ownerPrims, neighbourPrims, consOwner, consNeighbour)
 
+    # println("Roe averaged props at face 154")
+    # display(roeAveraged[154,:])
+
     #### 4. Find (and correct) eigenvalues
 
     eig1, eig2, eig3 = findEigenvalues(roeAveraged, ownerPrims, neighbourPrims)
 
+
+    #### 5. Find flux vectors (at interior faces???)
+
     FL, FR, F1, F2, F3 = findFluxVectors(mesh, sln, roeAveraged, eig1, eig2, eig3, ownerPrims, neighbourPrims, consOwner, consNeighbour) #TODO: Pretty sure this fcn isn't treating boundaries correctly
 
-    println("$breakdown")
+    # println("Theres are $nVars vars")
+    # println("$breakdown")
+
+    # println("These are face fluxes at 3492:")
+    # display(sln.faceFluxes[3492,:])
+    # display(mesh.fAVecs[3492,:])
 
 
 
-
-
-    #### 3. Add JST artificial Diffusion ####
-    fDeltas = faceDeltas(mesh, sln) # TODO: Figure out how to deal with boundaries, as currently they are not included here
-    fDGrads = greenGaussGrad(mesh, fDeltas, true)
-    eps2, eps4 = unstructured_JSTEps(mesh, sln, 0.5, (1.2/32), 1, gamma, R)
-
-    diffusionFlux = zeros(nVars)
     @inbounds @fastmath for f in 1:nFaces-nBdryFaces
         ownerCell = mesh.faces[f][1]
         neighbourCell = mesh.faces[f][2]
         d = mesh.cCenters[neighbourCell] .- mesh.cCenters[ownerCell]
 
-        @views fD = fDeltas[f,:]
-        @views farOwnerfD = fD .- dot(d, fDGrads[ownerCell,:,:])
-        @views farNeighbourfD = fD .+ dot(d, fDGrads[ownerCell,:,:])
+        # @views fD = fDeltas[f,:]
+        # @views farOwnerfD = fD .- dot(d, fDGrads[ownerCell,:,:])
+        # @views farNeighbourfD = fD .+ dot(d, fDGrads[ownerCell,:,:])
 
-        diffusionFlux = eps2[f]*fD - eps4[f]*(farNeighbourfD - 2*fD + farOwnerfD)
+        faceFluxes = 0.5 * (FL[f,:] + FR[f,:] - (F1[f,:]+F2[f,:]+F3[f,:]))
+
+        #diffusionFlux = eps2[f]*fD - eps4[f]*(farNeighbourfD - 2*fD + farOwnerfD)
+        if f == 2
+            println("Face fluxes for face 2 are:")
+            display(faceFluxes)
+            # println("Individ vectors are:")
+            # display(FL[f,:])
+            # display(FR[f,:])
+            # display(F1[f,:])
+            # display(F2[f,:])
+            # display(F3[f,:])
+            # holder = dot(sln.faceFluxes[f, 1:3], mesh.fAVecs[2])
+            # println("Mass flux flow: $holder")
+        end
 
         # Add diffusion flux in component form
         unitFA = normalize(mesh.fAVecs[f])
         for v in 1:nVars
             i1 = (v-1)*3+1
             i2 = i1+2
-            sln.faceFluxes[f,i1:i2] .-= (diffusionFlux[v] .* unitFA)
+            sln.faceFluxes[f,i1:i2] .+= (faceFluxes[v] .* unitFA)
         end
     end
+
+    holder = dot(sln.faceFluxes[2, 1:3], mesh.fAVecs[2])
+    println("Mass flux flow: $holder")
+    display(sln.faceFluxes[2,1:3])
 
 
 
@@ -899,6 +959,17 @@ function integrateFluxes_unstructured3D(mesh::Mesh, sln::SolutionState, boundary
             i2 = i1+2
             @views flow = dot(sln.faceFluxes[f, i1:i2], mesh.fAVecs[f])
 
+            if f == 2
+                println("Owner: Flow going from face $f and flux vars $v is: (neg is in)")
+                display(flow)
+                #display(ownerCell)
+            end
+            #
+            # if neighbourCell == 1
+            #     println("Neighbour: Flow is leaving cell 1 through face $f and var $v at a rate of (pos is in)")
+            #     display(flow)
+            # end
+
             # Subtract from owner cell
             sln.fluxResiduals[ownerCell, v] -= flow
             # Add to neighbour cell
@@ -907,6 +978,9 @@ function integrateFluxes_unstructured3D(mesh::Mesh, sln::SolutionState, boundary
             end
         end
     end
+
+    println("Cell flux resids:")
+    display(sln.fluxResiduals[1,:])
 
     # Divide by cell volume
     for c in 1:nCells
@@ -1030,12 +1104,14 @@ function wallBoundary!(mesh::Mesh, sln::SolutionState, boundaryNumber, _)
     @inbounds for f in currentBoundary
         ownerCell = max(mesh.faces[f][1], mesh.faces[f][2]) #One of these will be -1 (no cell), the other is the boundary cell we want
 
+        unitFA = normalize(mesh.fAVecs[f])
+
         faceP = sln.cellPrimitives[ownerCell, 1]
         faceT = sln.cellPrimitives[ownerCell, 2]
         # Momentum flux is Pressure in each of the normal directions (dot product)
-        sln.faceFluxes[f, 4] = faceP
-        sln.faceFluxes[f, 8] = faceP
-        sln.faceFluxes[f, 12] = faceP
+        sln.faceFluxes[f, 4] = faceP #* -unitFA[1]
+        sln.faceFluxes[f, 8] = faceP #* -unitFA[2]
+        sln.faceFluxes[f, 12] = faceP #* -unitFA[3]
 
         # Mass Flux is zero
         sln.faceFluxes[f, 1:3] .= 0.0
@@ -1043,7 +1119,7 @@ function wallBoundary!(mesh::Mesh, sln::SolutionState, boundaryNumber, _)
         sln.faceFluxes[f, 13:15] .= 0.0
 
         # For states, want to find conserved quantities with normal velocity = 0
-        unitFA = normalize(mesh.fAVecs[f])
+        #unitFA = normalize(mesh.fAVecs[f])
         cellVelo = sln.cellPrimitives[ownerCell, 3:5]
 
         faceNormalVelo = zeros(3)
@@ -1347,7 +1423,6 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
 
         ############## Take a timestep #############
         sln = timeIntegrationFn(mesh, fluxFunction, sln, boundaryConditions, gamma, R, Cp, dt)
-
 
 
         if timeIntegrationFn == LTSEuler
