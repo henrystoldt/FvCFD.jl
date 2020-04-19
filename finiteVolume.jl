@@ -329,8 +329,8 @@ function vanAlbeda(q_ip, q_i, q_im, dx; direc=0)
         s = 0
     end
     #s = (2 * (q_ip-q_i)*(q_i-q_im) + delta )/( (q_ip-q_i)^2 * (q_i-q_im)^2 + delta )
-    if s > 0.05
-        s = 0.05
+    if s > 1.0
+        s = 1.0
     end
     return s
 end
@@ -341,7 +341,6 @@ end
 
 function MUSCL_difference(mesh::Mesh, sln::SolutionState; sigma=-1)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
-    println("THeres $nCells cells, $nFaces faces, $nBdryFaces bdryfaces")
 
     nVars = size(sln.cellState, 2)
 
@@ -373,23 +372,24 @@ function MUSCL_difference(mesh::Mesh, sln::SolutionState; sigma=-1)
             @views farOwnerQ = qOwner - dot(d, gradCons[ownerCell, 1, :])
             @views farNeighbourQ = qNeighbour + dot(d, gradCons[neighbourCell, 1, :])
 
-            dx = 0.1
+            #dx = 0.1
+            dx = mag(mesh.fAVecs[f])
             sLeft = vanAlbeda(qNeighbour, qOwner, farOwnerQ, dx)
             sRight = vanAlbeda(qOwner, qNeighbour, farNeighbourQ, dx)
+            #sRight = vanAlbeda(farNeighbourQ, qNeighbour, qOwner, dx)
 
-            # if f > 153 && f < 155 && v == 2
-            #     println("This is face $f, var $v, and limiters are: $sLeft, $sRight")
-            #     println("Owners is: $qOwner, $farOwnerQ")
-            #     println("Neighbours is: $qNeighbour, $farNeighbourQ")
-            # end
+            # sLeft = 1
+            # sRight = 1
 
             #TODO: Fix MUSCL differencing!
-            interpOwner[f,v] = qOwner + 0.5*dot(d,gradCons[ownerCell,1,:])
-            interpNeighbour[f,v] = qNeighbour - 0.5*dot(d, gradCons[neighbourCell,1,:])
-            # interpOwner[f,v] = qOwner + sLeft*0.25*( (1-sigma*sLeft)*(qOwner-farOwnerQ) + (1+sigma*sLeft)*(qNeighbour-qOwner) ) * qOwner
-            # interpNeighbour[f,v] = qNeighbour - sRight*0.25*( (1-sigma*sRight)*(farNeighbourQ-qNeighbour) + (1+sigma*sRight)*(qNeighbour-qOwner) )*qNeighbour
+            # interpOwner[f,v] = qOwner + 0.5*dot(d,gradCons[ownerCell,1,:])
+            # interpNeighbour[f,v] = qNeighbour - 0.5*dot(d, gradCons[neighbourCell,1,:])
+            interpOwner[f,v] = qOwner + sLeft*0.25*( (1-sigma*sLeft)*(qOwner-farOwnerQ) + (1+sigma*sLeft)*(qNeighbour-qOwner) ) #* qOwner
+            interpNeighbour[f,v] = qNeighbour - sRight*0.25*( (1-sigma*sRight)*(farNeighbourQ-qNeighbour) + (1+sigma*sRight)*(qNeighbour-qOwner) )#*qNeighbour
+            #interpNeighbour[f,v] = qNeighbour - sRight*0.25*( (1-sigma*sRight)*(qOwner-qNeighbour) + (1+sigma*sRight)*(qNeighbour-farNeighbourQ) )
         end
     end
+
     return interpOwner, interpNeighbour
 end
 
@@ -638,7 +638,7 @@ function findFluxVectors(mesh::Mesh, sln::SolutionState, roeAveraged, eig1, eig2
 end
 
 
-function findEigenvalues(roe, left, right; gamma=1.4, K=1)
+function findEigenvalues(roe, left, right; gamma=1.4, K=0.1)
     nFaces = size(roe,1)
 
     sound = zeros(nFaces)
@@ -649,7 +649,7 @@ function findEigenvalues(roe, left, right; gamma=1.4, K=1)
 
     for f in 1:nFaces
         #display(roe[f,5])
-        #println("Face is $f")
+        # println("Face is $f")
         sound = sqrt( (gamma-1)*(roe[f,5] - 0.5*( mag(roe[f,2:4])^2 ) ) )
 
         eig1[f] = mag( roe[f,2:4] )
@@ -670,10 +670,10 @@ function findEigenvalues(roe, left, right; gamma=1.4, K=1)
 
         if epsilon > abs(eig3[f])
             println("Replaced eig3 for face $f, sound is $sound !")
-            display(eig3[f])
-            eig3[f] = ( eig3[f]^2 + epsilon^2 )/(2*epsilon)
-            println("Is now")
-            display(eig3[f])
+            #display(eig3[f])
+            eig3[f] = ( eig3[f]^2 + (epsilon)^2 )/(2*epsilon)
+            #println("Is now")
+            #display(eig3[f])
         end
     end
 
@@ -893,20 +893,6 @@ function unstructured_ROEFlux(mesh::Mesh, sln::SolutionState, boundaryConditions
 
         faceFluxes = 0.5 * (FL[f,:] + FR[f,:] - (F1[f,:]+F2[f,:]+F3[f,:]))
 
-        #diffusionFlux = eps2[f]*fD - eps4[f]*(farNeighbourfD - 2*fD + farOwnerfD)
-        if f == 2
-            println("Face fluxes for face 2 are:")
-            display(faceFluxes)
-            # println("Individ vectors are:")
-            # display(FL[f,:])
-            # display(FR[f,:])
-            # display(F1[f,:])
-            # display(F2[f,:])
-            # display(F3[f,:])
-            # holder = dot(sln.faceFluxes[f, 1:3], mesh.fAVecs[2])
-            # println("Mass flux flow: $holder")
-        end
-
         # Add diffusion flux in component form
         unitFA = normalize(mesh.fAVecs[f])
         for v in 1:nVars
@@ -915,12 +901,6 @@ function unstructured_ROEFlux(mesh::Mesh, sln::SolutionState, boundaryConditions
             sln.faceFluxes[f,i1:i2] .+= (faceFluxes[v] .* unitFA)
         end
     end
-
-    holder = dot(sln.faceFluxes[2, 1:3], mesh.fAVecs[2])
-    println("Mass flux flow: $holder")
-    display(sln.faceFluxes[2,1:3])
-
-
 
     #### 4. Integrate fluxes at in/out of each cell (sln.faceFluxes) to get change in cell center values (sln.fluxResiduals) ####
     return integrateFluxes_unstructured3D(mesh, sln, boundaryConditions)
@@ -959,17 +939,6 @@ function integrateFluxes_unstructured3D(mesh::Mesh, sln::SolutionState, boundary
             i2 = i1+2
             @views flow = dot(sln.faceFluxes[f, i1:i2], mesh.fAVecs[f])
 
-            if f == 2
-                println("Owner: Flow going from face $f and flux vars $v is: (neg is in)")
-                display(flow)
-                #display(ownerCell)
-            end
-            #
-            # if neighbourCell == 1
-            #     println("Neighbour: Flow is leaving cell 1 through face $f and var $v at a rate of (pos is in)")
-            #     display(flow)
-            # end
-
             # Subtract from owner cell
             sln.fluxResiduals[ownerCell, v] -= flow
             # Add to neighbour cell
@@ -978,9 +947,6 @@ function integrateFluxes_unstructured3D(mesh::Mesh, sln::SolutionState, boundary
             end
         end
     end
-
-    println("Cell flux resids:")
-    display(sln.fluxResiduals[1,:])
 
     # Divide by cell volume
     for c in 1:nCells
@@ -1313,7 +1279,7 @@ end
         .vtk files (is specified)
 =#
 function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}, boundaryConditions; timeIntegrationFn=forwardEuler,
-        fluxFunction=unstructured_JSTFlux, initDt=0.001, endTime=0.14267, outputInterval=0.01, adaptInterval=0.005,targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005,
+        fluxFunction=unstructured_JSTFlux, initDt=0.001, endTime=0.14267, outputInterval=0.01, adaptInterval=0.5,targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005,
         silent=true, restart=false, createRestartFile=true, createVTKOutput=true, restartFile="JuliaCFDRestart.txt")
 
     if !silent

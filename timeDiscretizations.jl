@@ -109,3 +109,22 @@ end
 #TODO: For implicit methods, need to compute the flux Jacobians at each edge, instead of just the fluxes
     # Use Jacobians as coefficients in matrix representing timestepping equations
     # Then solve with GMRES or some other matrix solver
+
+function backwardEuler(mesh::Mesh, fluxResidualFn, sln::SolutionState, boundaryConditions, gamma, R, Cp, dt)
+    nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
+    nVars = size(sln.cellState, 2)
+
+    fluxJacobian = zeros(nCells, )
+
+    if fluxResidualFn != unstructured_ROEFlux
+        println("Backwards Euler only setup for ROE!")
+        println("$breakdown")
+    end
+
+    sln.fluxResiduals = fluxResidualFn(mesh, sln, boundaryConditions, gamma, R)
+    b = -1*sln.fluxResiduals
+    @fastmath sln.cellState .+= sln.fluxResiduals.*dt
+    @fastmath decodeSolution_3D(sln, R, Cp)
+
+    return sln
+end
