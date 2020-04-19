@@ -802,29 +802,10 @@ end
     Inputs: Expects that sln.cellState, sln.cellPrimitives and sln.cellFluxes are up-to-date
     Outputs: Updates sln.faceFluxes and sln.cellResiduals
     Returns: Updated sln.cellResiduals
-
-    Applies classical JST method: central differencing + JST artificial diffusion. Each face treated as a 1D problem
-    http://aero-comlab.stanford.edu/Papers/jst_2015_updated_07_03_2015.pdf -  see especially pg.5-6
 =#
 function unstructured_ROEFlux(mesh::Mesh, sln::SolutionState, boundaryConditions, gamma, R)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     nVars = size(sln.cellState, 2)
-
-    # println("Cells for face 154")
-    # display(mesh.faces[154])
-    # #display(mesh.cell)
-    # println("Cell prims on 154 sides")
-    # display(sln.cellPrimitives[77,:])
-    # display(sln.cellPrimitives[90,:])
-    # println("Cell state on 154 sides")
-    # display(sln.cellState[77,:])
-    # display(sln.cellState[90,:])
-    # println("Face 2 owner is:")
-    # display(mesh.cells[1])
-
-    # println("Face 1 and 2 area vecs:")
-    # display(mesh.fAVecs[1,:])
-    # display(mesh.fAVecs[2,:])
 
     #### 0. Reset all face fluxes
     nLoop = size(sln.faceFluxes, 2)
@@ -843,26 +824,12 @@ function unstructured_ROEFlux(mesh::Mesh, sln::SolutionState, boundaryConditions
     #### 2. MUSCL difference fluxes ####
     consOwner, consNeighbour = MUSCL_difference(mesh, sln)
 
-    # println("Cons at face 154:")
-    # display(consOwner[154,:])
-    # display(consNeighbour[154,:])
-
-    #ownerPrims = zeros(nFaces-nBdryFaces, 5)
-    #neighbourPrims = zeros(nFaces-nBdryFaces, 5)
-
     ownerPrims = decodePrimitives3D(consOwner)
     neighbourPrims = decodePrimitives3D(consNeighbour)
-
-    # println("Prims at face 154:")
-    # display(ownerPrims[154,:])
-    # display(neighbourPrims[154,:])
 
     #### 3. Find ROE averaged quantites
 
     roeAveraged = calculateROEAveraged(ownerPrims, neighbourPrims, consOwner, consNeighbour)
-
-    # println("Roe averaged props at face 154")
-    # display(roeAveraged[154,:])
 
     #### 4. Find (and correct) eigenvalues
 
@@ -872,15 +839,6 @@ function unstructured_ROEFlux(mesh::Mesh, sln::SolutionState, boundaryConditions
     #### 5. Find flux vectors (at interior faces???)
 
     FL, FR, F1, F2, F3 = findFluxVectors(mesh, sln, roeAveraged, eig1, eig2, eig3, ownerPrims, neighbourPrims, consOwner, consNeighbour) #TODO: Pretty sure this fcn isn't treating boundaries correctly
-
-    # println("Theres are $nVars vars")
-    # println("$breakdown")
-
-    # println("These are face fluxes at 3492:")
-    # display(sln.faceFluxes[3492,:])
-    # display(mesh.fAVecs[3492,:])
-
-
 
     @inbounds @fastmath for f in 1:nFaces-nBdryFaces
         ownerCell = mesh.faces[f][1]

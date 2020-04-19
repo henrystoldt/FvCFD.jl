@@ -114,15 +114,23 @@ function backwardEuler(mesh::Mesh, fluxResidualFn, sln::SolutionState, boundaryC
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     nVars = size(sln.cellState, 2)
 
-    fluxJacobian = zeros(nCells, )
+    fluxJacobian = zeros(nCells, nCells, nVars)
 
     if fluxResidualFn != unstructured_ROEFlux
-        println("Backwards Euler only setup for ROE!")
+        println("Backwards Euler only setup for ROE! It might work, I just haven't tested!")
         println("$breakdown")
     end
 
     sln.fluxResiduals = fluxResidualFn(mesh, sln, boundaryConditions, gamma, R)
     b = -1*sln.fluxResiduals
+
+    fillFluxJacobian!(fluxJacobian, mesh, sln, boundaryConditions, gamma, R)
+
+    # Find vector x that is Q_n+1 - Q_n . Use that to find Q_N+1 (conservative)
+    #Start x as zeros?
+
+    # Then find flux residuals at the new Q_N+1
+    # Finally Q_n+1 = Q_n - fluxRes(Q_n+1)*dt     - but can take a bigger dt
     @fastmath sln.cellState .+= sln.fluxResiduals.*dt
     @fastmath decodeSolution_3D(sln, R, Cp)
 
