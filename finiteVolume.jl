@@ -177,10 +177,10 @@ function greenGaussGrad(mesh::Mesh, matrix::AbstractArray{Float64, 2}, valuesAtF
     nVars = size(matrix, 2)
 
     #Interpolate values to faces if necessary
-    if valuesAtFaces != true
-        faceVals = linInterp_3D(mesh, matrix)
-    else
+    if valuesAtFaces
         faceVals = matrix
+    else
+        faceVals = linInterp_3D(mesh, matrix)
     end
 
     # Create matrix to hold gradients

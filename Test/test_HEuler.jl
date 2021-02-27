@@ -110,18 +110,20 @@ end;
     cVols = [ 8.625, 1, 1, 1, 1, 1 ]
     faces = [ [1,2], [1,3], [1,4], [1,5], [1,6] ]
     fCenters = fCenters[1:5]
-    mesh = [ cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces ]
+    cSizes = zeros(6,3)
+    mesh = Mesh( cells, cVols, cCenters, cSizes, faces, fAVecs, fCenters, boundaryFaces )
 
     function samplePhiDistribution(x, y, z)
         return x^2 + y^2 + x^2*y^2
     end
-    phiFaceVals = []
+
+    phiFaceVals = zeros(5,1)
     for i in 1:5
-        push!(phiFaceVals, samplePhiDistribution(fCenters[i]...))
+        phiFaceVals[i,1] = samplePhiDistribution(fCenters[i]...)
     end
 
-    grad = greenGaussGrad(mesh, true, phiFaceVals)[1]
-    @test almostEqual(grad[1], [ 20.63111, 17.31454, 0.0 ], 1e-5)
+    grad = greenGaussGrad(mesh, phiFaceVals, true)
+    @test almostEqual(grad[1,1,:], [ 20.63111, 17.31454, 0.0 ], 1e-5)
 end;
 
 @testset "Laplacian" begin
