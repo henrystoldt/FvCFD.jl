@@ -231,7 +231,7 @@ end
     Face 2    x1_f2    x2_f2    x3_f2
     ...
 =#
-function linInterp_3D(mesh::Mesh, matrix::AbstractArray{Float64, 2}, faceVals=zeros(2,2))
+function linInterp_3D(mesh::Mesh, matrix::AbstractArray{Array{Float64, 1}, 2}, faceVals=zeros(2,2))
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     nVars = size(matrix, 2)
 
