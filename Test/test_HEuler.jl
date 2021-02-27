@@ -91,12 +91,15 @@ end;
 end;
 
 @testset "Green-Gauss Gradient" begin
-    mesh, P, T, U = initializeShockTubeFVM(4)
-    faceVals = [ 1, 2, 3, 4, 5 ]
-    gradient = [ [0.0,0.0,0.0], [4.0,0.0,0.0], [4.0,0.0,0.0], [0.0,0.0,0.0] ]
-    grad2 = greenGaussGrad(mesh, true, faceVals)[1]
+    #### Simple uniform gradient test case ####
+    mesh, cellPrimitives = initializeShockTube3DFVM(4)
+    faceVals = zeros(5,1)
+    faceVals[:,1] = [ 2, 3, 4, 1, 5 ] # Faces are numbered such that boundary faces come last, spatially values increase from one to five from left to right
+    expectedGradient = [ [4.0,0.0,0.0], [4.0,0.0,0.0], [4.0,0.0,0.0], [4.0,0.0,0.0] ] # Expect uniform gradient
+    gradient = greenGaussGrad(mesh, faceVals, true)
+   
     for i in 1:4
-        @test almostEqual(gradient[i], grad2[i])
+        @test almostEqual(expectedGradient[i], gradient[i,1,:])
     end
 
     ########## Case from Moukalled pg. 249 ##########
