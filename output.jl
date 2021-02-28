@@ -1,5 +1,6 @@
 using Plots
 using DelimitedFiles
+using WriteVTK
 include("mesh.jl")
 pyplot()
 
@@ -29,77 +30,27 @@ function readRestartFile(path="JuliaCFDRestart.txt")
     cellPrimitives = readdlm(path)
 end
 
+function outputVTK(meshPath, cellPrimitives, fileName="solution")
+    points, cellPtIndices = OpenFOAMMesh_findCellPts(meshPath)
+    points = transpose(points)
+    cells = Array{MeshCell, 1}(undef, 0)
 
-function outputVTK(meshPath, cellPrimitives, fileName="solution.vtk")
-    open(fileName, "w") do f
-        write(f, "# vtk DataFile Version 2.0\n")
-        write(f, "JuliaCFD\n")
-        write(f, "ASCII\n")
-        write(f, "DATASET UNSTRUCTURED_GRID\n")
+    cellType = [ 1, 3, 5, 10, 14, 13, "ERROR", 12 ] # This array maps from number of points in a cell to the .vtk numeric cell type. Example: 8 pts -> "12", which is .vtk code for "VTK_HEXAHEDRON"
+    # Corresponding .vtk cell types: [ "VTK_VERTEX", "VTK_LINE", "VTK_TRIANGLE", "VTK_TETRA", "VTK_PYRAMID", "VTK_WEDGE", "ERROR", "VTK_HEXAHEDRON" ]
 
-        #### Output all POINTS in the mesh, one per line ####
-        points, cellPtIndices = OpenFOAMMesh_findCellPts(meshPath)
-        nCells = size(cellPtIndices, 1)
-        nPts = size(points, 1)
-        write(f, "\nPOINTS $nPts float\n")
-        for pt in 1:nPts
-            x = points[pt, 1]
-            y = points[pt, 2]
-            z = points[pt, 3]
-            write(f, "$x $y $z\n")
-        end
-
-        #### Output CELLS, and CELL_TYPES ####
-        # Count and output the total number of points that we will have to output to make up all cells
-        totalCellListSize = nCells
-        for c in 1:nCells
-            totalCellListSize += size(cellPtIndices[c], 1)
-        end
-        write(f, "\nCELLS $nCells $totalCellListSize\n")
-
-        # Output one cell per line. The cell is represented by the indices of all the points that make it up (referring to the list of points printed earlier). Point indices are decremented by 1 to convert from Julia's 1-based indexing to .vtk's 0-based indexing
-        for c in 1:nCells
-            ptCount = size(cellPtIndices[c], 1)
-            str = "$ptCount"
-            for pt in cellPtIndices[c]
-                str = string(str, " ", pt-1 )
-            end
-            str = string(str, "\n")
-            write(f, str)
-        end
-
-        # Output the .vtk "type" of each cell, one per line
-        cellType = [ "1", "3", "5", "10", "14", "13", "ERROR", "12" ] # This array maps from number of points in a cell to the .vtk numeric cell type. Example: 8 pts -> "12", which is .vtk code for "VTK_HEXAHEDRON"
-            # Corresponding .vtk cell types: [ "VTK_VERTEX", "VTK_LINE", "VTK_TRIANGLE", "VTK_TETRA", "VTK_PYRAMID", "VTK_WEDGE", "ERROR", "VTK_HEXAHEDRON" ]
-        write(f, "CELL_TYPES $nCells\n")
-        for c in 1:nCells
-            nPts = size(cellPtIndices[c], 1)
-            cT = cellType[nPts]
-            write(f, "$cT\n")
-        end
-
-        #### Output SCALAR, VECTOR data at each cell center ####
-        write(f, "\nCELL_DATA $nCells\n")
-
-        # Pressure, Temperature
-        dataNames = [ "P", "T" ]
-        for d in 1:2
-            dataName = dataNames[d]
-            write(f, "SCALARS $dataName float 1\n") # Name=P dataType=float, 1 component
-            write(f, "LOOKUP_TABLE default\n") # No custom color lookup table
-            for c in 1:nCells
-                P = cellPrimitives[c, d]
-                write(f, "$P\n")
-            end
-        end
-
-        # Velocity
-        write(f, "VECTORS U float\n")
-        for c in 1:nCells
-            Ux, Uy, Uz = cellPrimitives[c, 3:5]
-            write(f, "$Ux $Uy $Uz\n")
-        end
+    for i in eachindex(cellPtIndices)
+        nPoints = size(cellPtIndices[i], 1)
+        cT = cellType[nPoints]
+        cell = MeshCell(VTKCellType(cT), cellPtIndices[i])
+        push!(cells, cell)
     end
+
+    file = vtk_grid(fileName, points, cells)
+    file["P"] = cellPrimitives[:,1]
+    file["T"] = cellPrimitives[:,2]
+    file["U"] = transpose(cellPrimitives[:,3:5])
+    
+    return vtk_save(file)
 end
 
 #=
@@ -134,7 +85,7 @@ function updateSolutionOutput(cellPrimitives, restartFile, meshPath, createResta
         vtkCounter = maxNum + 1
 
         # Write vtk file
-        solnName = "solution.$vtkCounter.vtk"
+        solnName = "solution.$vtkCounter"
         println("Writing $solnName")
         outputVTK(meshPath, cellPrimitives, solnName)
     end
