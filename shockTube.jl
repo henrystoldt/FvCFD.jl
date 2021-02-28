@@ -52,7 +52,7 @@ function initializeShockTube_StructuredFVM(nCells=100; domainLength=1, Pratio=10
 
     return dx, cellPrimitives
 end
-
+#
 # Wrapper for FDM initialization function, adding a mesh definition suitable for FVM and vector-format velocity
 function initializeShockTubeFVM(nCells=100; domainLength=1, Pratio=10, silent=true)
     if !silent
@@ -147,34 +147,33 @@ function initializeShockTube3DFVM(nCells=100; domainLength=1, Pratio=10, silent=
         if i == 1
             push!(cells, [nCells, 1])
             push!(faces, [i, i+1])
+            push!(fAVecs, fAVec)
         elseif i == nCells
             push!(cells, [nCells-1, nCells+1])
         else
             push!(cells, [i-1, i])
             push!(faces, [i, i+1])
+            push!(fAVecs, fAVec)
         end
 
         push!(cVols, cV)
-        push!(fAVecs, fAVec)
         push!(cCenters, [ (i-0.5)*dx, 0.0, 0.0 ])
 
         # Face centers also adjusted to have boundaries last
         if i != nCells
             push!(fCenters, [ i*dx, 0.0, 0.0 ])
-        else
-            # Left boundary face
-            push!(fCenters, [ 0.0, 0.0, 0.0 ])
         end
-
 
         cellSizes[i, :] = [dx, h, w]
     end
 
-    # Last face
-    push!(fAVecs, fAVec)
     # Boundary faces
-    push!(faces, [-1,1])
+    push!(faces, [1,-1])
+    push!(fAVecs, -fAVec)
+    push!(fCenters, [ 0.0, 0.0, 0.0 ])
+
     push!(faces, [nCells, -1])
+    push!(fAVecs, fAVec)
     push!(fCenters, [ nCells*dx, 0.0, 0.0 ])
 
     # Add the empty faces on the sides

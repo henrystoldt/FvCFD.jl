@@ -187,7 +187,7 @@ function greenGaussGrad(mesh::Mesh, matrix::AbstractArray{Float64, 2}, valuesAtF
     grad = zeros(nCells, nVars, 3)
 
     # Integrate fluxes from each face
-    @inbounds @fastmath for f in eachindex(mesh.faces)
+    @fastmath for f in eachindex(mesh.faces)
         ownerCell = mesh.faces[f][1]
         neighbourCell = mesh.faces[f][2]
 
@@ -205,7 +205,7 @@ function greenGaussGrad(mesh::Mesh, matrix::AbstractArray{Float64, 2}, valuesAtF
     end
 
     # Divide integral by cell volume to obtain gradients
-    @inbounds @fastmath for c in 1:nCells
+    @fastmath for c in 1:nCells
         for v in 1:nVars
             for d in 1:3
                 grad[c,v,d] /= mesh.cVols[c]

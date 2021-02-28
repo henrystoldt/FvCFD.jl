@@ -6,6 +6,7 @@ include("../shockTube.jl")
 include("../vectorFunctions.jl")
 include("test.jl")
 include("testMeshes.jl")
+include("../1D/finiteVolumeRoe.jl")
 
 @testset "Vector Utilities" begin
     v1 = [1, 2, 3]
@@ -93,8 +94,8 @@ end;
 @testset "Green-Gauss Gradient" begin
     #### Simple uniform gradient test case ####
     mesh, cellPrimitives = initializeShockTube3DFVM(4)
-    faceVals = zeros(5,1)
-    faceVals[:,1] = [ 2, 3, 4, 1, 5 ] # Faces are numbered such that boundary faces come last, spatially values increase from one to five from left to right
+    faceVals = zeros(21,1) # 4 internal faces, 2 on the ends, and 16 around the outside
+    faceVals[:,1] = [ 2, 3, 4, 1, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ] # Faces are numbered such that boundary faces come last, spatially values increase from one to five from left to right
     expectedGradient = [ [4.0,0.0,0.0], [4.0,0.0,0.0], [4.0,0.0,0.0], [4.0,0.0,0.0] ] # Expect uniform gradient
     gradient = greenGaussGrad(mesh, faceVals, true)
    
@@ -219,38 +220,17 @@ end;
     @test almostEqual(faceGrad[1,:], [ 66.628055, 75.37602, 0.0 ])
 end;
 
-@testset "Upwind Interpolation" begin
-    mesh, P, T, U = initializeShockTubeFVM(4)
-    cellVel = [ [-1,0,0], [-1,0,0], [-1,0,0], [-1,0,0] ]
-    cellVals = [ 1, 2, 3, 4 ]
-    faceVals = [ 2, 3, 4, 0, 0 ]
-    faceVals2 = upwindInterp(mesh, cellVel, cellVals)[1]
-    @test almostEqual(faceVals, faceVals2)
-
-    cellVel = [ [1,0,0], [1,0,0], [1,0,0], [1,0,0] ]
-    faceVals = [ 1, 2, 3, 0, 0 ]
-    faceVals2 = upwindInterp(mesh, cellVel, cellVals)[1]
-    @test almostEqual(faceVals, faceVals2)
-
-    cellVel = [ [1,0,0], [1,0,0], [-1,0,0], [-1,0,0] ]
-    faceVals = [ 1, 2.5, 4, 0, 0 ]
-    faceVals2 = upwindInterp(mesh, cellVel, cellVals)[1]
-    @test almostEqual(faceVals, faceVals2)
-end;
-
-@testset "Central + AD FVM" begin
+@testset "JST Solver" begin
     nCells = 4
+    boundaryConditions = [ zeroGradientBoundary, [], zeroGradientBoundary, [], emptyBoundary, [] ]
+    mesh, cellPrimitives = initializeShockTube3DFVM(nCells, Pratio=0.1)
+    cellPrimitives2 = unstructured3DFVM(mesh, "fakePath", cellPrimitives, boundaryConditions, initDt=0.051, endTime=0.05, createRestartFile=false, createVTKOutput=false)
+    
     P = [ 1, 0.99855553, 0.087046989, 0.1 ]
     U = [ 0, 0.090015665, 0.720126353, 0 ]
     T = [ 0.00348432, 0.00347929, 0.0024263, 0.00278746 ]
 
-    P2, U2, T2, rho2 = central_UnstructuredADFVM(initializeShockTubeFVM(nCells, Pratio=0.1)..., initDt=0.051, endTime=0.05, Cx=0)
-    xVel = []
-    for i in 1:4
-        push!(xVel, U2[i][1])
-    end
-
-    @test almostEqual(P, P2, 6)
-    @test almostEqual(U, xVel, 6)
-    @test almostEqual(T, T2, 6)
+    @test almostEqual(P, cellPrimitives2[:,1], 6)
+    @test almostEqual(U, cellPrimitives2[:,3], 6)
+    @test almostEqual(T, cellPrimitives2[:,2], 6)
 end;
