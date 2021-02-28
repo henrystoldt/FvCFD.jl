@@ -1,4 +1,4 @@
-name: CI
+name: Tests
 
 on: 
   push:
@@ -12,7 +12,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v1
-    - uses: julia-actions/setup-julia@v1.0.2
+    - uses: julia-actions/setup-julia@latest
       # with:
         # The Julia version to download (if necessary) and use. Example: 1.0.4
         # version: # optional, default is 1
