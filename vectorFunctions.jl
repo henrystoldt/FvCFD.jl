@@ -1,4 +1,3 @@
-
 ######################### Vector Functions ########################
 # Assumes sizes are equal
 function dot(vec1, vec2)
@@ -34,6 +33,13 @@ function dot(vec::Vector{Float64}, matrix::Matrix{Float64})
         @views result[i] = dot(vec, matrix[i, :])
     end
     return result
+end
+
+function cross(v1::Array{Float64, 1}, v2::Array{Float64, 1})
+    x = v1[2]*v2[3] - v1[3]*v2[2]
+    y = -(v1[1]*v2[3] - v1[3]*v2[1])
+    z = v1[1]*v2[2] - v1[2]*v2[1]
+    return [x,y,z]
 end
 
 function mag(vec)

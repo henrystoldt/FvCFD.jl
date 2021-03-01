@@ -20,7 +20,7 @@ include("../1D/finiteVolumeRoe.jl")
     v1 = [ 1.0, 2.0, 3.0 ]
     v2 = [ 2.0, 2.0, 2.0 ]
     crossProduct = [ -2.0, 4.0, -2.0 ]
-    crossProduct2 = crossProd(v1, v2)
+    crossProduct2 = cross(v1, v2)
     @test almostEqual(crossProduct, crossProduct2)
 end;
 

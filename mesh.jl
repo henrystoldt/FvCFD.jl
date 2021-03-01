@@ -1,15 +1,9 @@
 # Methods from Moukalled et al. FVM - OpenFOAM, Matlab
 include("vectorFunctions.jl")
 include("dataStructures.jl")
+using LinearAlgebra
 
 ######################### Mesh/Cell Geometry ###########################
-function crossProd(v1::Array{Float64, 1}, v2::Array{Float64, 1})
-    x = v1[2]*v2[3] - v1[3]*v2[2]
-    y = -(v1[1]*v2[3] - v1[3]*v2[1])
-    z = v1[1]*v2[2] - v1[2]*v2[1]
-    return [x,y,z]
-end
-
 function triangleCentroid(points)
     center = [ 0.0, 0.0, 0.0 ]
     nPts = size(points, 1)
@@ -27,7 +21,7 @@ geometricCenter = triangleCentroid
 function triangleArea(points::Array{Array{Float64, 1}})
     side1 = points[2] .- points[1]
     side2 = points[3] .- points[1]
-    fAVec = crossProd(side1, side2) ./ 2
+    fAVec = cross(side1, side2) ./ 2
     return fAVec
 end
 
@@ -216,7 +210,7 @@ function readOFFacesFile(filePath)
         bracketIndex = findfirst("(", fLine)[1]
         bracketsRemoved = fLine[bracketIndex+1:end-1]
         ptNumbers = split(bracketsRemoved)
-        nPts = size(ptNumbers, 1)
+        nPts = length(ptNumbers)
         for p in 1:nPts
             # Add one to convert to 1-based indexing
             push!(facePts, parse(Int64, ptNumbers[p])+1)
@@ -331,6 +325,17 @@ function readOpenFOAMMesh(polyMeshPath)
     return points, faces, owner, neighbour, boundaryNames, boundaryNumFaces, boundaryStartFaces
 end
 
+struct Face
+    pointIndices::Vector{Int64}
+end
+
+mutable struct Cell
+    faceIndices::Vector{Int64}
+    pointIndices::Vector{Int64}
+end
+
+Point = Vector # Alias
+
 #=
     Function used to find all the points in each cell.
     Not required for CFD, which is face-based, but required for cell-based .vtk file output.
@@ -341,84 +346,163 @@ end
         cellPtIndices:  Array of arrays, where each subarrary represents a cell, and each entry in a cell's array is the index of one of its points
 =#
 function OpenFOAMMesh_findCellPts(polyMeshPath)
-    points, OFfaces, owner, neighbour, boundaryNames, boundaryNumFaces, boundaryStartFaces = readOpenFOAMMesh(polyMeshPath)
-    nCells = maximum(owner)
-    nFaces = size(OFfaces, 1)
+    pointLocations, pointIndicesByFace, faceOwnerCellIndices, faceNeighborCellIndices, boundaryNames, boundaryNumFaces, boundaryStartFaces = readOpenFOAMMesh(polyMeshPath)
+    nCells = maximum(faceOwnerCellIndices)
+    nFaces = size(pointIndicesByFace, 1)
     nBoundaries = size(boundaryNames, 1)
 
-    cellPtIndices = Array{Array{Int64, 1}, 1}(undef, nCells)    # OUTPUT, Array of arrays, where each subarrary represents a cell, and each entry in a cell's array is the index of one of its points
-    cells = Array{Array{Int64, 1}, 1}(undef, nCells)            # Indices of faces that make up a cell
+    # Output
+    cells = Array{Cell, 1}(undef, nCells)
+    for i in eachindex(cells)
+        cells[i] = Cell(Vector{Int64}(undef, 0), Vector{Int64}(undef, 0))
+    end
 
     ### Populate the cells array ###
-    #TODO: This code to make the cells array is nearly duplicated in OpenFOAMMesh() below. Perhaps extract it into a function.
-    nOwners = size(owner, 1)
-    for f in 1:nOwners
-        ownerCell = owner[f]
-        if isassigned(cells, ownerCell)
-            push!(cells[ownerCell], f)
-        else
-            cells[ownerCell] = [f,]
+    function addCellFaceIndices(adjacentCellList)
+        nFaces = length(adjacentCellList)
+        for f in 1:nFaces
+            ownerCellIndex = adjacentCellList[f]
+            push!(cells[ownerCellIndex].faceIndices, f)
         end
     end
 
-    nNeighbours = size(neighbour, 1)
-    for f in 1:nNeighbours
-        neighbourCell = neighbour[f]
-        if isassigned(cells, neighbourCell)
-            push!(cells[neighbourCell], f)
-        else
-            cells[neighbourCell] = [f,]
+    # Start by a just adding face indices, want to order the points appropriately before adding them
+    addCellFaceIndices(faceOwnerCellIndices)
+    addCellFaceIndices(faceNeighborCellIndices)
+
+    function addAllPoints!(cell::Cell, faceIndex)
+        for pointIndex in pointIndicesByFace[face1]
+            push!(cell.pointIndices, pointIndex)
+        end        
+    end
+
+    function addAllNewPoints!(cell::Cell, faceIndex)
+        for pointIndex in pointIndicesByFace[face2]
+            if !any(x->x==pointIndex, cell.pointIndices)
+                push!(cell.pointIndices, pointIndex)
+            end
         end
     end
-    # fAVecs, fCenters, faces, cells now complete
 
-    ### Using the cells array, populate the cellPtIndices array ###
-    for c in 1:nCells
-        pts = Array{Int64,1}(undef, 0) # Points that make up the present cell
+    function disjoint(f1Points, f2Points)
+        allPoints = vcat(f1Points, f2Points)
+        pointSet = Set(allPoints)
+        return length(allPoints) == length(pointSet)
+    end
 
-        # Add all points from face f to pts
-        function addFace(f)
-            for pt in OFfaces[f]
-                push!(pts, pt)
+    function intersection(points1, points2)
+        return intersect(Set(points1), Set(points2))
+    end
+
+    function index(element, array)
+        for i in eachindex(array)
+            if element == array[i]
+                return i
+            end
+        end
+        return -1
+    end            
+
+    function getOrderedPointIndices_Tet!(cell::Cell)
+        # For a tetrahedron, the order of points is unimportant
+        # And all points from an arbitrary face
+        addAllPoints!(cell, cell.faceIndices[1])
+
+        # Choose another face, it will contain the fourth point we need to complete the tetrahedron
+        # Find it and add it
+        addAllNewPoints!(cell, cell.faceIndices[2])
+    end
+
+    function getOrderedPointIndices_Hex!(cell::Cell)
+        # Start by choosing an arbitrary face
+        unusedFaces = deepcopy(cell.faceIndices)
+        f1 = pop!(unusedFaces)
+        f1Points = pointIndicesByFace[f1]
+        f1PointsSet = Set(f1Points)
+
+        # Find the opposite face (no points in common)
+        f2 = -1
+        f2Points = Vector{Int64}(undef, 4)
+        for i in 1:length(unusedFaces)
+            fi = unusedFaces[i]
+            fiPoints = pointIndicesByFace[fi]
+
+            if disjoint(f1Points, fiPoints)
+                f2 = fi
+                f2Points = fiPoints
+                deleteat!(unusedFaces, i)
+                break
             end
         end
 
-        # Are all points in face f currently absent from the pts array (are the arrays OFfaces[f] and pts disjont?)
-        function disjoint(f)
-            for pt in OFfaces[f]
-                if any(x->x==pt, pts)
-                    return false
+        # The combination of the points in f1 and f2 will contain all of the points that make up the present cell
+
+        ### Now find the correct orientation
+            # Point f1_i needs to be aligned (spatially) with Point f2_i
+            # We can check for this by using one of the other faces as a guide, since it forms part of the connection between f1 and f2
+        cellPoints = vcat(f1Points, [0, 0, 0, 0])
+
+        # Pick an arbitrary other face
+        f3 = pop!(unusedFaces)
+        f3Points = pointIndicesByFace[f3]
+
+        # For each of the other faces, try to identify an edge connecting faces one and two
+            # Such an edge will appear as a pair of points that two faces connecting faces one and to have in common
+        function addEdges(facePoints)
+            oppositeFaceIndex = -1
+            for i in 1:length(unusedFaces)
+                fi = unusedFaces[i]
+                fiPoints = pointIndicesByFace[fi]
+                commonPoints = intersection(fiPoints, facePoints)
+
+                if length(commonPoints) == 2
+                    # These two points form an edge connecting faces one and two
+                    points = collect(commonPoints)
+
+                    if points[1] in f1PointsSet
+                        p1 = points[1]
+                        p2 = points[2]
+                    else
+                        p1 = points[2]
+                        p2 = points[1]
+                    end
+
+                    position = index(p1, f1Points) # Find position over the point on the face one side
+                    if position == -1
+                        throw(ErrorException("Point $p1 not found in $f1Points"))
+                    end
+                    cellPoints[position+4] = p2 # The point on the face two side goes in the matching spot
+                else
+                    oppositeFaceIndex = i # This is the face opposite to the one containing facePoints
                 end
             end
-            return true
+            return oppositeFaceIndex
         end
 
-        # First face to add to the pts array. Changing the index of this face (which must be <= Number of faces in smallest cell) can change in which order points are added to the array.
-            # This sometimes happens to put points in the correct order for nice-looking .vtk output
-            # Current best options for each mesh: Wedge - 3
-        addFace(cells[c][1])
-
-        # Add any disjoint faces
-        for f in cells[c]
-            if disjoint(f)
-                addFace(f)
-            end
+        lastFace = addEdges(f3Points)
+        lastFacePoints = pointIndicesByFace[unusedFaces[lastFace]]
+        deleteat!(unusedFaces, lastFace)
+        
+        noResult = addEdges(lastFacePoints)
+        if noResult != -1
+            throw(ErrorException("Failure to appropriately order hexahedral cell points for writing to .vtk"))
         end
 
-        # Add any leftover points
-        for f in cells[c]
-            for pt in OFfaces[f]
-                if !any(x->x==pt, pts)
-                    push!(pts, pt)
-                end
-            end
-        end
-
-        # Store the list of points that make up the current cell
-        cellPtIndices[c] = pts
+        cell.pointIndices = cellPoints
     end
 
-    return points, cellPtIndices
+    # Now use the face indices to gather and order each cell's points appropriately
+        # Correct point ordering is important for .vtk output: (See figure 2) https://vtk.org/wp-content/uploads/2015/04/file-formats.pdf
+    for cell in cells
+        nFaces = length(cell.faceIndices)
+        if nFaces == 4
+            getOrderedPointIndices_Tet!(cell)
+        elseif nFaces == 6
+            getOrderedPointIndices_Hex!(cell)
+        end
+    end
+
+    return pointLocations, cells
 end
 
 #=

@@ -22,16 +22,16 @@ U = [ 694.44, 0, 0 ]
 
 #meshPath = "Test/OFunstructuredWedgeMesh"
 #boundaryConditions = [ emptyBoundary, [], supersonicInletBoundary, [P, T, U..., 1005], zeroGradientBoundary, [], symmetryBoundary, [], zeroGradientBoundary, [], wallBoundary, [] ]
-# meshPath = "Test/OFwedgeMesh"
-# boundaryConditions = [ supersonicInletBoundary, [P, T, U..., 1005], zeroGradientBoundary, [], symmetryBoundary, [], zeroGradientBoundary, [], wallBoundary, [], emptyBoundary, [] ]
+meshPath = "Test/OFwedgeMesh"
+boundaryConditions = [ supersonicInletBoundary, [P, T, U..., 1005], zeroGradientBoundary, [], symmetryBoundary, [], zeroGradientBoundary, [], wallBoundary, [], emptyBoundary, [] ]
 # meshPath = "Test/OFcoarseWedgeMesh"
 # boundaryConditions = [ emptyBoundary, [], supersonicInletBoundary, [P, T, U..., 1005], zeroGradientBoundary, [], symmetryBoundary, [], zeroGradientBoundary, [], wallBoundary, [] ]
-meshPath = "Test/OFmemesWedgeMesh"
-boundaryConditions = [ symmetryBoundary, [], emptyBoundary, [], supersonicInletBoundary, [P, T, U..., 1005], wallBoundary, [], zeroGradientBoundary, [], zeroGradientBoundary, [] ]
+# meshPath = "Test/OFmemesWedgeMesh"
+# boundaryConditions = [ symmetryBoundary, [], emptyBoundary, [], supersonicInletBoundary, [P, T, U..., 1005], wallBoundary, [], zeroGradientBoundary, [], zeroGradientBoundary, [] ]
 
 mesh = OpenFOAMMesh(meshPath)
 cellPrimitives = initializeUniformSolution3D(mesh, P, T, U...)
-unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00000001, endTime=0.0001, outputInterval=0.005, targetCFL=0.5, silent=false)
+unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00000001, endTime=0.01, outputInterval=0.005, targetCFL=0.5, silent=false)
 
 ### Forward Step ###
 # Freestream Conditions (Mach 3)
@@ -69,14 +69,14 @@ unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.0
 # xVel = U
 
 ### UnstructuredFVM from OpenFOAM Meshes ###
-# meshPath = "Test/OFshockTube_400"
+# meshPath = "Test/OFshockTube_100"
 # OFmesh = OpenFOAMMesh(meshPath)
 # nCells = size(OFmesh.cells, 1)
 
 # _, cellPrimitives = initializeShockTube3DFVM(nCells...)
 
 # boundaryConditions = [ zeroGradientBoundary, [], emptyBoundary, [] ]
-# cellPrimitives = unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, LTSEuler, initDt=0.0001, endTime=0.14267, outputInterval=0.14267, targetCFL=0.1, silent=false, createVTKOutput=false)
+# cellPrimitives = unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, LTSEuler, initDt=0.0001, endTime=0.14267, outputInterval=0.14267, targetCFL=0.1, silent=false, createVTKOutput=true)
 # @profview unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00001, endTime=0.14267, outputInterval=0.14267, targetCFL=0.1, silent=true)
 # @btime unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00001, endTime=0.005, outputInterval=0.14267, targetCFL=0.01, silent=true, createRestartFile=false, createVTKOutput=false)
 # @code_warntype unstructured3DFVM(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00001, endTime=0.00001, outputInterval=0.14267, targetCFL=0.01, silent=true, createRestartFile=false, createVTKOutput=false)
@@ -110,14 +110,13 @@ unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.0
 
 # Choose a mesh
 # meshPath = "Test/OFairfoilMesh"
-# boundaryConditions = [ wallBoundary, [], emptyBoundary, [], subsonicInletBoundary, [Pt, Tt, UunitVec..., gamma, R, Cp], pressureOutletBoundary, P ]
 # meshPath = "Test/OFmemesAirfoilMesh"
 # boundaryConditions = [ wallBoundary, [], emptyBoundary, [], subsonicInletBoundary, [Pt, Tt, UunitVec..., gamma, R, Cp], pressureOutletBoundary, P ]
 #
-# # Solve
+# Solve
 # mesh = OpenFOAMMesh(meshPath)
 # cellPrimitives = initializeUniformSolution3D(mesh, P, T, U...)
-# unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.0000001, endTime=0.00002, outputInterval=0.00002, targetCFL=0.5, silent=false, restart=true)
+# unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.0000001, endTime=0.002, outputInterval=0.002, targetCFL=0.5, silent=false)
 
 
 # ### Delta Wing ###

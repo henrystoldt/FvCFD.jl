@@ -30,18 +30,24 @@ function readRestartFile(path="JuliaCFDRestart.txt")
     cellPrimitives = readdlm(path)
 end
 
+struct MeshPoint
+    index::Int64
+    location::Vector{Float64}
+end
+
+
 function outputVTK(meshPath, cellPrimitives, fileName="solution")
-    points, cellPtIndices = OpenFOAMMesh_findCellPts(meshPath)
+    points, cellIndices = OpenFOAMMesh_findCellPts(meshPath)
     points = transpose(points)
     cells = Array{MeshCell, 1}(undef, 0)
 
     cellType = [ 1, 3, 5, 10, 14, 13, "ERROR", 12 ] # This array maps from number of points in a cell to the .vtk numeric cell type. Example: 8 pts -> "12", which is .vtk code for "VTK_HEXAHEDRON"
     # Corresponding .vtk cell types: [ "VTK_VERTEX", "VTK_LINE", "VTK_TRIANGLE", "VTK_TETRA", "VTK_PYRAMID", "VTK_WEDGE", "ERROR", "VTK_HEXAHEDRON" ]
 
-    for i in eachindex(cellPtIndices)
-        nPoints = size(cellPtIndices[i], 1)
+    for i in eachindex(cellIndices)
+        nPoints = length(cellIndices[i].pointIndices)
         cT = cellType[nPoints]
-        cell = MeshCell(VTKCellType(cT), cellPtIndices[i])
+        cell = MeshCell(VTKCellType(cT), cellIndices[i].pointIndices)
         push!(cells, cell)
     end
 
