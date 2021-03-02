@@ -1,7 +1,6 @@
 # Methods from Moukalled et al. FVM - OpenFOAM, Matlab
 include("vectorFunctions.jl")
 include("dataStructures.jl")
-using LinearAlgebra
 
 ######################### Mesh/Cell Geometry ###########################
 function triangleCentroid(points)
@@ -325,16 +324,10 @@ function readOpenFOAMMesh(polyMeshPath)
     return points, faces, owner, neighbour, boundaryNames, boundaryNumFaces, boundaryStartFaces
 end
 
-struct Face
-    pointIndices::Vector{Int64}
-end
-
 mutable struct Cell
     faceIndices::Vector{Int64}
     pointIndices::Vector{Int64}
 end
-
-Point = Vector # Alias
 
 #=
     Function used to find all the points in each cell.
@@ -403,6 +396,37 @@ function OpenFOAMMesh_findCellPts(polyMeshPath)
         return -1
     end            
 
+    function addEdges!(cellPoints, facePoints, endFacePoints, endFacePointsSet, unusedFaces, pointOffset=4)
+        oppositeFaceIndex = -1
+        for i in 1:length(unusedFaces)
+            fi = unusedFaces[i]
+            fiPoints = pointIndicesByFace[fi]
+            commonPoints = intersection(fiPoints, facePoints)
+
+            if length(commonPoints) == 2
+                # These two points form an edge connecting faces one and two
+                points = collect(commonPoints)
+
+                if points[1] in endFacePointsSet
+                    p1 = points[1]
+                    p2 = points[2]
+                else
+                    p1 = points[2]
+                    p2 = points[1]
+                end
+
+                position = index(p1, endFacePoints) # Find position over the point on the face one side
+                if position == -1
+                    throw(ErrorException("Point $p1 not found in $endFacePoints"))
+                end
+                cellPoints[ position + pointOffset ] = p2 # The point on the face two side goes in the matching spot
+            else
+                oppositeFaceIndex = i # This is the face opposite to the one containing facePoints
+            end
+        end
+        return oppositeFaceIndex
+    end
+
     function getOrderedPointIndices_Tet!(cell::Cell)
         # For a tetrahedron, the order of points is unimportant
         # And all points from an arbitrary face
@@ -413,6 +437,63 @@ function OpenFOAMMesh_findCellPts(polyMeshPath)
         addAllNewPoints!(cell, cell.faceIndices[2])
     end
 
+    function getOrderedPointIndices_Pyramid!(cell::Cell)
+        # Pyramids need to have the points that make up their square base ordered 1-4, with the tip of the pyramid coming last
+        # Find the quad face
+        for faceIndex in cell.faceIndices
+            if length(pointIndicesByFace[faceIndex]) == 4
+                for pointIndex in pointIndicesByFace[faceIndex]
+                    push!(cell.pointIndices, pointIndex)
+                end
+                break
+            end
+        end
+
+        # There is only one square face, and all other faces contain the pyramid tip
+        # Therefore, adding all of the points from any two faces will ensure that the tip is added
+        addAllNewPoints!(cell, cell.faceIndices[1])
+        addAllNewPoints!(cell, cell.faceIndices[2])
+    end
+
+    function getOrderedPointIndices_Wedge!(cell::Cell)
+        # Wedges need the triangular faces numbered 1-3 and 4-6 respectively, where 1 is aligned with 4, 2 with 5, and 3 with 6
+        # First identify the two triangular faces
+        unusedFaces = deepcopy(cell.faceIndices)
+        t1 = -1
+
+        for j in 1:2
+            for i in eachindex(unusedFaces)
+                faceIndex = unusedFaces[i]
+                
+                if length(pointIndicesByFace[faceIndex]) == 3
+                    # Found a triangular face
+                    if t1 == -1
+                        t1 = faceIndex
+                    end
+                    deleteat!(unusedFaces, i)
+                    break
+                end
+            end
+        end
+
+        if length(unusedFaces) != 3
+            throw(ErrorException("Expected three quadrilateral faces remaining after removal of two triangular end faces, got $(length(unusedFaces))"))
+        end
+
+        t1Points = pointIndicesByFace[t1]
+        t1PointsSet = Set(t1Points)
+        cell.pointIndices = vcat(t1Points, [0, 0, 0])
+
+        # Now all the remaining faces (3) will be quadrilaterals connecting the two triangular end faces
+        q1 = pop!(unusedFaces)
+        q1Points = pointIndicesByFace[q1] 
+        addEdges!(cell.pointIndices, q1Points, t1Points, t1PointsSet, unusedFaces, 3)
+
+        q2 = pop!(unusedFaces)
+        q2Points = pointIndicesByFace[q2]
+        addEdges!(cell.pointIndices, q2Points, t1Points, t1PointsSet, unusedFaces, 3)
+    end
+
     function getOrderedPointIndices_Hex!(cell::Cell)
         # Start by choosing an arbitrary face
         unusedFaces = deepcopy(cell.faceIndices)
@@ -420,16 +501,12 @@ function OpenFOAMMesh_findCellPts(polyMeshPath)
         f1Points = pointIndicesByFace[f1]
         f1PointsSet = Set(f1Points)
 
-        # Find the opposite face (no points in common)
-        f2 = -1
-        f2Points = Vector{Int64}(undef, 4)
+        # Find the opposite face (no points in common) and remove it
         for i in 1:length(unusedFaces)
             fi = unusedFaces[i]
             fiPoints = pointIndicesByFace[fi]
 
             if disjoint(f1Points, fiPoints)
-                f2 = fi
-                f2Points = fiPoints
                 deleteat!(unusedFaces, i)
                 break
             end
@@ -440,7 +517,7 @@ function OpenFOAMMesh_findCellPts(polyMeshPath)
         ### Now find the correct orientation
             # Point f1_i needs to be aligned (spatially) with Point f2_i
             # We can check for this by using one of the other faces as a guide, since it forms part of the connection between f1 and f2
-        cellPoints = vcat(f1Points, [0, 0, 0, 0])
+        cell.pointIndices = vcat(f1Points, [0, 0, 0, 0])
 
         # Pick an arbitrary other face
         f3 = pop!(unusedFaces)
@@ -448,47 +525,14 @@ function OpenFOAMMesh_findCellPts(polyMeshPath)
 
         # For each of the other faces, try to identify an edge connecting faces one and two
             # Such an edge will appear as a pair of points that two faces connecting faces one and to have in common
-        function addEdges(facePoints)
-            oppositeFaceIndex = -1
-            for i in 1:length(unusedFaces)
-                fi = unusedFaces[i]
-                fiPoints = pointIndicesByFace[fi]
-                commonPoints = intersection(fiPoints, facePoints)
-
-                if length(commonPoints) == 2
-                    # These two points form an edge connecting faces one and two
-                    points = collect(commonPoints)
-
-                    if points[1] in f1PointsSet
-                        p1 = points[1]
-                        p2 = points[2]
-                    else
-                        p1 = points[2]
-                        p2 = points[1]
-                    end
-
-                    position = index(p1, f1Points) # Find position over the point on the face one side
-                    if position == -1
-                        throw(ErrorException("Point $p1 not found in $f1Points"))
-                    end
-                    cellPoints[position+4] = p2 # The point on the face two side goes in the matching spot
-                else
-                    oppositeFaceIndex = i # This is the face opposite to the one containing facePoints
-                end
-            end
-            return oppositeFaceIndex
-        end
-
-        lastFace = addEdges(f3Points)
+        lastFace = addEdges!(cell.pointIndices, f3Points, f1Points, f1PointsSet, unusedFaces)
         lastFacePoints = pointIndicesByFace[unusedFaces[lastFace]]
         deleteat!(unusedFaces, lastFace)
         
-        noResult = addEdges(lastFacePoints)
+        noResult = addEdges!(cell.pointIndices, lastFacePoints, f1Points, f1PointsSet, unusedFaces)
         if noResult != -1
             throw(ErrorException("Failure to appropriately order hexahedral cell points for writing to .vtk"))
         end
-
-        cell.pointIndices = cellPoints
     end
 
     # Now use the face indices to gather and order each cell's points appropriately
@@ -497,6 +541,22 @@ function OpenFOAMMesh_findCellPts(polyMeshPath)
         nFaces = length(cell.faceIndices)
         if nFaces == 4
             getOrderedPointIndices_Tet!(cell)
+        elseif nFaces == 5
+            quadFaceCount = 0
+
+            for f in cell.faceIndices
+                if length(pointIndicesByFace[f]) == 4
+                    quadFaceCount += 1
+                end
+            end
+
+            if quadFaceCount == 1
+                getOrderedPointIndices_Pyramid!(cell)
+            elseif quadFaceCount == 3
+                getOrderedPointIndices_Wedge!(cell)
+            else
+                throw(ErrorException("Unrecognized cell type, cell: $cell. Expecting only hex, tet, wedge, or pyramid cells for vtk output."))
+            end
         elseif nFaces == 6
             getOrderedPointIndices_Hex!(cell)
         end
