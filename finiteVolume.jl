@@ -5,6 +5,7 @@ include("timeDiscretizations.jl")
 include("mesh.jl")
 include("output.jl")
 include("dataStructures.jl")
+include("boundaryConditions.jl")
 
 __precompile__()
 
@@ -20,25 +21,6 @@ function initializeUniformSolution3D(mesh, P, T, Ux, Uy, Uz)
 
     return cellPrimitives
 end
-
-######################### CFL #######################################
-# function maxCFL3D(mesh::Mesh, sln::SolutionState, dt, gamma=1.4, R=287.05)
-#     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
-#
-#     maxCFL = 0.0
-#     for c in 1:nCells
-#         a = sqrt(gamma * R * sln.cellPrimitives[c,2])
-#
-#         CFL = 0.0
-#         for d in 1:3
-#             cDeltaT = (abs(sln.cellPrimitives[c,d+2]) + a)*dt
-#             CFL += cDeltaT / mesh.cellSizes[c, d]
-#         end
-#         maxCFL = max(maxCFL, CFL)
-#     end
-#
-#     return maxCFL
-# end
 
 # Calculates CFL at each cell. Expects sln.cellState, sln.cellPrimitives and sln.faceFluxes to be up to date
 function CFL!(CFL, mesh::Mesh, sln::SolutionState, dt=1, gamma=1.4, R=287.05)
@@ -457,116 +439,87 @@ function integrateFluxes_unstructured3D(mesh::Mesh, sln::SolutionState, boundary
     return sln.fluxResiduals
 end
 
-######################### Boundary Conditions #########################
-# The job of the BC functions is to calculate/enforce face fluxes at boundary faces.
-# The JST method only calculates fluxes at internal faces, then these conditions are applied to calculate them at the boundaries
+mutable struct SolverStatus
+    currentTime::Float64
+    nTimeSteps::Int64
+    nextOutputTime::Float64
+    endTime::Float64
+end
 
-# InletConditions: [ Static Pressure, Static Temperture, Ux, Uy, Uz, Cp ]
-function supersonicInletBoundary(mesh::Mesh, sln::SolutionState, boundaryNumber, inletConditions)
-    P, T, Ux, Uy, Uz, Cp = inletConditions
-    rho = idealGasRho(T, P)
-    xMom, yMom, zMom = [Ux, Uy, Uz] .* rho
-    e = calPerfectEnergy(T, Cp)
-    eV2 = rho*(e + (mag([Ux, Uy, Uz])^2)/2)
+function populateSolution(cellPrimitives, nCells, nFaces, R, Cp, nDims=3)
+    # Each dimension adds one momentum equation
+    nConservedVars = 2+nDims
+    # Each dimension adds a flux for each conserved quantity
+    nFluxes = nConservedVars*nDims
 
-    boundaryFluxes = Vector{Float64}(undef, 15)
-    calculateFluxes3D!(boundaryFluxes, [P, T, Ux, Uy, Uz],  [rho, xMom, yMom, zMom, eV2])
-    currentBoundary = mesh.boundaryFaces[boundaryNumber]
-    @inbounds for face in currentBoundary
-        sln.faceFluxes[face,:] = boundaryFluxes
+    # rho, xMom, total energy from P, T, Ux, Uy, Uz
+    cellState = encodePrimitives3D(cellPrimitives, R, Cp)
+    cellFluxes = zeros(nCells, nFluxes)
+    fluxResiduals = zeros(nCells, nConservedVars)
+    faceFluxes = zeros(nFaces, nFluxes)
+
+    # Initialize solution state
+    sln = SolutionState(cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes)
+
+    # Calculates cell fluxes, primitives from cell state
+    decodeSolution_3D(sln, R, Cp)
+
+    return sln
+end
+
+function restrictTimeStep(status, desiredDt)
+    maxStep = min(status.endTime-status.currentTime, status.nextOutputTime-status.currentTime)
+
+    if desiredDt > maxStep
+        return true, maxStep
+    else
+        return false, desiredDt
     end
 end
 
-# InletConditions: [ totalPressure, totalTemp, nx, ny, nz, gamma, R, Cp ]
-# Where n is the unit vector representing the direction of inlet velocity
-# Using method from FUN3D solver
-# TODO: Allow for variation of R and gamma
-function subsonicInletBoundary(mesh, sln::SolutionState, boundaryNumber, inletConditions)
-    Pt, Tt, nx, ny, nz, gamma, R, Cp = inletConditions
-
-    boundaryFluxes = Vector{Float64}(undef, 15)
-    primitives = Vector{Float64}(undef, 5)
-    state = Vector{Float64}(undef, 5)
-    velUnitVector = [ nx, ny, nz ]
-    currentBoundary = mesh.boundaryFaces[boundaryNumber]
-
-    @inbounds @fastmath for face in currentBoundary
-        ownerCell = mesh.faces[face][1]
-        @views adjustedVelocity = dot(velUnitVector, sln.cellPrimitives[ownerCell, 3:5])
-        primitives[2] = Tt - (gamma-1)/2 * (adjustedVelocity^2)/(gamma*R)
-        machNum = abs(adjustedVelocity) / sqrt(gamma * R * primitives[2])
-        primitives[1] = Pt*(1 + (gamma-1)/2 * machNum^2)^(-gamma/(gamma-1))
-        primitives[3:5] = adjustedVelocity .* velUnitVector
-
-        # Calculate state variables
-        state[1] = idealGasRho(primitives[2], primitives[1], R)
-        state[2:4] .= primitives[3:5] .* state[1]
-        e = calPerfectEnergy(primitives[2], Cp, R)
-        state[5] = state[1]*(e + (mag(primitives[3:5])^2)/2 )
-
-        calculateFluxes3D!(boundaryFluxes, primitives, state)
-        sln.faceFluxes[face, :] = boundaryFluxes
+function adjustTimeStep_LTS(targetCFL, dt, status::SolverStatus)
+    CFL = 1.0
+    if status.nTimeSteps < 10
+        # Ramp up CFL linearly in the first ten time steps to reach the target CFL
+        CFL = (status.nTimeSteps+1) * targetCFL / 10
+    else
+        CFL = targetCFL
     end
+
+    writeOutputThisIteration, CFL = restrictTimeStep(status, CFL)
+
+    # Store the target CFL for the present time step in the first element of the dt vector.
+    # The time discretization function will determine the actual local time step based on this target CFL
+    dt[1] = CFL # TODO: Cleaner way to pass this information
+
+    return writeOutputThisIteration, dt, CFL
+end
+        
+function adjustTimeStep(maxCFL, targetCFL, dt, status)
+    # If CFL too high, attempt to preserve stability by cutting timestep size in half
+    if maxCFL > targetCFL*1.01
+        dt *= targetCFL/(2*maxCFL)
+    # Otherwise slowly approach target CFL
+    else
+        dt *= ((targetCFL/maxCFL - 1)/10+1)
+    end
+
+    writeOutputThisIteration, dt = restrictTimeStep(status, dt)
+    return writeOutputThisIteration, dt, maxCFL
 end
 
-function pressureOutletBoundary(mesh, sln::SolutionState, boundaryNumber, outletPressure)
-    nFluxes = size(sln.cellFluxes, 2)
+function advance!(status::SolverStatus, dt, CFL, timeIntegrationFn, silent)
+    status.nTimeSteps += 1
 
-    # Directly extrapolate cell center flux to boundary (zero gradient between the cell center and the boundary)
-    currentBoundary = mesh.boundaryFaces[boundaryNumber]
-    @inbounds @fastmath for face in currentBoundary
-        ownerCell = mesh.faces[face][1]
-        # Mass fluxes are unaffected by pressure boundary
-        for flux in 1:nFluxes
-            sln.faceFluxes[face, flux] = sln.cellFluxes[ownerCell, flux]
-        end
+    if timeIntegrationFn == LTSEuler
+        status.currentTime += CFL
+    else
+        status.currentTime += dt
+    end        
 
-        origP = sln.cellPrimitives[ownerCell, 1]
-        # Adjust the momentum fluxes containing pressure
-        for flux in [4, 8, 12]
-            sln.faceFluxes[face, flux] += outletPressure - origP
-        end
-        #Adjust the energy fluxes
-        for d in 1:3
-            sln.faceFluxes[face, 12+d] += sln.cellPrimitives[ownerCell, 2+d]*(outletPressure - origP)
-        end
+    if !silent
+        @printf("Timestep: %5.0f, simTime: %9.4g, Max CFL: %9.4g \n", status.nTimeSteps, status.currentTime, CFL)
     end
-end
-
-function zeroGradientBoundary(mesh::Mesh, sln::SolutionState, boundaryNumber, _)
-    nFluxes = size(sln.cellFluxes, 2)
-
-    # Directly extrapolate cell center flux to boundary (zero gradient between the cell center and the boundary)
-    currentBoundary = mesh.boundaryFaces[boundaryNumber]
-    @inbounds for face in currentBoundary
-        ownerCell = mesh.faces[face][1] #One of these will be -1 (no cell), the other is the boundary cell we want
-        for flux in 1:nFluxes
-            sln.faceFluxes[face, flux] = sln.cellFluxes[ownerCell, flux]
-        end
-    end
-end
-
-function wallBoundary(mesh::Mesh, sln::SolutionState, boundaryNumber, _)
-    currentBoundary = mesh.boundaryFaces[boundaryNumber]
-    @inbounds for f in currentBoundary
-        ownerCell = max(mesh.faces[f][1], mesh.faces[f][2]) #One of these will be -1 (no cell), the other is the boundary cell we want
-
-        faceP = sln.cellPrimitives[ownerCell, 1]
-        # Momentum flux is Pressure in each of the normal directions (dot product)
-        sln.faceFluxes[f, 4] = faceP
-        sln.faceFluxes[f, 8] = faceP
-        sln.faceFluxes[f, 12] = faceP
-
-        # Mass Flux is zero
-        sln.faceFluxes[f, 1:3] .= 0.0
-        # Energy Flux is zero
-        sln.faceFluxes[f, 13:15] .= 0.0
-    end
-end
-symmetryBoundary = wallBoundary
-
-function emptyBoundary(mesh::Mesh, sln::SolutionState, boundaryNumber, _)
-    return
 end
 
 ######################### Solvers #######################
@@ -608,13 +561,15 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
     if !silent
         println("Initializing Simulation")
     end
-    nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
-    nDims = 3
 
-    # Each dimension adds one momentum equation
-    nVars = 2+nDims
-    # Each dimension adds a flux for each conserved quantity
-    nFluxes = nVars*nDims
+    nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
+
+    if !silent
+        println("Mesh: $meshPath")
+        println("Cells: $nCells")
+        println("Faces: $nFaces")
+        println("Boundaries: $nBoundaries")
+    end
 
     if restart
         if !silent
@@ -623,97 +578,51 @@ function unstructured3DFVM(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}
 
         cellPrimitives = readRestartFile(restartFile)
 
-        # Check that restart file has the same nnumber of cells as the mesh
+        # Check that restart file has the same number of cells as the mesh
         nCellsRestart = size(cellPrimitives, 1)
         if nCellsRestart != nCells
             throw(ArgumentError("Number of cells in restart file ($nCellsRestart) does not match the present mesh ($nCells). Please provide a matching mesh and restart file."))
         end
     end
 
-    # rho, xMom, total energy from P, T, Ux, Uy, Uz
-    cellState = encodePrimitives3D(cellPrimitives, R, Cp)
-    cellFluxes = zeros(nCells, nFluxes)
-    fluxResiduals = zeros(nCells, nVars)
-    faceFluxes = zeros(nFaces, nFluxes)
-    # Initialize solution state
-    sln = SolutionState(cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes)
+    sln = populateSolution(cellPrimitives, nCells, nFaces, R, Cp, 3)
 
-    # Calculates cell fluxes, primitives from cell state
-    decodeSolution_3D(sln, R, Cp)
+    dt = initDt
+    if timeIntegrationFn==LTSEuler
+        # If using local time stepping, the time step will be different for each cell
+        dt = zeros(nCells)
+    end
+
+    status = SolverStatus(0, 0, outputInterval, endTime)
+    writeOutputThisIteration = false
+    CFLvec = zeros(nCells)
 
     if !silent
         println("Starting iterations")
     end
 
-    dt = initDt
-    if timeIntegrationFn==LTSEuler
-        dt = zeros(nCells)
-    end
-
-    currTime = 0
-    timeStepCounter = 0
-    nextOutputTime = outputInterval
-    writeOutputThisIteration = false
-    CFLvec = zeros(nCells)
-    while currTime < endTime
-        ############## Timestep adjustment #############
+    ### Main Loop ###
+    while status.currentTime < status.endTime
         if timeIntegrationFn == LTSEuler
-            CFL = 1.0
-            if timeStepCounter < 10
-                # Ramp up CFL linearly in the first ten time steps to reach the target CFL
-                CFL = (timeStepCounter+1) * targetCFL / 10
-            else
-                CFL = targetCFL
-            end
-
-            # Store the target CFL for the present time step in the first element of the dt vector.
-            # The time discretization function will determine the actual local time step based on this target CFL
-            dt[1] = CFL
+            writeOutputThisIteration, dt, CFL = adjustTimeStep_LTS(targetCFL, dt, status)
         else
             CFL!(CFLvec, mesh, sln, dt, gamma, R)
-            CFL = maximum(CFLvec)
-
-            # If CFL too high, attempt to preserve stability by cutting timestep size in half
-            if CFL > targetCFL*1.01
-                dt *= targetCFL/(2*CFL)
-            # Otherwise slowly approach target CFL
-            else
-                dt *= ((targetCFL/CFL - 1)/10+1)
-            end
-
-            # Cut timestep to hit endtime/writeTimes as necessary
-            if (endTime - currTime) < dt
-                dt = endTime - currTime
-            elseif (nextOutputTime - currTime) < dt
-                dt = nextOutputTime - currTime
-                writeOutputThisIteration = true
-            end
+            writeOutputThisIteration, dt, CFL = adjustTimeStep(maximum(CFLvec), targetCFL, dt, status)
         end
 
         ############## Take a timestep #############
         sln = timeIntegrationFn(mesh, fluxFunction, sln, boundaryConditions, gamma, R, Cp, dt)
-
-        if timeIntegrationFn == LTSEuler
-            currTime += CFL
-            if (nextOutputTime - currTime) < CFL
-                writeOutputThisIteration = true
-            end
-        else
-            currTime += dt
-        end
-        timeStepCounter += 1
-
-        if !silent
-            @printf("Timestep: %5.0f, simTime: %9.4g, Max CFL: %9.4g \n", timeStepCounter, currTime, CFL)
-        end
+        advance!(status, dt, CFL, timeIntegrationFn, silent)
 
         if writeOutputThisIteration
-            updateSolutionOutput(sln.cellPrimitives, restartFile, meshPath, createRestartFile, createVTKOutput)
-            writeOutputThisIteration = false
-            nextOutputTime += outputInterval
+            writeOutput(sln.cellPrimitives, restartFile, meshPath, createRestartFile, createVTKOutput)
+            status.nextOutputTime += outputInterval
         end
     end
+    
+    # Always create output upon exit
+    writeOutput(sln.cellPrimitives, restartFile, meshPath, createRestartFile, createVTKOutput)
 
-    updateSolutionOutput(sln.cellPrimitives, restartFile, meshPath, createRestartFile, createVTKOutput)
+    # Return current cell-center properties
     return sln.cellPrimitives
 end

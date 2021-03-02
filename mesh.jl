@@ -90,7 +90,7 @@ function cellVolCentroid(points, fAVecs, faceCentroids)
     return vol, centroid
 end
 
-# For each face, calculates the vectors from it's owner and neighbour cell centers to it's own center
+# For each face, calculates the vectors from its owner and neighbour cell centers to its own center
 function cellCentroidToFaceVec(faceCentroids::Array{Array{Float64, 1}}, cellCentroids::Array{Array{Float64, 1}})
     #TODO: Understand ordering to make sure we're accepting faces in the order we need to pass them back in??
     nFaces = size(faceCentroids, 1)
@@ -363,12 +363,6 @@ function OpenFOAMMesh_findCellPts(polyMeshPath)
     addCellFaceIndices(faceOwnerCellIndices)
     addCellFaceIndices(faceNeighborCellIndices)
 
-    function addAllPoints!(cell::Cell, faceIndex)
-        for pointIndex in pointIndicesByFace[face1]
-            push!(cell.pointIndices, pointIndex)
-        end        
-    end
-
     function addAllNewPoints!(cell::Cell, faceIndex)
         for pointIndex in pointIndicesByFace[face2]
             if !any(x->x==pointIndex, cell.pointIndices)
@@ -427,39 +421,43 @@ function OpenFOAMMesh_findCellPts(polyMeshPath)
         return oppositeFaceIndex
     end
 
-    function getOrderedPointIndices_Tet!(cell::Cell)
+    function populatePointIndices_Tet!(cell::Cell)
         # For a tetrahedron, the order of points is unimportant
         # And all points from an arbitrary face
-        addAllPoints!(cell, cell.faceIndices[1])
+        addAllNewPoints!(cell, cell.faceIndices[1])
 
         # Choose another face, it will contain the fourth point we need to complete the tetrahedron
-        # Find it and add it
         addAllNewPoints!(cell, cell.faceIndices[2])
     end
 
-    function getOrderedPointIndices_Pyramid!(cell::Cell)
+    function populatePointIndices_Pyramid!(cell::Cell)
         # Pyramids need to have the points that make up their square base ordered 1-4, with the tip of the pyramid coming last
         # Find the quad face
         for faceIndex in cell.faceIndices
             if length(pointIndicesByFace[faceIndex]) == 4
-                for pointIndex in pointIndicesByFace[faceIndex]
-                    push!(cell.pointIndices, pointIndex)
+                addAllNewPoints!(cell, faceIndex)
+
+                # There is only one square face, and all other faces contain the pyramid tip
+                # Find any other face and add its points to make the pyramid tip the final point
+                if faceIndex != cell.faceIndices[1]
+                    addAllNewPoints!(cell, cell.faceIndices[1])
+                else
+                    addAllNewPoints!(cell, cell.faceIndices[2])
                 end
+
+                # All done
                 break
             end
         end
-
-        # There is only one square face, and all other faces contain the pyramid tip
-        # Therefore, adding all of the points from any two faces will ensure that the tip is added
-        addAllNewPoints!(cell, cell.faceIndices[1])
-        addAllNewPoints!(cell, cell.faceIndices[2])
     end
 
-    function getOrderedPointIndices_Wedge!(cell::Cell)
+    function populatePointIndices_Wedge!(cell::Cell)
         # Wedges need the triangular faces numbered 1-3 and 4-6 respectively, where 1 is aligned with 4, 2 with 5, and 3 with 6
-        # First identify the two triangular faces
+        # Using similar strategy it to that used for hex cells: Identify two end faces, then use the faces that connect them to ensure their points are aligned
+        
+        # First identify the two triangular faces, keep track of one and get rid of the other
         unusedFaces = deepcopy(cell.faceIndices)
-        t1 = -1
+        t1 = -1 # Triangular face one, we will base the ordering off this one
 
         for j in 1:2
             for i in eachindex(unusedFaces)
@@ -482,19 +480,29 @@ function OpenFOAMMesh_findCellPts(polyMeshPath)
 
         t1Points = pointIndicesByFace[t1]
         t1PointsSet = Set(t1Points)
-        cell.pointIndices = vcat(t1Points, [0, 0, 0])
+        cell.pointIndices = vcat(t1Points, [0, 0, 0]) # Still have to determine proper ordering of points in the other triangular end face, 0's will be replaced below
 
         # Now all the remaining faces (3) will be quadrilaterals connecting the two triangular end faces
-        q1 = pop!(unusedFaces)
+        q1 = pop!(unusedFaces) # Select one at random
         q1Points = pointIndicesByFace[q1] 
-        addEdges!(cell.pointIndices, q1Points, t1Points, t1PointsSet, unusedFaces, 3)
+        addEdges!(cell.pointIndices, q1Points, t1Points, t1PointsSet, unusedFaces, 3) # Use it to populate 2/3 of the unknown points
 
-        q2 = pop!(unusedFaces)
+        q2 = pop!(unusedFaces) # Select another at random
         q2Points = pointIndicesByFace[q2]
-        addEdges!(cell.pointIndices, q2Points, t1Points, t1PointsSet, unusedFaces, 3)
+        addEdges!(cell.pointIndices, q2Points, t1Points, t1PointsSet, unusedFaces, 3) # Use it to populate the last unknown point
     end
 
-    function getOrderedPointIndices_Hex!(cell::Cell)
+    function populatePointIndices_Hex!(cell::Cell)
+        # Need to order point such that the points that make up a single quadrilateral face are ordered 1-4
+            # The face opposite to it must have its points ordered 5-8, with point 1 connected to/aligned with point 5, 2 with 6, etc...
+            # We will accomplish this by first picking a starting face at random, this face's points will be numbered 1-4
+            # Then we will identify its opposite face and remove it
+            # Then all the remaining faces form the connections between the first face we picked and its opposite Face
+            # Pairs of these faces will contain 0 or 2 points in common
+                # When zero, they are opposite each other
+                # When two, they are adjacent and the two points they have in common form an edge connecting the two end faces
+                    # This indicates that these two points should be aligned, and is used to properly order the remaining points
+
         # Start by choosing an arbitrary face
         unusedFaces = deepcopy(cell.faceIndices)
         f1 = pop!(unusedFaces)
@@ -512,8 +520,6 @@ function OpenFOAMMesh_findCellPts(polyMeshPath)
             end
         end
 
-        # The combination of the points in f1 and f2 will contain all of the points that make up the present cell
-
         ### Now find the correct orientation
             # Point f1_i needs to be aligned (spatially) with Point f2_i
             # We can check for this by using one of the other faces as a guide, since it forms part of the connection between f1 and f2
@@ -522,14 +528,13 @@ function OpenFOAMMesh_findCellPts(polyMeshPath)
         # Pick an arbitrary other face
         f3 = pop!(unusedFaces)
         f3Points = pointIndicesByFace[f3]
-
-        # For each of the other faces, try to identify an edge connecting faces one and two
-            # Such an edge will appear as a pair of points that two faces connecting faces one and to have in common
         lastFace = addEdges!(cell.pointIndices, f3Points, f1Points, f1PointsSet, unusedFaces)
-        lastFacePoints = pointIndicesByFace[unusedFaces[lastFace]]
-        deleteat!(unusedFaces, lastFace)
         
+        # Add points from the edges of the face opposite f3
+        lastFacePoints = pointIndicesByFace[unusedFaces[lastFace]]
+        deleteat!(unusedFaces, lastFace)        
         noResult = addEdges!(cell.pointIndices, lastFacePoints, f1Points, f1PointsSet, unusedFaces)
+
         if noResult != -1
             throw(ErrorException("Failure to appropriately order hexahedral cell points for writing to .vtk"))
         end
@@ -540,7 +545,7 @@ function OpenFOAMMesh_findCellPts(polyMeshPath)
     for cell in cells
         nFaces = length(cell.faceIndices)
         if nFaces == 4
-            getOrderedPointIndices_Tet!(cell)
+            populatePointIndices_Tet!(cell)
         elseif nFaces == 5
             quadFaceCount = 0
 
@@ -551,14 +556,14 @@ function OpenFOAMMesh_findCellPts(polyMeshPath)
             end
 
             if quadFaceCount == 1
-                getOrderedPointIndices_Pyramid!(cell)
+                populatePointIndices_Pyramid!(cell)
             elseif quadFaceCount == 3
-                getOrderedPointIndices_Wedge!(cell)
+                populatePointIndices_Wedge!(cell)
             else
                 throw(ErrorException("Unrecognized cell type, cell: $cell. Expecting only hex, tet, wedge, or pyramid cells for vtk output."))
             end
         elseif nFaces == 6
-            getOrderedPointIndices_Hex!(cell)
+            populatePointIndices_Hex!(cell)
         end
     end
 

@@ -17,7 +17,7 @@ function plot2DResult(mesh, cellValue)
         y[c] = cCenters[c][2]
     end
 
-    plot(x, y, callValue, st=:surface)
+    plot(x, y, cellValue, st=:surface)
     gui()
 end
 
@@ -29,12 +29,6 @@ end
 function readRestartFile(path="JuliaCFDRestart.txt")
     cellPrimitives = readdlm(path)
 end
-
-struct MeshPoint
-    index::Int64
-    location::Vector{Float64}
-end
-
 
 function outputVTK(meshPath, cellPrimitives, fileName="solution")
     points, cellIndices = OpenFOAMMesh_findCellPts(meshPath)
@@ -72,7 +66,7 @@ end
     Will overwrite existing restart files
     Will not overwrite existing .vtk files
 =#
-function updateSolutionOutput(cellPrimitives, restartFile, meshPath, createRestartFile, createVTKOutput)
+function writeOutput(cellPrimitives, restartFile, meshPath, createRestartFile, createVTKOutput)
     if createRestartFile
         println("Writing Restart File: $restartFile")
         writeRestartFile(cellPrimitives, restartFile)
