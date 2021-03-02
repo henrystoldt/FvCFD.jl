@@ -169,7 +169,7 @@ function greenGaussGrad(mesh::Mesh, matrix::AbstractArray{Float64, 2}, valuesAtF
     grad = zeros(nCells, nVars, 3)
 
     # Integrate fluxes from each face
-    @fastmath for f in eachindex(mesh.faces)
+    @fastmath @inbounds for f in eachindex(mesh.faces)
         ownerCell = mesh.faces[f][1]
         neighbourCell = mesh.faces[f][2]
 
@@ -187,7 +187,7 @@ function greenGaussGrad(mesh::Mesh, matrix::AbstractArray{Float64, 2}, valuesAtF
     end
 
     # Divide integral by cell volume to obtain gradients
-    @fastmath for c in 1:nCells
+    for c in 1:nCells
         for v in 1:nVars
             for d in 1:3
                 grad[c,v,d] /= mesh.cVols[c]
@@ -223,14 +223,18 @@ function linInterp_3D(mesh::Mesh, matrix::AbstractArray{Float64, 2}, faceVals=ze
     end
 
     # Boundary face fluxes must be set separately
-    @inbounds @fastmath for f in 1:nFaces-nBdryFaces
+    for f in 1:nFaces-nBdryFaces
         # Find value at face using linear interpolation
         c1 = mesh.faces[f][1]
         c2 = mesh.faces[f][2]
 
         #TODO: Precompute these distances?
-        c1Dist = mag(mesh.cCenters[c1] .- mesh.fCenters[f])
-        c2Dist = mag(mesh.cCenters[c2] .- mesh.fCenters[f])
+        c1Dist = 0
+        c2Dist = 0
+        for i in 1:3
+            c1Dist += (mesh.cCenters[c1][i] - mesh.fCenters[f][i])^2
+            c2Dist += (mesh.cCenters[c2][i] - mesh.fCenters[f][i])^2
+        end
         totalDist = c1Dist + c2Dist
 
         for v in 1:nVars
@@ -280,8 +284,6 @@ function faceDeltas(mesh::Mesh, sln::SolutionState)
 
     return faceDeltas
 end
-
-# TODO: MUSCL Interp
 
 ######################### Convective Term Things #######################
 # Calculates eps2 and eps4, the second and fourth-order artificial diffusion coefficients used in the JST method
