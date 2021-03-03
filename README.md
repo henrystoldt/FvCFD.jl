@@ -2,7 +2,22 @@
 
 ![](https://github.com/henrystoldt/JuliaCFD/workflows/Tests/badge.svg)
 
+<img src="https://raw.githubusercontent.com/henrystoldt/JuliaCFD/master/Resources/forwardStep.gif?raw=true" alt="Forward step simulation"
+  title="MAPLEAF" height=225 style="padding-right: 10px;"/>
 
+JuliaCFD is a simple explicit compressible Euler solver for 3D unstructured polyhedral meshes written in the Julia programming language.
+JuliaCFD is compatible with OpenFOAM meshes and outputs .vtu files which can be viewed with most post processing software (ex. Paraview).
+The code is compact enough to be read fully by individual users/developers (<2000 lines) and makes for an excellent hands-on introduction to CFD.
+This code was originally created as a final project for a graduate numerical methods class, and would make for a good starting point for additional projects or low-overhead numerical research.
+Ongoing projects include the implementation of adaptive meshing and implicit time stepping.
+Contributions are welcome.
+In terms of numerics, JuliaCFD uses the JST or Roe/MUSCL second-order convective schemes and explicit local/global Runge-Kutta time stepping of up to fourth order.
+Have a look at or run runSolver.jl to get started!
+
+## Install
+TODO: Julia Package
+
+## Sample results
 
 ## For newcomers to Julia
 Julia is unlike most other languages in that it makes extensive use of Just-in-Time Compilation (JIT).
