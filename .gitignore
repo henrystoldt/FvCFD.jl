@@ -1,2 +1,3 @@
-/*JuliaCFDRestart.txt
-/*.vtk
+*JuliaCFDRestart.txt
+*.vtk
+*.vtu
