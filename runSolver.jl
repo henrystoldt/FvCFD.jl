@@ -24,14 +24,14 @@ U = [ 694.44, 0, 0 ]
 #boundaryConditions = [ emptyBoundary!, [], supersonicInletBoundary!, [P, T, U..., 1005], zeroGradientBoundary!, [], symmetryBoundary!, [], zeroGradientBoundary!, [], wallBoundary!, [] ]
 # meshPath = "Test/OFwedgeMesh"
 # boundaryConditions = [ supersonicInletBoundary, [P, T, U..., 1005], zeroGradientBoundary, [], symmetryBoundary, [], zeroGradientBoundary, [], wallBoundary, [], emptyBoundary, [] ]
-#meshPath = "Test/OFcoarseWedgeMesh"
-#boundaryConditions = [ emptyBoundary!, [], supersonicInletBoundary!, [P, T, U..., 1005], zeroGradientBoundary!, [], symmetryBoundary!, [], zeroGradientBoundary!, [], wallBoundary!, [] ]
-meshPath = "Test/OFmemesWedgeMesh"
-boundaryConditions = [ symmetryBoundary!, [], emptyBoundary!, [], supersonicInletBoundary!, [P, T, U..., 1005], wallBoundary!, [], zeroGradientBoundary!, [], zeroGradientBoundary!, [] ]
+meshPath = "Test/OFcoarseWedgeMesh"
+boundaryConditions = [ emptyBoundary!, [], supersonicInletBoundary!, [P, T, U..., 1005], zeroGradientBoundary!, [], symmetryBoundary!, [], zeroGradientBoundary!, [], wallBoundary!, [] ]
+# meshPath = "Test/OFmemesWedgeMesh"
+# boundaryConditions = [ symmetryBoundary!, [], emptyBoundary!, [], supersonicInletBoundary!, [P, T, U..., 1005], wallBoundary!, [], zeroGradientBoundary!, [], zeroGradientBoundary!, [] ]
 
 mesh = OpenFOAMMesh(meshPath)
 cellPrimitives = initializeUniformSolution3D(mesh, P, T, U...)
-unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00000001, endTime=0.005, outputInterval=0.005, targetCFL=0.5, silent=false)
+unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00000001, endTime=0.01, adaptInterval=0.005, outputInterval=0.005, targetCFL=0.5, silent=false)
 
 ### Forward Step ###
 # Freestream Conditions (Mach 3)
