@@ -60,7 +60,7 @@ function run1000()
 end
 # @profview run1000()
 output = zeros(400, 1, 3)
-@benchmark greenGaussGrad(OFmesh, P, nothing)
+@benchmark greenGaussGrad(OFmesh, P)
 # output = zeros(2001, 1)
 # @benchmark linInterp_3D(OFmesh, P, output)
 # @code_warntype greenGaussGrad(OFmesh, P, false)

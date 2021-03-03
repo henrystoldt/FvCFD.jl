@@ -169,11 +169,11 @@ function greenGaussGrad(mesh::Mesh, matrix::AbstractArray{Float64, 2}, valuesAtF
     grad = zeros(nCells, nVars, 3)
 
     # Integrate fluxes from each face
-    @fastmath @inbounds for f in eachindex(mesh.faces)
+    @fastmath for f in eachindex(mesh.faces)
         ownerCell = mesh.faces[f][1]
         neighbourCell = mesh.faces[f][2]
 
-        for v in 1:nVars
+        @inbounds for v in 1:nVars
             for d in 1:3
                 # Every face has an owner
                 grad[ownerCell, v, d] += mesh.fAVecs[f][d] * faceVals[f, v]
@@ -187,7 +187,7 @@ function greenGaussGrad(mesh::Mesh, matrix::AbstractArray{Float64, 2}, valuesAtF
     end
 
     # Divide integral by cell volume to obtain gradients
-    for c in 1:nCells
+    @simd for c in 1:nCells
         for v in 1:nVars
             for d in 1:3
                 grad[c,v,d] /= mesh.cVols[c]
@@ -213,12 +213,12 @@ end
     Face 2    x1_f2    x2_f2    x3_f2
     ...
 =#
-function linInterp_3D(mesh::Mesh, matrix::AbstractArray{Float64, 2}, faceVals=zeros(2,2))
+function linInterp_3D(mesh::Mesh, matrix::AbstractArray{Float64, 2}, faceVals=nothing)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     nVars = size(matrix, 2)
 
     # Make a new matrix if one is not passed in
-    if faceVals == zeros(2,2)
+    if faceVals == nothing
         faceVals = zeros(nFaces, nVars)
     end
 
