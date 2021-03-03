@@ -516,7 +516,7 @@ function OpenFOAMMesh(polyMeshPath)
     end
 
     # Compute cell sizes in the x, y, z directions
-    # In the past, cell sizes were used for a shitty CFL calculation, may be able to get rid of them now
+    # In the past, cell sizes were used for a simplified CFL calculation, may be able to get rid of them now
     maxCoords = [ -1000000.0, -1000000.0, -1000000.0 ]
     minCoords = [ 1000000.0, 1000000.0, 1000000.0 ]
     for c in 1:nCells
@@ -723,9 +723,9 @@ function pointAddition(cells, faces, fCen, fPoints, fPLocs, fData, nList, index,
         #workingPointLocs[j+p,:] = fPLocs[negFacePts[j],:]
     end
 
-    if p == 4 && firstPassFlag
-        offset = 2
-    end
+    # if p == 4 && firstPassFlag
+    #     offset = 2
+    # end
 
     println("Offset is $offset")
     negPoints = fPLocs[negFacePts[:],:]
@@ -1110,7 +1110,7 @@ function removeFacesAndCellsFromMesh(cells, faces, fCen, fPoints, fData, nList, 
                 faces[f][cell] -= 1
 
             elseif faces[f][cell] == delCell
-                println("You fucked up removing faces references to dead cell!")
+                println("You messed up removing faces references to dead cell!")
                 println("$breakdown")
             end
         end

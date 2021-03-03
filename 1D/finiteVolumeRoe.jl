@@ -183,7 +183,7 @@ function vanLeer(q_ip, q_i, q_im; direc=0, dx=0.05)
 
     if r > 5
         r = 0.7
-        #println("Did some fucky shit with limiter")
+        #println("Did some weird stuff with limiter")
     end
 
     s = 0

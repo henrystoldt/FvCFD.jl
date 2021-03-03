@@ -1,8 +1,6 @@
 using Profile
 using BenchmarkTools
-using ProfileView
-
-home_dir = "/home/bwdalman/Documents/JuliaCFD/JuliaCFD/"
+# using ProfileView
 
 include("finiteVolume.jl")
 include("mesh.jl")
