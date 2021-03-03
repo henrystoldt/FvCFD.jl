@@ -63,14 +63,19 @@ end;
     rho = 2
     xMom = 1
     eV2 = 3
+
     U = 0.5
     e = 1.5 - 0.125
     T = e/(1005 - 287.05)
-    P = rho*287.05*T
-    res1 = [ P, T, U ]
-    res2 = decodePrimitives(rho, xMom, eV2, 287.05, 1005)
-    for i in 1:3
-        @test almostEqual(res1[i], res2[i])
+    P = rho*287.05*T    
+    expectedResult = [ P, T, U, 0, 0 ]
+    
+    primitives = zeros(5)
+    state = [ rho, xMom, 0, 0, eV2] # y-momentum and z-momentum = 0
+    decodePrimitives3D!(primitives, state, 287.05, 1005)
+
+    for i in 1:5
+        @test almostEqual(expectedResult[i], primitives[i])
     end
 end;
 
@@ -78,14 +83,19 @@ end;
     rho = 2
     xMom = 1
     eV2 = 3
+
     U = 0.5
     e = 1.5 - 0.125
     T = e/(1005 - 287.05)
     P = rho*287.05*T
-    res1 = [ rho, xMom, eV2 ]
-    res2 = encodePrimitives(P, T, U, 287.05, 1005)
-    for i in 1:3
-        @test almostEqual(res1[i], res2[i])
+    expectedResult = [ rho, xMom, 0, 0, eV2 ]
+
+    primitives = Matrix{Float64}(undef, 1, 5)
+    primitives[1,:] = [ P, T, U, 0, 0 ]
+
+    state = encodePrimitives3D(primitives, 287.05, 1005)
+    for i in 1:5
+        @test almostEqual(expectedResult[i], state[1,i])
     end
 end;
 

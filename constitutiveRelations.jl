@@ -45,7 +45,7 @@ end
     Calculate cellState from cellPrimitives
 
     Arguments:
-        cellPrimitives: 2D vector of primitives: see dataStructuresDefinitions.md
+        cellPrimitives: matrix of primitives: see dataStructuresDefinitions.md
         R: R-value of the fluid (J/(kg*K))
         Cp: Constant pressure specific heat capacity (kJ/(kgK))
 
