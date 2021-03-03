@@ -2,7 +2,7 @@
 
 ![](https://github.com/henrystoldt/JuliaCFD/workflows/Tests/badge.svg)
 
-<img src="https://raw.githubusercontent.com/henrystoldt/JuliaCFD/master/Resources/forwardStep.gif?raw=true" alt="Forward step simulation"
+<img src="https://raw.githubusercontent.com/henrystoldt/JuliaCFD/master/Resources/fStep.gif?raw=true" alt="Forward step simulation"
   title="MAPLEAF" height=225 style="padding-right: 10px;"/>
 
 JuliaCFD is a simple explicit compressible Euler solver for 3D unstructured polyhedral meshes written in the Julia programming language.

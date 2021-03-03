@@ -45,8 +45,7 @@ boundaryConditions = [ supersonicInletBoundary, [P, T, U..., 1005], zeroGradient
 # Solve
 mesh = OpenFOAMMesh(meshPath)
 cellPrimitives = initializeUniformSolution3D(mesh, P, T, U...)
-Endtime 0.01152
-unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, ShuOsher, initDt=0.00000001, endTime=0.03, outputInterval=0.000288, targetCFL=0.95, silent=false, restart=false)
+unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, ShuOsher, initDt=0.00000001, endTime=0.03, outputInterval=0.000072, targetCFL=0.95, silent=false, restart=false)
 
 #### Simple convection ####
 # mesh, cellPrimitives = initializeShockTube3DFVM(10)
