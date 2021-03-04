@@ -10,7 +10,7 @@ include("shockTube.jl")
 include("finiteVolume.jl")
 
 # Create mesh
-meshPath = "Test/OFshockTube_400"
+meshPath = "test/OFshockTube_400"
 OFmesh = OpenFOAMMesh(meshPath)
 nCells = size(OFmesh.cells, 1)
 mesh, cellPrimitives = initializeShockTube3DFVM(nCells...)

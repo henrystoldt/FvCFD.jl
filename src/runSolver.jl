@@ -8,13 +8,13 @@ include("shockTube.jl")
 # T = 300
 # U = [ 694.44, 0, 0 ]
 
-# meshPath = "Test/OFunstructuredWedgeMesh"
+# meshPath = "test/OFunstructuredWedgeMesh"
 # boundaryConditions = [ emptyBoundary, [], supersonicInletBoundary, [P, T, U..., 1005], zeroGradientBoundary, [], symmetryBoundary, [], zeroGradientBoundary, [], wallBoundary, [] ]
-# meshPath = "Test/OFwedgeMesh"
+# meshPath = "test/OFwedgeMesh"
 # boundaryConditions = [ supersonicInletBoundary, [P, T, U..., 1005], zeroGradientBoundary, [], symmetryBoundary, [], zeroGradientBoundary, [], wallBoundary, [], emptyBoundary, [] ]
-# meshPath = "Test/OFcoarseWedgeMesh"
+# meshPath = "test/OFcoarseWedgeMesh"
 # boundaryConditions = [ emptyBoundary, [], supersonicInletBoundary, [P, T, U..., 1005], zeroGradientBoundary, [], symmetryBoundary, [], zeroGradientBoundary, [], wallBoundary, [] ]
-# meshPath = "Test/OFmemesWedgeMesh"
+# meshPath = "test/OFmemesWedgeMesh"
 # boundaryConditions = [ symmetryBoundary, [], emptyBoundary, [], supersonicInletBoundary, [P, T, U..., 1005], wallBoundary, [], zeroGradientBoundary, [], zeroGradientBoundary, [] ]
 
 # mesh = OpenFOAMMesh(meshPath)
@@ -27,9 +27,9 @@ P = 100000
 T = 300
 U = [ 1041.66, 0, 0 ]
 
-# meshPath = "Test/OFforwardStepMesh"
+# meshPath = "test/OFforwardStepMesh"
 # boundaryConditions = [ supersonicInletBoundary, [P, T, U..., 1005], zeroGradientBoundary, [], symmetryBoundary, [], symmetryBoundary, [], wallBoundary, [], emptyBoundary, [] ]
-meshPath = "Test/OFforwardStepFineMesh"
+meshPath = "test/OFforwardStepFineMesh"
 boundaryConditions = [ supersonicInletBoundary, [P, T, U..., 1005], zeroGradientBoundary, [], symmetryBoundary, [], symmetryBoundary, [], wallBoundary, [], emptyBoundary, [] ]
 
 # Solve
@@ -56,7 +56,7 @@ unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, ShuOsher, 
 # xVel = U
 
 ### UnstructuredFVM from OpenFOAM Meshes ###
-# meshPath = "Test/OFshockTube_100"
+# meshPath = "test/OFshockTube_100"
 # OFmesh = OpenFOAMMesh(meshPath)
 # nCells = size(OFmesh.cells, 1)
 
@@ -96,8 +96,8 @@ unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, ShuOsher, 
 # Tt = T*(1 + ((gamma-1)/2)*machNum^2)
 
 # Choose a mesh
-# meshPath = "Test/OFairfoilMesh"
-# meshPath = "Test/OFmemesAirfoilMesh"
+# meshPath = "test/OFairfoilMesh"
+# meshPath = "test/OFmemesAirfoilMesh"
 # boundaryConditions = [ wallBoundary, [], emptyBoundary, [], subsonicInletBoundary, [Pt, Tt, UunitVec..., gamma, R, Cp], pressureOutletBoundary, P ]
 #
 # Solve
@@ -114,7 +114,7 @@ unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, ShuOsher, 
 # U = [ 539, 0, 0 ]
 #
 # # Choose a mesh
-# meshPath = "Test/OFmemesDeltaMesh"
+# meshPath = "test/OFmemesDeltaMesh"
 # boundaryConditions = [ supersonicInletBoundary, [P, T, U...], zeroGradientBoundary, [], symmetryBoundary, [], wallBoundary, [] ]
 
 ### Cone Flare ###
@@ -124,7 +124,7 @@ unstructured3DFVM(mesh, meshPath, cellPrimitives, boundaryConditions, ShuOsher, 
 # U = [ 694.26, 0, 0 ]
 #
 # # Choose a mesh
-# meshPath = Test/OFflaredConeMesh"
+# meshPath = test/OFflaredConeMesh"
 # boundaryConditions = [ supersonicInletBoundary, [P, T, U...], zeroGradientBoundary, [], wallBoundary, [] ]
 
 # Solve

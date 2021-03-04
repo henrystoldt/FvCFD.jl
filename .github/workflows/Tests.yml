@@ -25,4 +25,4 @@ jobs:
         
     - name: Run Tests
       run: |
-        julia runTests.jl
+        julia test/runTests.jl

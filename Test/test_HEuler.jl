@@ -1,8 +1,8 @@
 using Test
-include("../mesh.jl")
-include("../finiteVolume.jl")
-include("../shockTube.jl")
-include("../vectorFunctions.jl")
+include("../src/mesh.jl")
+include("../src/finiteVolume.jl")
+include("../src/shockTube.jl")
+include("../src/vectorFunctions.jl")
 include("test.jl")
 include("testMeshes.jl")
 

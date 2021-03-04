@@ -1,5 +1,5 @@
 using Test
-include("../mesh.jl")
+include("../src/mesh.jl")
 include("test.jl")
 include("testMeshes.jl")
 
@@ -74,17 +74,17 @@ end;
 end;
 
 @testset "Reading OF Meshes" begin
-    faces = readOFFacesFile("Test/OFshockTube_100/faces")
+    faces = readOFFacesFile("test/OFshockTube_100/faces")
     @test length(faces) == 501
     @test faces[1] == [2, 103, 305, 204]
 
-    points = readOFPointsFile("Test/OFshockTube_100/points")
+    points = readOFPointsFile("test/OFshockTube_100/points")
     @test length(points)/3 == 404
     @test points[1,:] == [0, -1, -1]
 end
 
 @testset "Getting cell points" begin
-    points, cells = OpenFOAMMesh_findCellPts("Test/OFshockTube_100")
+    points, cells = OpenFOAMMesh_findCellPts("test/OFshockTube_100")
     @test cells[1].pointIndices == [ 1, 102, 103, 2, 203, 304, 305, 204 ]
     @test cells[2].pointIndices == [ 2, 103, 305, 204, 3, 104, 306, 205 ]
 end

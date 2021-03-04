@@ -1,4 +1,4 @@
-include("../mesh.jl")
+include("../src/mesh.jl")
 
 # Creates a simple sample cell from Moukalled with one fully-defined cell and a centroid-only neighbour
 # For laplacian test cases

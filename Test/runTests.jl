@@ -3,8 +3,8 @@ files = readdir("./Test")
 
 for file in files
     if lastindex(file) > 5 && file[1:5] == "test_" && file[end-2:end] == ".jl"
-        println("Running Tests from: Test/$file")
-        include("./Test/$file")
+        println("Running Tests from: test/$file")
+        include("$file")
         println()
     end
 end
