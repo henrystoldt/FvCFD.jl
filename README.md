@@ -10,14 +10,16 @@ The code is compact enough to be read fully by individual users/developers (<200
 This code was originally created as a final project for a graduate numerical methods class, and would be a good starting point for additional projects or low-overhead numerical research.
 
 ### Basics:
-Mesh format: OpenFOAM  
-Output format: .vtu + restart files  
-Convective schemes: JST & MUSCL+Roe  
-Time discretization (transient): Explicit Runge-Kutta orders 1-4  
-Time discretization (steady-state): Explicit first-order Euler local time stepping
+Property | Value
+--- | ---
+Mesh format | OpenFOAM  
+Output format | .vtu + restart files  
+Convective schemes | JST & MUSCL+Roe  
+Time discretization (transient) | Explicit Runge-Kutta orders 1-4  
+Time discretization (steady-state) | Explicit first-order .local time stepping
 
 Ongoing projects include the implementation of adaptive meshing and implicit time stepping.
-Contributions are welcome.
+All contributions are welcome.
 
 Have a look at or run [runSolver.jl](todo) to get started running cases!
 For developers, look at [dataStructuresDefinitions.md](todo) to get familiar with the data structures used to represent the mesh and current solution in JuliaCFD.
@@ -28,6 +30,7 @@ Install as Julia package:
 
 ## Sample results
 
+TODO
 ## For newcomers to Julia
 Julia is a dynamically-typed language that makes extensive use of Just-in-Time Compilation (JIT).
 In scientific computing, this approach can often deliver something approximating the speed of C++ combined with the simplicity of Python.
@@ -62,7 +65,7 @@ Then, as/if the project progresses, the code's speed can be increased dramatical
 
 More information about Julia: https://julialang.org/  
 General documentation: https://docs.julialang.org/en/v1/  
-Julia performance tips: https://docs.julialang.org/en/v1/manual/performance-tips/
+Julia performance tips: https://docs.julialang.org/en/v1/manual/performance-tips/  
 Julia/general performance tips: https://biojulia.net/post/hardware/
 # Nomenclature
 All units SI  
