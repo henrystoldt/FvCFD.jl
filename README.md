@@ -2,8 +2,8 @@
 
 ![](https://github.com/henrystoldt/JuliaCFD/workflows/Tests/badge.svg)
 
-<img src="https://raw.githubusercontent.com/henrystoldt/JuliaCFD/master/Resources/fStep.gif?raw=true" alt="Forward step simulation"
-  title="MAPLEAF" height=225 style="padding-right: 10px;"/>
+<img src="https://raw.githubusercontent.com/henrystoldt/JuliaCFD/master/Resources/fStep.gif?raw=true" alt="Unsteady forward step"
+  title="Unsteady forward step" height=225 style="padding-right: 10px;"/>
 
 JuliaCFD is a simple explicit compressible Euler solver for 3D unstructured polyhedral meshes written in the Julia programming language.
 The code is compact enough to be read fully by individual users/developers (<2000 lines) and makes for an excellent hands-on introduction to CFD.
@@ -16,9 +16,9 @@ Mesh format | OpenFOAM
 Output format | .vtu + restart files  
 Convective schemes | JST & MUSCL+Roe  
 Time discretization (transient) | Explicit Runge-Kutta orders 1-4  
-Time discretization (steady-state) | Explicit first-order .local time stepping
+Time discretization (steady-state) | Explicit first-order local time-stepping
 
-Ongoing projects include the implementation of adaptive meshing and implicit time stepping.
+Ongoing projects include the implementation of adaptive meshing and implicit time-stepping.
 All contributions are welcome.
 
 Have a look at or run [runSolver.jl](todo) to get started running cases!
@@ -29,8 +29,22 @@ Install as Julia package:
 `Pkg.add("JuliaCFD")`
 
 ## Sample results
+**Forward step/Title animation:** Mach 3 forward step problem (transient, 2D, quadratic uniform mesh), third-order Shu-Osher time-stepping CFL=0.5, JST convective discretization.  
+Case is originally from [Woodward & Collela (1984)](https://www.sciencedirect.com/science/article/pii/0021999184901426), OpenFOAM comparison results available in [Greenshields et al. (2010)](https://onlinelibrary.wiley.com/doi/abs/10.1002/fld.2069?casa_token=9BGHHPs3E2gAAAAA:zm9otvnMGzwOwykHqqf5Zn0DcvVIKmliteJODRzkInQ4U0tjU1eqzor08SbK1fdN5ypFrjSbvgyue98).
 
-TODO
+**Transonic NACA 0012:** Mach 0.8, AOA 1.25 degrees, Euler time integration, JST convective discretization
+<img src="https://raw.githubusercontent.com/henrystoldt/JuliaCFD/master/Resources/NACATransient.gif?raw=true" alt="Transonic NACA 0012 Global time-stepping"
+  title="Transonic NACA 0012 Global time-stepping" height=225 style="padding-right: 10px;"/>
+
+**Transonic NACA 0012:** Same as above but using local time-stepping. Note that although the animation speeds look similar, they do not correspond to equal amounts of computational time. Each frame in the animation above (global time-stepping) corresponds to 185 solver iterations, while each frame in the animation below (local time-stepping) corresponds to 20 solver iterations.
+<img src="https://raw.githubusercontent.com/henrystoldt/JuliaCFD/master/Resources/NACA.gif?raw=true" alt="Transonic NACA 0012 Local time-stepping"
+  title="Transonic NACA 0012 Local time-stepping" height=225 style="padding-right: 10px;"/>
+
+**Supersonic wedge:** Mach 2, 10 degree ramp angle, triangular mesh, Euler time integration, JST convective discretization.
+Properties correspond to one of the [SU2 tutorial cases](https://su2code.github.io/tutorials/Inviscid_Wedge/).
+<img src="https://raw.githubusercontent.com/henrystoldt/JuliaCFD/master/Resources/UnstructuredOblique.gif?raw=true" alt="Supersonic oblique shock"
+  title="Supersonic oblique shock" height=225 style="padding-right: 10px;"/>
+
 ## For newcomers to Julia
 Julia is a dynamically-typed language that makes extensive use of Just-in-Time Compilation (JIT).
 In scientific computing, this approach can often deliver something approximating the speed of C++ combined with the simplicity of Python.
