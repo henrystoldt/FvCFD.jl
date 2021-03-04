@@ -1,16 +1,6 @@
-using Profile
-using BenchmarkTools
-using ProfileView
-
-home_dir = "/home/bwdalman/Documents/JuliaCFD/JuliaCFD/"
-
 include("finiteVolume.jl")
 include("shockTube.jl")
 
-################## Output ##################
-println("Reading mesh")
-
-### UnstructuredFVM from OpenFOAM Meshes ###
 
 ### Supersonic Wedge ###
 # Freestream Conditions (Mach 2)

@@ -19,15 +19,17 @@ Time discretization (steady-state): Explicit first-order Euler local time steppi
 Ongoing projects include the implementation of adaptive meshing and implicit time stepping.
 Contributions are welcome.
 
-Have a look at or run runSolver.jl to get started!
+Have a look at or run [runSolver.jl](todo) to get started running cases!
+For developers, look at [dataStructuresDefinitions.md](todo) to get familiar with the data structures used to represent the mesh and current solution in JuliaCFD.
 
 ## Install
-TODO: Julia Package
+Install as Julia package:  
+`Pkg.add("JuliaCFD")`
 
 ## Sample results
 
 ## For newcomers to Julia
-Julia is unlike most other languages in that it makes extensive use of Just-in-Time Compilation (JIT).
+Julia is a dynamically-typed language that makes extensive use of Just-in-Time Compilation (JIT).
 In scientific computing, this approach can often deliver something approximating the speed of C++ combined with the simplicity of Python.
 Unfortunately, since compilation and execution are mixed together, Julia's speed is not always immediately obvious.
 

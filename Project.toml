@@ -1,7 +1,7 @@
+name = "JuliaCFD"
+uuid = "3894bb1e-daea-4181-948f-3877d7a6e5a8"
+version = "0.1.0"
+authors = ["Henry Stoldt",
+            "Ben Dalman" ]
+
 [deps]
-BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
-LaTeXStrings = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
-Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
-Profile = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
-ProfileView = "c46f51b8-102a-5cf2-8d2c-8597cb0e0da7"
-PyPlot = "d330b81b-6aea-500a-939a-2ce795aea3ee"

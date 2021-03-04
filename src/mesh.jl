@@ -310,6 +310,7 @@ end
     Output: Calls readOFPoints/Faces/Owner/NeighbourFile and returns all of their results (reads all OpenFOAM's mesh file data into arrays)
 =#
 function readOpenFOAMMesh(polyMeshPath)
+    println("Reading mesh: $polyMeshPath")
     pointsFilePath = "$polyMeshPath/points"
     points = readOFPointsFile(pointsFilePath)
     facesFilePath = "$polyMeshPath/faces"
