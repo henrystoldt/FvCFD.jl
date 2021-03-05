@@ -7,7 +7,7 @@ using ProfileView #Doesn't want to install on my work ubuntu desktop for some re
 using BenchmarkTools
 
 include("shockTube.jl")
-include("finiteVolume.jl")
+include("JuliaCFD.jl")
 
 # Create mesh
 meshPath = "test/OFshockTube_400"

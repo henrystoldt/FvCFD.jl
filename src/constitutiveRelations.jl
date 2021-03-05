@@ -17,7 +17,7 @@ function calPerfectT(e, Cp=1005, R=287.05)
     @fastmath return e/(Cp-R)
 end
 
-######################### Public functions (called by finiteVolume.jl) #######################
+######################### Public functions (called by JuliaCFD.jl) #######################
 #=
     Calculate primitives from cellState
 =#

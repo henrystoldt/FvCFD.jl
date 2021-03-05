@@ -9,15 +9,16 @@
 
 JuliaCFD is a simple explicit compressible Euler solver for 3D unstructured polyhedral meshes, written in the Julia programming language.
 The code is compact enough to be read fully by individual users/developers (<2000 lines) and makes for an excellent hands-on introduction to CFD.
-This code was originally created as a final project for a graduate numerical methods class, and would be a good starting point for additional projects or low-overhead numerical research.
+This code was originally a final project for a graduate numerical methods class, and would be a good starting point for additional projects or low-overhead numerical research.
 
 <div align="center">
   
 Property | Value
 --- | ---
 Mesh format | OpenFOAM  
-Output format | .vtu + restart files  
+Output format | .vtu solution + ascii restart files  
 Convective schemes | JST & MUSCL+Roe  
+Gradient schemes | Green-Gauss & Weighted Least-Squares
 Time discretization (transient) | Explicit Runge-Kutta orders 1-4  
 Time discretization (steady-state) | Explicit first-order local time-stepping
 Dependencies | [WriteVTK](https://github.com/jipolanco/WriteVTK.jl)
@@ -27,7 +28,7 @@ Dependencies | [WriteVTK](https://github.com/jipolanco/WriteVTK.jl)
 Ongoing projects include the implementation of adaptive meshing and implicit time-stepping.
 All contributions are welcome.
 
-Have a look at or run [runSolver.jl](https://github.com/henrystoldt/JuliaCFD/blob/master/src/runSolver.jl) to get started running cases!
+Have a look at or run [runJuliaCFD.jl](https://github.com/henrystoldt/JuliaCFD/blob/master/src/runJuliaCFD.jl) to get started running cases!
 For developers, look at [dataStructuresDefinitions.md](https://github.com/henrystoldt/JuliaCFD/blob/master/dataStructuresDefinitions.md) to get familiar with the data structures used to represent the mesh and current solution in JuliaCFD.
 
 ## Install

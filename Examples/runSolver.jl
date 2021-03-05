@@ -1,4 +1,4 @@
-include("finiteVolume.jl")
+include("JuliaCFD.jl")
 include("shockTube.jl")
 
 
