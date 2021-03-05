@@ -20,6 +20,7 @@ Output format | .vtu + restart files
 Convective schemes | JST & MUSCL+Roe  
 Time discretization (transient) | Explicit Runge-Kutta orders 1-4  
 Time discretization (steady-state) | Explicit first-order local time-stepping
+Dependencies | [WriteVTK](https://github.com/jipolanco/WriteVTK.jl)
  
  </div>
 
