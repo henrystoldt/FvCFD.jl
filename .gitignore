@@ -1,3 +1,4 @@
 *JuliaCFDRestart.txt
 *.vtk
 *.vtu
+Manifest.toml
