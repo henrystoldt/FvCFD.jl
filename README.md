@@ -1,9 +1,9 @@
 <div align="center">
-  <h1 align="center">JuliaCFD</h1>
+  <h1>JuliaCFD</h1>
 
-  <a align="center" href="https://github.com/henrystoldt/JuliaCFD/actions"><img alt="Tests" src="https://github.com/henrystoldt/JuliaCFD/workflows/Tests/badge.svg"/></a>
+  <a href="https://github.com/henrystoldt/JuliaCFD/actions"><img alt="Tests" src="https://github.com/henrystoldt/JuliaCFD/workflows/Tests/badge.svg"/></a>
 
-  <img align="center" src="https://github.com/henrystoldt/JuliaCFD/blob/master/Resources/fstep.gif?raw=true" alt="Unsteady forward step"
+  <img style="object-fit:contain" src="https://github.com/henrystoldt/JuliaCFD/blob/master/Resources/fstep.gif?raw=true" alt="Unsteady forward step"
     title="Unsteady forward step" height=250 style="padding-right: 10px;"/>
 </div>
 
@@ -36,18 +36,18 @@ Case is originally from [Woodward & Collela (1984)](https://www.sciencedirect.co
 
 **Transonic NACA 0012:** Mach 0.8, AOA 1.25 degrees, Euler time integration, JST convective discretization  
 <div align="center">
-  <img src="https://github.com/henrystoldt/JuliaCFD/blob/master/Resources/NACATransient.gif?raw=true" alt="Transonic NACA 0012 Global time-stepping" title="Transonic NACA 0012 Global time-stepping" height=325 style="padding-right: 10px;"/>
+  <img style="object-fit:contain" src="https://github.com/henrystoldt/JuliaCFD/blob/master/Resources/NACATransient.gif?raw=true" alt="Transonic NACA 0012 Global time-stepping" title="Transonic NACA 0012 Global time-stepping" height=325 style="padding-right: 10px;"/>
 </div>
 
 **Transonic NACA 0012:** Same as above but using local time-stepping. Note that although the animation speeds look similar, they do not correspond to equal amounts of computational time. Each frame in the animation above (global time-stepping) corresponds to 185 solver iterations, while each frame in the animation below (local time-stepping) corresponds to 20 solver iterations.  
 <div align="center">
-  <img src="https://github.com/henrystoldt/JuliaCFD/blob/master/Resources/NACA.gif?raw=true" alt="Transonic NACA 0012 Local time-stepping" title="Transonic NACA 0012 Local time-stepping" height=335 style="padding-right: 10px;"/>
+  <img style="object-fit:contain" src="https://github.com/henrystoldt/JuliaCFD/blob/master/Resources/NACA.gif?raw=true" alt="Transonic NACA 0012 Local time-stepping" title="Transonic NACA 0012 Local time-stepping" height=335 style="padding-right: 10px;"/>
 </div>
 
 **Supersonic wedge:** Mach 2, 10 degree ramp angle, triangular mesh, Euler time integration, JST convective discretization.
 Properties correspond to one of the [SU2 tutorial cases](https://su2code.github.io/tutorials/Inviscid_Wedge/).  
 <div align="center">
-  <img src="https://github.com/henrystoldt/JuliaCFD/blob/master/Resources/UnstructuredOblique.gif?raw=true" alt="Supersonic oblique shock" title="Supersonic oblique shock" height=275 style="padding-right: 10px;"/>
+  <img style="object-fit:contain" src="https://github.com/henrystoldt/JuliaCFD/blob/master/Resources/UnstructuredOblique.gif?raw=true" alt="Supersonic oblique shock" title="Supersonic oblique shock" height=275 style="padding-right: 10px;"/>
 </div>
 
 ## For newcomers to Julia
