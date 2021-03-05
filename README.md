@@ -27,8 +27,8 @@ Dependencies | [WriteVTK](https://github.com/jipolanco/WriteVTK.jl)
 Ongoing projects include the implementation of adaptive meshing and implicit time-stepping.
 All contributions are welcome.
 
-Have a look at or run [runSolver.jl](todo) to get started running cases!
-For developers, look at [dataStructuresDefinitions.md](todo) to get familiar with the data structures used to represent the mesh and current solution in JuliaCFD.
+Have a look at or run [runSolver.jl](https://github.com/henrystoldt/JuliaCFD/blob/master/src/runSolver.jl) to get started running cases!
+For developers, look at [dataStructuresDefinitions.md](https://github.com/henrystoldt/JuliaCFD/blob/master/dataStructuresDefinitions.md) to get familiar with the data structures used to represent the mesh and current solution in JuliaCFD.
 
 ## Install
 Install as Julia package:  
