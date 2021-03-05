@@ -1,4 +1,4 @@
-include("JuliaCFD.jl")
+include("fvCFD.jl")
 include("shockTube.jl")
 
 

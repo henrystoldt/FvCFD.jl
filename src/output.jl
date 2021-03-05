@@ -3,11 +3,11 @@ using WriteVTK
 include("mesh.jl")
 
 #### Read / Write Restart Files ####
-function writeRestartFile(cellPrimitives, path="JuliaCFDRestart.txt")
+function writeRestartFile(cellPrimitives, path="fvCFDRestart.txt")
     writedlm(path, cellPrimitives)
 end
 
-function readRestartFile(path="JuliaCFDRestart.txt")
+function readRestartFile(path="fvCFDRestart.txt")
     cellPrimitives = readdlm(path)
 end
 

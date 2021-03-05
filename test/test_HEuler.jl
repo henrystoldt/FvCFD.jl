@@ -1,6 +1,6 @@
 using Test
 include("../src/mesh.jl")
-include("../src/JuliaCFD.jl")
+include("../src/fvCFD.jl")
 include("../src/shockTube.jl")
 include("../src/vectorFunctions.jl")
 include("test.jl")

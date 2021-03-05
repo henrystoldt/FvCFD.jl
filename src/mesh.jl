@@ -572,7 +572,7 @@ function OpenFOAMMesh_findCellPts(polyMeshPath)
 end
 
 #=
-    Reads an OpenFOAM mesh and returns a Mesh object suitable for calculations in JuliaCFD.
+    Reads an OpenFOAM mesh and returns a Mesh object suitable for calculations in fvCFD.jl.
 
     Mesh defined in dataStructures.jl, documented in dataStructureDefintions.md
 =#

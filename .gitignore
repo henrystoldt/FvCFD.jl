@@ -1,4 +1,4 @@
-*JuliaCFDRestart.txt
+*fvCFDRestart.txt
 *.vtk
 *.vtu
 Manifest.toml

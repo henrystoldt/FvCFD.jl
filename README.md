@@ -1,13 +1,13 @@
 <div align="center">
-  <h1>JuliaCFD</h1>
+  <h1>fvCFD.jl</h1>
 
-  <a href="https://github.com/henrystoldt/JuliaCFD/actions"><img alt="Tests" src="https://github.com/henrystoldt/JuliaCFD/workflows/Tests/badge.svg"/></a>
+  <a href="https://github.com/henrystoldt/fvCFD.jl/actions"><img alt="Tests" src="https://github.com/henrystoldt/fvCFD.jl/workflows/Tests/badge.svg"/></a>
 
-  <img style="object-fit:contain" src="https://github.com/henrystoldt/JuliaCFD/blob/master/Resources/fstep.gif?raw=true" alt="Unsteady forward step"
+  <img style="object-fit:contain" src="https://github.com/henrystoldt/fvCFD.jl/blob/master/Resources/fstep.gif?raw=true" alt="Unsteady forward step"
     title="Unsteady forward step" height=225 style="padding-right: 10px;"/>
 </div>
 
-JuliaCFD is a simple explicit compressible Euler solver for 3D unstructured polyhedral meshes, written in the Julia programming language.
+fvCFD.jl is a simple explicit compressible Euler solver for 3D unstructured polyhedral meshes, written in the Julia programming language.
 The code is compact enough to be read fully by individual users/developers (<2000 lines) and makes for an excellent hands-on introduction to CFD.
 This code was originally a final project for a graduate numerical methods class, and would be a good starting point for additional projects or low-overhead numerical research.
 
@@ -28,12 +28,12 @@ Dependencies | [WriteVTK](https://github.com/jipolanco/WriteVTK.jl)
 Ongoing projects include the implementation of adaptive meshing and implicit time-stepping.
 All contributions are welcome.
 
-Have a look at or run [runJuliaCFD.jl](https://github.com/henrystoldt/JuliaCFD/blob/master/src/runJuliaCFD.jl) to get started running cases!
-For developers, look at [dataStructuresDefinitions.md](https://github.com/henrystoldt/JuliaCFD/blob/master/dataStructuresDefinitions.md) to get familiar with the data structures used to represent the mesh and current solution in JuliaCFD.
+Have a look at or run [runfvCFD.jl](https://github.com/henrystoldt/fvCFD.jl/blob/master/src/runfvCFD.jl) to get started running cases!
+For developers, look at [dataStructuresDefinitions.md](https://github.com/henrystoldt/fvCFD.jl/blob/master/dataStructuresDefinitions.md) to get familiar with the data structures used to represent the mesh and current solution in fvCFD.jl.
 
 ## Install
 Install as Julia package:  
-`Pkg.add("JuliaCFD")`
+`Pkg.add("fvCFD.jl")`
 
 ## Sample results
 **Forward step/Title animation:** Mach 3 forward step problem (transient, 2D, quadratic uniform mesh), third-order Shu-Osher time-stepping CFL=0.5, JST convective discretization.  
@@ -41,18 +41,18 @@ Case is originally from [Woodward & Collela (1984)](https://www.sciencedirect.co
 
 **Transonic NACA 0012:** Mach 0.8, AOA 1.25 degrees, Euler time integration, JST convective discretization  
 <div align="center">
-  <img style="object-fit:contain" src="https://github.com/henrystoldt/JuliaCFD/blob/master/Resources/NACATransient.gif?raw=true" alt="Transonic NACA 0012 Global time-stepping" title="Transonic NACA 0012 Global time-stepping" height=325 style="padding-right: 10px;"/>
+  <img style="object-fit:contain" src="https://github.com/henrystoldt/fvCFD.jl/blob/master/Resources/NACATransient.gif?raw=true" alt="Transonic NACA 0012 Global time-stepping" title="Transonic NACA 0012 Global time-stepping" height=325 style="padding-right: 10px;"/>
 </div>
 
 **Transonic NACA 0012:** Same as above but using local time-stepping. Note that although the animation speeds look similar, they do not correspond to equal amounts of computational time. Each frame in the animation above (global time-stepping) corresponds to 185 solver iterations, while each frame in the animation below (local time-stepping) corresponds to 20 solver iterations.  
 <div align="center">
-  <img style="object-fit:contain" src="https://github.com/henrystoldt/JuliaCFD/blob/master/Resources/NACA.gif?raw=true" alt="Transonic NACA 0012 Local time-stepping" title="Transonic NACA 0012 Local time-stepping" height=335 style="padding-right: 10px;"/>
+  <img style="object-fit:contain" src="https://github.com/henrystoldt/fvCFD.jl/blob/master/Resources/NACA.gif?raw=true" alt="Transonic NACA 0012 Local time-stepping" title="Transonic NACA 0012 Local time-stepping" height=335 style="padding-right: 10px;"/>
 </div>
 
 **Supersonic wedge:** Mach 2, 10 degree ramp angle, triangular mesh, Euler time integration, JST convective discretization.
 Properties correspond to one of the [SU2 tutorial cases](https://su2code.github.io/tutorials/Inviscid_Wedge/).  
 <div align="center">
-  <img style="object-fit:contain" src="https://github.com/henrystoldt/JuliaCFD/blob/master/Resources/UnstructuredOblique.gif?raw=true" alt="Supersonic oblique shock" title="Supersonic oblique shock" height=275 style="padding-right: 10px;"/>
+  <img style="object-fit:contain" src="https://github.com/henrystoldt/fvCFD.jl/blob/master/Resources/UnstructuredOblique.gif?raw=true" alt="Supersonic oblique shock" title="Supersonic oblique shock" height=275 style="padding-right: 10px;"/>
 </div>
 
 ## For newcomers to Julia
