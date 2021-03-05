@@ -232,7 +232,7 @@ end;
     nCells = 4
     boundaryConditions = [ zeroGradientBoundary, [], zeroGradientBoundary, [], emptyBoundary, [] ]
     mesh, cellPrimitives = initializeShockTube3DFVM(nCells, Pratio=0.1)
-    cellPrimitives2 = unstructured3DFVM(mesh, "fakePath", cellPrimitives, boundaryConditions, initDt=0.051, endTime=0.05, createRestartFile=false, createVTKOutput=false)
+    cellPrimitives2 = solve(mesh, "fakePath", cellPrimitives, boundaryConditions, initDt=0.051, endTime=0.05, createRestartFile=false, createVTKOutput=false)
     
     P = [ 1, 0.99855553, 0.087046989, 0.1 ]
     U = [ 0, 0.090015665, 0.720126353, 0 ]
