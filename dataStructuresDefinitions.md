@@ -41,15 +41,16 @@ solutionState =
    faceFluxes        # massFluxes, momentumFluxes, and energyFluxes at face centers
 ]  
 ```
-Where  
+where:  
 #### Cell State definition
 ```julia
 # CellState =
 # Cell      rho      x-Momentum   Total Energy
-# Cell 1    rho_1    xM_1         eV2_1
-# Cell 2    rho_2    xM_2         eV2_2
+# Cell 1    rho_1    xMom_1         eV2_1
+# Cell 2    rho_2    xMom_2         eV2_2
 # ...
 ```
+Ex. to access the x-Momentum in cell 23: `solutionState.cellState[23,2]`
 #### Cell Fluxes definition
 ```julia
 # CellFluxes =
@@ -67,12 +68,13 @@ Where
 # ...
 ```
 #### Flux Residuals definition
-Note that "residual" is taken to mean flux balance, which is only strictly true in a steady-state computations. Term used loosely here.
+Note that "residual" is taken to mean flux balance, which is only strictly true in a steady-state computations.
+In transient simulations, the "residual" represents the time derivative of the conserved quantity in each cell.
 ```julia
 # fluxResiduals =
 # Cell      rho            x-Momentum     Total Energy
-# Cell 1    d(rho_1)/dt    d(xM_1)dt      d(eV2_1)/dt
-# Cell 2    d(rho_2)/dt    d(xM_2)dt      d(eV2_2)/dt
+# Cell 1    d(rho_1)/dt    d(xMom1)/dt      d(eV2_1)/dt
+# Cell 2    d(rho_2)/dt    d(xMom2)/dt      d(eV2_2)/dt
 # ...
 ```
 #### Face Fluxes definition

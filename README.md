@@ -91,16 +91,15 @@ General documentation: https://docs.julialang.org/en/v1/
 Julia performance tips: https://docs.julialang.org/en/v1/manual/performance-tips/  
 Julia/general performance tips: https://biojulia.net/post/hardware/
 # Nomenclature
-All units SI  
 For the simple variables:
 
-Var | Meaning
---- | ---
-e | internal energy  
-P | Pressure  
-rho | Density  
-T | Temperature  
-U | Velocity   
+Var | Meaning | Units
+--- | --- | ---
+e | internal energy | J/kg
+P | Pressure | Pa
+rho | Density | kg/m^3
+T | Temperature | K
+U | Velocity | m/s
 
 And the state & flux variables:  
 
