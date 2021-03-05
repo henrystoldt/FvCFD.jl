@@ -4,7 +4,7 @@
   <a href="https://github.com/henrystoldt/JuliaCFD/actions"><img alt="Tests" src="https://github.com/henrystoldt/JuliaCFD/workflows/Tests/badge.svg"/></a>
 
   <img style="object-fit:contain" src="https://github.com/henrystoldt/JuliaCFD/blob/master/Resources/fstep.gif?raw=true" alt="Unsteady forward step"
-    title="Unsteady forward step" height=250 style="padding-right: 10px;"/>
+    title="Unsteady forward step" height=225 style="padding-right: 10px;"/>
 </div>
 
 JuliaCFD is a simple explicit compressible Euler solver for 3D unstructured polyhedral meshes, written in the Julia programming language.
