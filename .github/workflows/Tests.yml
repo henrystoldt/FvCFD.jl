@@ -18,10 +18,10 @@ jobs:
         # version: # optional, default is 1
         # Architecture of the Julia binaries. Defaults to x64.
         # arch: # optional, default is x64
-    - name: Setup
-      run: |
-        /usr/bin/python3 -m pip install matplotlib
-        julia setupEnvironment.jl
+    # - name: Setup
+    #   run: |
+    #     /usr/bin/python3 -m pip install matplotlib
+    #     julia setupEnvironment.jl
         
     - name: Run Tests
       run: |
