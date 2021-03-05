@@ -22,7 +22,9 @@ jobs:
     #   run: |
     #     /usr/bin/python3 -m pip install matplotlib
     #     julia setupEnvironment.jl
-        
+    - name: name
+      run: |
+        ls -la
     - name: Run Tests
       run: |
         julia test/runTests.jl
