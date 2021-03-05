@@ -1,5 +1,3 @@
-include("mesh.jl")
-
 ######################### Initialization #######################
 function checkPRatio(Pratio)
     if Pratio < 0

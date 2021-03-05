@@ -1,3 +1,5 @@
+module fvCFD
+
 using Printf
 include("constitutiveRelations.jl")
 include("vectorFunctions.jl")
@@ -10,6 +12,15 @@ include("numerics.jl")
 include("JST.jl")
 
 __precompile__()
+
+# From this file
+export solve, initializeUniformSolution3D
+# From boundaryConditions.jl
+export supersonicInletBoundary, subsonicInletBoundary, pressureOutletBoundary, zeroGradientBoundary, wallBoundary, emptyBoundary
+# From dataStructures.jl
+export Mesh, SolutionState
+# From mesh.jl
+export OpenFOAMMesh
 
 mutable struct SolverStatus
     currentTime::Float64
@@ -254,4 +265,6 @@ function solve(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}, boundaryCo
 
     # Return current cell-center properties
     return sln.cellPrimitives
+end
+
 end

@@ -2,6 +2,11 @@
 include("vectorFunctions.jl")
 include("dataStructures.jl")
 
+mutable struct Cell
+    faceIndices::Vector{Int64}
+    pointIndices::Vector{Int64}
+end
+
 ######################### Mesh/Cell Geometry ###########################
 function triangleCentroid(points)
     center = [ 0.0, 0.0, 0.0 ]
@@ -325,11 +330,6 @@ function readOpenFOAMMesh(polyMeshPath)
     return points, faces, owner, neighbour, boundaryNames, boundaryNumFaces, boundaryStartFaces
 end
 
-mutable struct Cell
-    faceIndices::Vector{Int64}
-    pointIndices::Vector{Int64}
-end
-
 #=
     Function used to find all the points in each cell.
     Not required for CFD, which is face-based, but required for cell-based .vtk file output.
@@ -572,7 +572,7 @@ function OpenFOAMMesh_findCellPts(polyMeshPath)
 end
 
 #=
-    Reads an OpenFOAM mesh and returns a Mesh object suitable for calculations in fvCFD.jl.
+    Reads an OpenFOAM mesh and returns a Mesh object suitable for calculations in JuliaCFD.
 
     Mesh defined in dataStructures.jl, documented in dataStructureDefintions.md
 =#

@@ -2,34 +2,15 @@ include("fvCFD.jl")
 include("shockTube.jl")
 
 
-### Supersonic Wedge ###
-# Freestream Conditions (Mach 2)
-# P = 100000
-# T = 300
-# U = [ 694.44, 0, 0 ]
-
-# meshPath = "test/OFunstructuredWedgeMesh"
-# boundaryConditions = [ emptyBoundary, [], supersonicInletBoundary, [P, T, U..., 1005], zeroGradientBoundary, [], symmetryBoundary, [], zeroGradientBoundary, [], wallBoundary, [] ]
-# meshPath = "test/OFwedgeMesh"
-# boundaryConditions = [ supersonicInletBoundary, [P, T, U..., 1005], zeroGradientBoundary, [], symmetryBoundary, [], zeroGradientBoundary, [], wallBoundary, [], emptyBoundary, [] ]
-# meshPath = "test/OFcoarseWedgeMesh"
-# boundaryConditions = [ emptyBoundary, [], supersonicInletBoundary, [P, T, U..., 1005], zeroGradientBoundary, [], symmetryBoundary, [], zeroGradientBoundary, [], wallBoundary, [] ]
-# meshPath = "test/OFmemesWedgeMesh"
-# boundaryConditions = [ symmetryBoundary, [], emptyBoundary, [], supersonicInletBoundary, [P, T, U..., 1005], wallBoundary, [], zeroGradientBoundary, [], zeroGradientBoundary, [] ]
-
-# mesh = OpenFOAMMesh(meshPath)
-# cellPrimitives = initializeUniformSolution3D(mesh, P, T, U...)
-# solve(mesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00000001, endTime=0.001, outputInterval=0.005, targetCFL=0.5, silent=false)
-
 ### Forward Step ###
 # Freestream Conditions (Mach 3)
 P = 100000
 T = 300
 U = [ 1041.66, 0, 0 ]
 
-# meshPath = "test/OFforwardStepMesh"
+# meshPath = "../test/OFforwardStepMesh"
 # boundaryConditions = [ supersonicInletBoundary, [P, T, U..., 1005], zeroGradientBoundary, [], symmetryBoundary, [], symmetryBoundary, [], wallBoundary, [], emptyBoundary, [] ]
-meshPath = "test/OFforwardStepFineMesh"
+meshPath = "../test/OFforwardStepFineMesh"
 boundaryConditions = [ supersonicInletBoundary, [P, T, U..., 1005], zeroGradientBoundary, [], symmetryBoundary, [], symmetryBoundary, [], wallBoundary, [], emptyBoundary, [] ]
 
 # Solve
@@ -56,7 +37,7 @@ solve(mesh, meshPath, cellPrimitives, boundaryConditions, ShuOsher, initDt=0.000
 # xVel = U
 
 ### UnstructuredFVM from OpenFOAM Meshes ###
-# meshPath = "test/OFshockTube_100"
+# meshPath = "../test/OFshockTube_100"
 # OFmesh = OpenFOAMMesh(meshPath)
 # nCells = size(OFmesh.cells, 1)
 
@@ -96,8 +77,8 @@ solve(mesh, meshPath, cellPrimitives, boundaryConditions, ShuOsher, initDt=0.000
 # Tt = T*(1 + ((gamma-1)/2)*machNum^2)
 
 # Choose a mesh
-# meshPath = "test/OFairfoilMesh"
-# meshPath = "test/OFmemesAirfoilMesh"
+# meshPath = "../test/OFairfoilMesh"
+# meshPath = "../test/OFmemesAirfoilMesh"
 # boundaryConditions = [ wallBoundary, [], emptyBoundary, [], subsonicInletBoundary, [Pt, Tt, UunitVec..., gamma, R, Cp], pressureOutletBoundary, P ]
 #
 # Solve
@@ -114,7 +95,7 @@ solve(mesh, meshPath, cellPrimitives, boundaryConditions, ShuOsher, initDt=0.000
 # U = [ 539, 0, 0 ]
 #
 # # Choose a mesh
-# meshPath = "test/OFmemesDeltaMesh"
+# meshPath = "../test/OFmemesDeltaMesh"
 # boundaryConditions = [ supersonicInletBoundary, [P, T, U...], zeroGradientBoundary, [], symmetryBoundary, [], wallBoundary, [] ]
 
 ### Cone Flare ###
@@ -124,7 +105,7 @@ solve(mesh, meshPath, cellPrimitives, boundaryConditions, ShuOsher, initDt=0.000
 # U = [ 694.26, 0, 0 ]
 #
 # # Choose a mesh
-# meshPath = test/OFflaredConeMesh"
+# meshPath = ../test/OFflaredConeMesh"
 # boundaryConditions = [ supersonicInletBoundary, [P, T, U...], zeroGradientBoundary, [], wallBoundary, [] ]
 
 # Solve
