@@ -36,6 +36,7 @@ function decodePrimitives3D!(primitives, cellState, R=287.05, Cp=1005)
 
     ## Temperature ##
     primitives[2] = calPerfectT(e, Cp, R)
+
     ## Pressure ##
     # P = idealGasP(rho, P, R)
     primitives[1] = idealGasP(cellState[1], primitives[2], R)
