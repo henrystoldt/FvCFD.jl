@@ -11,7 +11,8 @@ JuliaCFD is a simple explicit compressible Euler solver for 3D unstructured poly
 The code is compact enough to be read fully by individual users/developers (<2000 lines) and makes for an excellent hands-on introduction to CFD.
 This code was originally created as a final project for a graduate numerical methods class, and would be a good starting point for additional projects or low-overhead numerical research.
 
-### Basics:
+<div align="center">
+  
 Property | Value
 --- | ---
 Mesh format | OpenFOAM  
@@ -19,6 +20,8 @@ Output format | .vtu + restart files
 Convective schemes | JST & MUSCL+Roe  
 Time discretization (transient) | Explicit Runge-Kutta orders 1-4  
 Time discretization (steady-state) | Explicit first-order local time-stepping
+ 
+ </div>
 
 Ongoing projects include the implementation of adaptive meshing and implicit time-stepping.
 All contributions are welcome.
