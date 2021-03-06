@@ -1,18 +1,20 @@
 using fvCFD
 
+# All file paths are relative to the repository's main directory, 'include' this script from there
+
 ### Freestream Conditions (Mach 2) ###
 P = 100000
 T = 300
 U = [ 694.44, 0, 0 ]
 
 ### Select a mesh ###
-meshPath = "../test/OFunstructuredWedgeMesh"
+meshPath = "test/OFunstructuredWedgeMesh"
 boundaryConditions = [ emptyBoundary, [], supersonicInletBoundary, [P, T, U..., 1005], zeroGradientBoundary, [], symmetryBoundary, [], zeroGradientBoundary, [], wallBoundary, [] ]
-# meshPath = "../test/OFwedgeMesh"
+# meshPath = "test/OFwedgeMesh"
 # boundaryConditions = [ supersonicInletBoundary, [P, T, U..., 1005], zeroGradientBoundary, [], symmetryBoundary, [], zeroGradientBoundary, [], wallBoundary, [], emptyBoundary, [] ]
-# meshPath = "../test/OFcoarseWedgeMesh"
+# meshPath = "test/OFcoarseWedgeMesh"
 # boundaryConditions = [ emptyBoundary, [], supersonicInletBoundary, [P, T, U..., 1005], zeroGradientBoundary, [], symmetryBoundary, [], zeroGradientBoundary, [], wallBoundary, [] ]
-# meshPath = "../test/OFmemesWedgeMesh"
+# meshPath = "test/OFmemesWedgeMesh"
 # boundaryConditions = [ symmetryBoundary, [], emptyBoundary, [], supersonicInletBoundary, [P, T, U..., 1005], wallBoundary, [], zeroGradientBoundary, [], zeroGradientBoundary, [] ]
 
 ### Run ###
