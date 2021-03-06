@@ -18,9 +18,5 @@ jobs:
         # version: # optional, default is 1
         # Architecture of the Julia binaries. Defaults to x64.
         # arch: # optional, default is x64
-    - name: Setup
-      run: |
-        julia setupEnvironment.jl
-    - name: Run Tests
-      run: |
-        julia test/runTests.jl
+    - uses: julia-actions/julia-buildpkg@v1
+    - uses: julia-actions/julia-runtest@v1
