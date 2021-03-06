@@ -16,7 +16,7 @@ __precompile__()
 # From this file
 export solve, initializeUniformSolution3D
 # From boundaryConditions.jl
-export supersonicInletBoundary, subsonicInletBoundary, pressureOutletBoundary, zeroGradientBoundary, wallBoundary, emptyBoundary
+export supersonicInletBoundary, subsonicInletBoundary, pressureOutletBoundary, zeroGradientBoundary, wallBoundary, symmetryBoundary, emptyBoundary
 # From dataStructures.jl
 export Mesh, SolutionState
 # From mesh.jl
@@ -38,7 +38,7 @@ function initializeUniformSolution3D(mesh, P, T, Ux, Uy=0, Uz=0, nDims=3)
     cellPrimitives = Matrix{Float64}(undef, nCells, nVars)
     initialValues = [ P, T, Ux, Uy, Uz ][1:nVars]
     
-    for c in 1:nCells0
+    for c in 1:nCells
         cellPrimitives[c, :] = initialValues
     end
 
