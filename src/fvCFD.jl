@@ -19,6 +19,8 @@ export solve, initializeUniformSolution3D
 export supersonicInletBoundary, subsonicInletBoundary, pressureOutletBoundary, zeroGradientBoundary, wallBoundary, symmetryBoundary, emptyBoundary
 # From dataStructures.jl
 export Mesh, SolutionState
+# From timeDiscretizations.jl
+export forwardEuler, RK2_Mid, ShuOsher, RK4, LTSEuler
 # From mesh.jl
 export OpenFOAMMesh
 
