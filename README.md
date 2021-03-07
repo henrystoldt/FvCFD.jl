@@ -7,7 +7,7 @@
     title="Unsteady forward step" height=225 style="padding-right: 10px;"/>
 </div>
 
-fvCFD.jl is a simple explicit compressible Euler solver for 3D unstructured polyhedral meshes, written in the Julia programming language.
+fvCFD.jl is a simple explicit compressible Euler solver for 3D unstructured polyhedral meshes.
 The code is compact enough to be read fully by individual users/developers (<2000 lines) and makes for an excellent hands-on introduction to CFD.
 This code was originally a final project for a graduate numerical methods class, and would be a good starting point for additional projects or low-overhead numerical research.
 
