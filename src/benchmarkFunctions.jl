@@ -70,3 +70,9 @@ output = zeros(400, 1, 3)
 
 #### LinInterp ####
 # @code_warntype linInterp_3D(mesh, sln.cellFluxes, sln.faceFluxes)
+
+
+#### Entire Code ####
+# @profview solve(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00001, endTime=0.14267, outputInterval=0.14267, targetCFL=0.1, silent=true)
+# @btime solve(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00001, endTime=0.005, outputInterval=0.14267, targetCFL=0.01, silent=true, createRestartFile=false, createVTKOutput=false)
+# @code_warntype solve(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00001, endTime=0.00001, outputInterval=0.14267, targetCFL=0.01, silent=true, createRestartFile=false, createVTKOutput=false)

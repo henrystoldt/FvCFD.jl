@@ -1,50 +1,6 @@
 include("fvCFD.jl")
 include("shockTube.jl")
 
-
-#### Simple convection ####
-# mesh, cellPrimitives = initializeShockTube3DFVM(10)
-# P = 100000
-# T = 300
-# U = [ 694.26, 0, 0 ]
-# boundaryConditions = [ supersonicInletBoundary, [P, T, U..., 1005], zeroGradientBoundary, [], emptyBoundary, [] ]
-# P, U, T, rho = solve(mesh, initializeUniformSolution3D(mesh, P, T, U...), boundaryConditions, initDt=0.0000001, endTime=0.00002, targetCFL=0.1, silent=false)
-# plotShockTubeResults_PyPlot(P, U, T, rho)
-
-
-
-###################################################### FORMERLY RUNSHOCKTUBE ###############################################################
-
-# println("Meshing")
-#### FDM or Structured FVM ###
-# cellPrimitives = solve(initializeShockTube3DFVM(nCells)..., ShuOsher, initDt=0.00001, endTime=0.14267, targetCFL=0.05, silent=false)
-# xVel = U
-
-### UnstructuredFVM from OpenFOAM Meshes ###
-# meshPath = "../test/OFshockTube_100"
-# OFmesh = OpenFOAMMesh(meshPath)
-# nCells = size(OFmesh.cells, 1)
-
-# _, cellPrimitives = initializeShockTube3DFVM(nCells...)
-
-# boundaryConditions = [ zeroGradientBoundary, [], emptyBoundary, [] ]
-# cellPrimitives = solve(OFmesh, meshPath, cellPrimitives, boundaryConditions, LTSEuler, initDt=0.0001, endTime=0.14267, outputInterval=0.14267, targetCFL=0.1, silent=false, createVTKOutput=true)
-# @profview solve(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00001, endTime=0.14267, outputInterval=0.14267, targetCFL=0.1, silent=true)
-# @btime solve(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00001, endTime=0.005, outputInterval=0.14267, targetCFL=0.01, silent=true, createRestartFile=false, createVTKOutput=false)
-# @code_warntype solve(OFmesh, meshPath, cellPrimitives, boundaryConditions, initDt=0.00001, endTime=0.00001, outputInterval=0.14267, targetCFL=0.01, silent=true, createRestartFile=false, createVTKOutput=false)
-
-# P = cellPrimitives[:,1]
-# T = cellPrimitives[:,2]
-# xVel = cellPrimitives[:,3]
-# rho = zeros(nCells)
-# for i in 1:nCells
-#     rho[i] = idealGasRho(T[i], P[i])
-# end
-#
-# println("Plotting results")
-# plotShockTubeResults_PyPlot(P, xVel, T, rho)
-
-
 ###################################################### FORMERLY RUNAIRFOIL ###############################################################
 # Freestream Conditions
 # P = 100000
