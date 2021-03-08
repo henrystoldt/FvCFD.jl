@@ -1,7 +1,7 @@
 using Test
 using fvCFD
 
-include("shockTube.jl")
+include("shockTubeFunctions.jl")
 include("test.jl")
 include("testMeshes.jl")
 
