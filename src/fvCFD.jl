@@ -71,7 +71,8 @@ function CFL!(CFL, mesh::Mesh, sln::SolutionState, dt=1, gamma=1.4, R=287.05)
         @views flux = abs(dot(faceVel, mesh.fAVecs[f]))*dt
 
         if faceT <= 0.0
-            println("Warning: Negative temperature at face $f")
+            position = mesh.fCenters[f]            
+            println("Warning: Negative temperature at face $f: $position")
         end
 
         a = sqrt(gamma * R * faceT)

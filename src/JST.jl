@@ -63,6 +63,13 @@ function unstructured_JSTFlux(mesh::Mesh, sln::SolutionState, boundaryConditions
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     nVars = size(sln.cellState, 2)
 
+    #### 3. Apply boundary conditions ####
+    for b in 1:nBoundaries
+        bFunctionIndex = 2*b-1
+        parameters = boundaryConditions[bFunctionIndex+1]
+        boundaryConditions[bFunctionIndex](mesh, sln, b, parameters)
+    end
+
     #### 1. Centrally differenced fluxes ####
     linInterp_3D(mesh, sln.cellFluxes, sln.faceFluxes)
 
@@ -90,13 +97,6 @@ function unstructured_JSTFlux(mesh::Mesh, sln::SolutionState, boundaryConditions
             i2 = i1+2
             sln.faceFluxes[f,i1:i2] .-= (diffusionFlux[v] .* unitFA)
         end
-    end
-
-    #### 3. Apply boundary conditions ####
-    for b in 1:nBoundaries
-        bFunctionIndex = 2*b-1
-        parameters = boundaryConditions[bFunctionIndex+1]
-        boundaryConditions[bFunctionIndex](mesh, sln, b, parameters)
     end
 
     #### 4. Integrate fluxes at in/out of each cell (sln.faceFluxes) to get change in cell center values (sln.fluxResiduals) ####

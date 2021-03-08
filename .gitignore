@@ -2,3 +2,5 @@
 *.vtk
 *.vtu
 Manifest.toml
+DSuL*
+*deltaFine

@@ -365,7 +365,7 @@ function OpenFOAMMesh_findCellPts(polyMeshPath)
     addCellFaceIndices(faceNeighborCellIndices)
 
     function addAllNewPoints!(cell::Cell, faceIndex)
-        for pointIndex in pointIndicesByFace[face2]
+        for pointIndex in pointIndicesByFace[faceIndex]
             if !any(x->x==pointIndex, cell.pointIndices)
                 push!(cell.pointIndices, pointIndex)
             end
