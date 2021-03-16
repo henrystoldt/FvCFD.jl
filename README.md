@@ -28,12 +28,31 @@ Dependencies | [WriteVTK](https://github.com/jipolanco/WriteVTK.jl)
 Ongoing projects include the implementation of adaptive meshing and implicit time-stepping.
 All contributions are welcome.
 
-Have a look at or run [runfvCFD.jl](https://github.com/henrystoldt/JuliaCFD/blob/master/src/runfvCFD.jl) to get started running cases!
+To get started, use the instructions below to [install](https://github.com/henrystoldt/fvCFD#Install) fvCFD and [run the included example cases](https://github.com/henrystoldt/fvCFD#Run example cases).
 For developers, look at [dataStructuresDefinitions.md](https://github.com/henrystoldt/JuliaCFD/blob/master/dataStructuresDefinitions.md) to get familiar with the data structures used to represent the mesh and current solution in fvCFD.jl.
 
 ## Install
-Install as Julia package:  
-`Pkg.add("fvCFD.jl")`
+1. Start Julia:
+`$ julia`
+2. Activate the Julia package manager
+`julia> ]`
+3. Either  
+  a. install Julia package: `pkg> add fvCFD`  
+  b. OR install directly from GitHub: `pkg> add https://github.com/henrystoldt/fvCFD.git`
+4. (Optional) run tests to ensure the installation worked: `pkg> test fvCFD`
+5. Press backspace(Windows)/delete(Mac) to exit the Julia package manager
+
+## Run example cases
+Example scripts to run simple included cases are stored in [./Examples](https://github.com/henrystoldt/fvCFD/tree/master/Examples)
+They use the OpenFOAM meshes stored in [./test](https://github.com/henrystoldt/fvCFD/tree/master/test)
+To run one:
+1. Clone this repository somewhere convenient:
+`$ git clone https://github.com/henrystoldt/fvCFD.git`
+2. Start Julia from in main directory of this git repository (same location where this file is stored):
+`$ julia`
+3. Execute the example script for the case you'd like to run
+`julia> include("./Examples/shockTube.jl")`
+4. After the simulation completes, view the solution.xx.vtu files that were created using a post-processing tool like [Paraview](https://www.paraview.org/)
 
 ## Sample results
 **Forward step/Title animation:** Mach 3 forward step problem (transient, 2D, quadratic uniform mesh), third-order Shu-Osher time-stepping CFL=0.5, JST convective discretization.  
@@ -54,6 +73,24 @@ Properties correspond to one of the [SU2 tutorial cases](https://su2code.github.
 <div align="center">
   <img style="object-fit:contain" src="https://github.com/henrystoldt/JuliaCFD/blob/master/Resources/UnstructuredOblique.gif?raw=true" alt="Supersonic oblique shock" title="Supersonic oblique shock" height=275 style="padding-right: 10px;"/>
 </div>
+
+## Mesh Compatibility Note
+If you are getting errors trying to load an OpenFOAM mesh, try running the mesh through OpenFOAM's renumberMesh utility to standardize its formatting:
+`$ renumberMesh -overwrite` (execute inside OpenFOAM case directory, then use the new mesh files generated in ./constant/polyMesh)
+
+This can be helpful because fvCFD's current mesh parser is less flexible than OpenFOAM's. If you're interested in improving this, have a look at the readOF*File functions in [mesh.jl](https://github.com/henrystoldt/fvCFD/blob/master/src/mesh.jl). Should be fairly straightforward to improve these functions to accept whatever variation of the OF mesh format your meshing tool is generating.
+
+## (Developers) Running tests on local copy of the code
+1. Start Julia (In main git directory):
+`$ julia`
+2. Enter package manager:
+`julia> ]`
+3. Activate current directory's environment
+`pkg> activate .`
+4. Run tests:
+`pkg> test fvCFD`
+
+All of the tests are defined in files named ./test/test_*.jl. You can add new tests to the existing files or create new ones that follow that naming pattern (ex. ./test/test_MyNewCode.jl). Tests are discovered/run by [./test/runtests.jl](https://github.com/henrystoldt/fvCFD/blob/master/test/runtests.jl), which is what pkg runs when you tell it to test fvCFD.
 
 ## For newcomers to Julia
 Julia is a dynamically-typed language that makes extensive use of Just-in-Time Compilation (JIT).
