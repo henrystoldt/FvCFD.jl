@@ -64,16 +64,12 @@ function unstructured_JSTFlux(mesh::Mesh, sln::SolutionState, boundaryConditions
     nVars = size(sln.cellState, 2)
 
     #### 1. Apply boundary conditions ####
-    for b in 1:nBoundaries
-        bFunctionIndex = 2*b-1
-        parameters = boundaryConditions[bFunctionIndex+1]
-        boundaryConditions[bFunctionIndex](mesh, sln, b, parameters)
-    end
+    applyBoundaryConditions(mesh, sln, boundaryConditions, nBoundaries)
 
     #### 2. Centrally differenced fluxes ####
     linInterp_3D(mesh, sln.cellFluxes, sln.faceFluxes)
 
-    #### 3. Add JST artificial Diffusion ####
+    #### 3. JST artificial Diffusion ####
     fDeltas = faceDeltas(mesh, sln)
     fDGrads = greenGaussGrad(mesh, fDeltas, false)
     eps2, eps4 = unstructured_JSTEps(mesh, sln, 0.5, (1.2/32), 1, gamma, R)

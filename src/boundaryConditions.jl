@@ -112,3 +112,13 @@ symmetryBoundary = wallBoundary
 function emptyBoundary(mesh::Mesh, sln::SolutionState, boundaryNumber, _)
     return
 end
+
+function applyBoundaryConditions(mesh::Mesh, sln::SolutionState, boundaryConditions, nBoundaries)
+    for boundaryNumber in 1:nBoundaries
+        bFunctionIndex = 2*boundaryNumber-1
+        boundaryConditionFunction = boundaryConditions[bFunctionIndex]
+        boundaryParameters = boundaryConditions[bFunctionIndex+1]
+
+        boundaryConditionFunction(mesh, sln, boundaryNumber, boundaryParameters)
+    end
+end
