@@ -2,11 +2,11 @@ using DelimitedFiles
 using WriteVTK
 
 #### Read / Write Restart Files ####
-function writeRestartFile(cellPrimitives, path="fvCFDRestart.txt")
+function writeRestartFile(cellPrimitives, path="FvCFDRestart.txt")
     writedlm(path, cellPrimitives)
 end
 
-function readRestartFile(path="fvCFDRestart.txt")
+function readRestartFile(path="FvCFDRestart.txt")
     cellPrimitives = readdlm(path)
 end
 

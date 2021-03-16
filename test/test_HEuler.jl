@@ -1,5 +1,5 @@
 using Test
-using fvCFD
+using FvCFD
 
 include("shockTubeFunctions.jl")
 include("test.jl")
@@ -7,17 +7,17 @@ include("testMeshes.jl")
 
 @testset "Vector Utilities" begin
     v1 = [1, 2, 3]
-    @test fvCFD.mag(v1) == 3.7416573867739413
+    @test FvCFD.mag(v1) == 3.7416573867739413
 
     v2 = [2, 3, 4]
-    @test fvCFD.dot(v1, v2) == 20.0
+    @test FvCFD.dot(v1, v2) == 20.0
 
-    @test almostEqual(fvCFD.normalize(v1), [0.267261242, 0.534522484, 0.801783726], 1e-9)
+    @test almostEqual(FvCFD.normalize(v1), [0.267261242, 0.534522484, 0.801783726], 1e-9)
 
     v1 = [ 1.0, 2.0, 3.0 ]
     v2 = [ 2.0, 2.0, 2.0 ]
     crossProduct = [ -2.0, 4.0, -2.0 ]
-    crossProduct2 = fvCFD.cross(v1, v2)
+    crossProduct2 = FvCFD.cross(v1, v2)
     @test almostEqual(crossProduct, crossProduct2)
 end;
 
@@ -71,7 +71,7 @@ end;
     
     primitives = zeros(5)
     state = [ rho, xMom, 0, 0, eV2] # y-momentum and z-momentum = 0
-    fvCFD.decodePrimitives3D!(primitives, state, 287.05, 1005)
+    FvCFD.decodePrimitives3D!(primitives, state, 287.05, 1005)
 
     for i in 1:5
         @test almostEqual(expectedResult[i], primitives[i])
@@ -92,7 +92,7 @@ end;
     primitives = Matrix{Float64}(undef, 1, 5)
     primitives[1,:] = [ P, T, U, 0, 0 ]
 
-    state = fvCFD.encodePrimitives3D(primitives, 287.05, 1005)
+    state = FvCFD.encodePrimitives3D(primitives, 287.05, 1005)
     for i in 1:5
         @test almostEqual(expectedResult[i], state[1,i])
     end
@@ -104,7 +104,7 @@ end;
     faceVals = zeros(21,1) # 4 internal faces, 2 on the ends, and 16 around the outside
     faceVals[:,1] = [ 2, 3, 4, 1, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ] # Faces are numbered such that boundary faces come last, spatially values increase from one to five from left to right
     expectedGradient = [ [4.0,0.0,0.0], [4.0,0.0,0.0], [4.0,0.0,0.0], [4.0,0.0,0.0] ] # Expect uniform gradient
-    gradient = fvCFD.greenGaussGrad(mesh, faceVals, true)
+    gradient = FvCFD.greenGaussGrad(mesh, faceVals, true)
    
     for i in 1:4
         @test almostEqual(expectedGradient[i], gradient[i,1,:])
@@ -130,7 +130,7 @@ end;
         phiFaceVals[i,1] = samplePhiDistribution(fCenters[i]...)
     end
 
-    grad = fvCFD.greenGaussGrad(mesh, phiFaceVals, true)
+    grad = FvCFD.greenGaussGrad(mesh, phiFaceVals, true)
     @test almostEqual(grad[1,1,:], [ 20.63111, 17.31454, 0.0 ], 1e-5)
 end;
 
@@ -205,7 +205,7 @@ end;
     cellVals = zeros(4,1)
     cellVals[:,1] = [ 1, 2, 3, 4 ]
     faceVals = [ 1.5, 2.5, 3.5, 0, 0 ]
-    faceVals2 = fvCFD.linInterp_3D(mesh, cellVals)
+    faceVals2 = FvCFD.linInterp_3D(mesh, cellVals)
     @test almostEqual(faceVals, faceVals2[1:5,1])
 
     cells, cVols, cCenters, faces, fAVecs, fCenters, boundaryFaces = meshMoukalled813()
@@ -223,7 +223,7 @@ end;
     for i in 1:5
         gradients[i,:] = oldGradient[i]
     end
-    faceGrad = fvCFD.linInterp_3D(mesh, gradients)
+    faceGrad = FvCFD.linInterp_3D(mesh, gradients)
     @test almostEqual(faceGrad[1,:], [ 66.628055, 75.37602, 0.0 ])
 end;
 

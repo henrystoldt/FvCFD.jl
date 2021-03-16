@@ -1,5 +1,5 @@
 using Test
-using fvCFD
+using FvCFD
 
 include("test.jl")
 include("testMeshes.jl")
@@ -12,14 +12,14 @@ include("testMeshes.jl")
     points = [ pt1, pt2, pt3 ]
 
     centroid = [ 0.3333333333333, 0.333333333333, 0.0 ]
-    centroid2 = fvCFD.triangleCentroid(points)
+    centroid2 = FvCFD.triangleCentroid(points)
     @test almostEqual(centroid, centroid2, 9)
 
     area = [ 0.0, 0.0, 0.5 ]
-    area2 = fvCFD.triangleArea(points)
+    area2 = FvCFD.triangleArea(points)
     @test almostEqual(area, area2)
 
-    area2, centroid2 = fvCFD.faceAreaCentroid(points)
+    area2, centroid2 = FvCFD.faceAreaCentroid(points)
     @test almostEqual(centroid, centroid2, 9)
     @test almostEqual(area, area2)
 
@@ -28,7 +28,7 @@ include("testMeshes.jl")
     points = [ pt1, pt2, pt4, pt3 ]
     area = [ 0.0, 0.0, 1.0 ]
     centroid = [ 0.5, 0.5, 0.0 ]
-    area2, centroid2 = fvCFD.faceAreaCentroid(points)
+    area2, centroid2 = FvCFD.faceAreaCentroid(points)
     @test almostEqual(centroid, centroid2, 9)
     @test almostEqual(area, area2)
 
@@ -47,8 +47,8 @@ include("testMeshes.jl")
     end
 
     # @test almostEqual(mag(fAVecs[6]), 8.625)
-    @test almostEqual(fvCFD.mag(fAVecs[7]), 8.625)
-    @test almostEqual(fvCFD.mag(fAVecs[6]), 8.625)
+    @test almostEqual(FvCFD.mag(fAVecs[7]), 8.625)
+    @test almostEqual(FvCFD.mag(fAVecs[6]), 8.625)
 end;
 
 @testset "Cell Geometry" begin
@@ -68,24 +68,24 @@ end;
 
     centroid = [ 0.5, 0.5, 0.5 ]
     volume = 1.0
-    volume2, centroid2 = fvCFD.cellVolCentroid(points, fAVecs, faceCentroids)
+    volume2, centroid2 = FvCFD.cellVolCentroid(points, fAVecs, faceCentroids)
     @test almostEqual(volume, volume2)
     @test almostEqual(centroid, centroid2)
 
 end;
 
 @testset "Reading OF Meshes" begin
-    faces = fvCFD.readOFFacesFile(pathPrefix*"OFshockTube_100/faces")
+    faces = FvCFD.readOFFacesFile(pathPrefix*"OFshockTube_100/faces")
     @test length(faces) == 501
     @test faces[1] == [2, 103, 305, 204]
 
-    points = fvCFD.readOFPointsFile(pathPrefix*"OFshockTube_100/points")
+    points = FvCFD.readOFPointsFile(pathPrefix*"OFshockTube_100/points")
     @test length(points)/3 == 404
     @test points[1,:] == [0, -1, -1]
 end
 
 @testset "Getting cell points" begin
-    points, cells = fvCFD.OpenFOAMMesh_findCellPts(pathPrefix*"OFshockTube_100")
+    points, cells = FvCFD.OpenFOAMMesh_findCellPts(pathPrefix*"OFshockTube_100")
     @test cells[1].pointIndices == [ 1, 102, 103, 2, 203, 304, 305, 204 ]
     @test cells[2].pointIndices == [ 2, 103, 305, 204, 3, 104, 306, 205 ]
 end

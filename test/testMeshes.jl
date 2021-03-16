@@ -1,4 +1,4 @@
-using fvCFD
+using FvCFD
 
 # Creates a simple sample cell from Moukalled with one fully-defined cell and a centroid-only neighbour
 # For laplacian test cases
@@ -65,14 +65,14 @@ function meshMoukalled813()
     fAVecs = Array{Array{Float64, 1}}(undef, 7)
     fCenters = Array{Array{Float64, 1}}(undef, 7)
     for i in 1:7
-        fAVec, fCenter = fvCFD.faceAreaCentroid(facePoints[i])
+        fAVec, fCenter = FvCFD.faceAreaCentroid(facePoints[i])
         fAVecs[i] = fAVec
         fCenters[i] = fCenter
     end
     faces = [ [ 1,2 ] ]
     boundaryFaces = []
 
-    cellVol, cellCentroid = fvCFD.cellVolCentroid(points, fAVecs, fCenters)
+    cellVol, cellCentroid = FvCFD.cellVolCentroid(points, fAVecs, fCenters)
     cVols = [ cellVol, 1 ]
     cCenters = [ cellCentroid, [4.25, 3.5, 0.5 ]]
 

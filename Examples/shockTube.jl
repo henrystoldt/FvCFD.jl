@@ -1,4 +1,4 @@
-using fvCFD
+using FvCFD
 include("../test/shockTubeFunctions.jl")
 
 ### Select a mesh ###

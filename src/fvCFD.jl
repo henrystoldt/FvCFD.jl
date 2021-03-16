@@ -1,4 +1,4 @@
-module fvCFD
+module FvCFD
 
 using Printf
 include("dataStructures.jl")
@@ -197,7 +197,7 @@ end
 =#
 function solve(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}, boundaryConditions, timeIntegrationFn=forwardEuler,
         fluxFunction=unstructured_JSTFlux; initDt=0.001, endTime=0.14267, outputInterval=0.01, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005,
-        silent=true, restart=false, createRestartFile=true, createVTKOutput=true, restartFile="fvCFDRestart.txt")
+        silent=true, restart=false, createRestartFile=true, createVTKOutput=true, restartFile="FvCFDRestart.txt")
 
     if !silent
         println("Initializing Simulation")

@@ -1,4 +1,4 @@
-using fvCFD
+using FvCFD
 
 # All file paths are relative to the repository's main directory, 'include' this script from there
 

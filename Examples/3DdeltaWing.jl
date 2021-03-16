@@ -1,4 +1,4 @@
-using fvCFD
+using FvCFD
 
 ### Freestream Conditions ###
 P = 7669
