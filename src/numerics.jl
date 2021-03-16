@@ -239,7 +239,7 @@ end
 #=
     Calculates sln.fluxResiduals from sln.faceFluxes
 =#
-function integrateFluxes_unstructured3D(mesh::Mesh, sln::SolutionState, boundaryConditions)
+function integrateFluxes_unstructured3D(mesh::Mesh, sln::SolutionState)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
 
     # Recomputing flux balances, so wipe existing values
