@@ -1,6 +1,6 @@
 name = "fvCFD"
 uuid = "3894bb1e-daea-4181-948f-3877d7a6e5a8"
-version = "0.1.0"
+version = "0.1.1"
 
 [deps]
 DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
