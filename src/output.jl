@@ -1,6 +1,5 @@
 using DelimitedFiles
 using WriteVTK
-include("mesh.jl")
 
 #### Read / Write Restart Files ####
 function writeRestartFile(cellPrimitives, path="fvCFDRestart.txt")

@@ -1,6 +1,4 @@
 # Methods from Moukalled et al. FVM - OpenFOAM, Matlab
-include("vectorFunctions.jl")
-include("dataStructures.jl")
 
 mutable struct Cell
     faceIndices::Vector{Int64}

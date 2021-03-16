@@ -1,12 +1,12 @@
 module fvCFD
 
 using Printf
+include("dataStructures.jl")
+include("mesh.jl")
 include("constitutiveRelations.jl")
 include("vectorFunctions.jl")
 include("timeDiscretizations.jl")
-include("mesh.jl")
 include("output.jl")
-include("dataStructures.jl")
 include("boundaryConditions.jl")
 include("numerics.jl")
 include("JST.jl")

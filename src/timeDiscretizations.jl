@@ -1,5 +1,3 @@
-include("dataStructures.jl")
-
 ######################### Global Time Stepping ###########################
 function forwardEuler(mesh::Mesh, fluxResidualFn, sln::SolutionState, boundaryConditions, gamma, R, Cp, dt)
     sln.fluxResiduals = fluxResidualFn(mesh, sln, boundaryConditions, gamma, R)

@@ -1,5 +1,3 @@
-include("dataStructures.jl")
-
 ######################### Boundary Conditions #########################
 # The job of the BC functions is to calculate/enforce face fluxes at boundary faces.
 # The JST method only calculates fluxes at internal faces, then these conditions are applied to calculate them at the boundaries

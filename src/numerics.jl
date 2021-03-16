@@ -1,5 +1,3 @@
-include("dataStructures.jl")
-
 ######################### Gradient Computation #######################
 #TODO: LSQ Gradient
 # Non-functional
