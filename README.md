@@ -28,29 +28,33 @@ Dependencies | [WriteVTK](https://github.com/jipolanco/WriteVTK.jl)
 Ongoing projects include the implementation of adaptive meshing and implicit time-stepping.
 All contributions are welcome.
 
-To get started, use the instructions below to [install](https://github.com/henrystoldt/fvCFD#Install) fvCFD and [run the included example cases](https://github.com/henrystoldt/fvCFD#Run example cases).
+To get started, use the instructions below to [install](https://github.com/henrystoldt/fvCFD#Install) fvCFD and [run the included example cases](https://github.com/henrystoldt/fvCFD#Run-example-cases).
 For developers, look at [dataStructuresDefinitions.md](https://github.com/henrystoldt/JuliaCFD/blob/master/dataStructuresDefinitions.md) to get familiar with the data structures used to represent the mesh and current solution in fvCFD.jl.
 
 ## Install
-1. Start Julia:
+1. Start Julia:  
 `$ julia`
-2. Activate the Julia package manager
+2. Activate the Julia package manager:  
 `julia> ]`
-3. Either  
-  a. install Julia package: `pkg> add fvCFD`  
-  b. OR install directly from GitHub: `pkg> add https://github.com/henrystoldt/fvCFD.git`
-4. (Optional) run tests to ensure the installation worked: `pkg> test fvCFD`
+3. Either:  
+  a. (Recommended) install Julia package:  
+  `pkg> add fvCFD`  
+  b. OR install directly from GitHub:  
+  `pkg> add https://github.com/henrystoldt/fvCFD.git`  
+  c. OR activate local copy of the code (must run Julia in this repository's main directory):  
+  `pkg> activate .`
+4. (Optional) run tests to ensure the installation worked:  
+`pkg> test fvCFD`
 5. Press backspace(Windows)/delete(Mac) to exit the Julia package manager
 
 ## Run example cases
-Example scripts to run simple included cases are stored in [./Examples](https://github.com/henrystoldt/fvCFD/tree/master/Examples)
-They use the OpenFOAM meshes stored in [./test](https://github.com/henrystoldt/fvCFD/tree/master/test)
+Example scripts to run simple included cases are stored in [./Examples](https://github.com/henrystoldt/fvCFD/tree/master/Examples)  
 To run one:
-1. Clone this repository somewhere convenient:
+1. Clone this repository somewhere convenient:  
 `$ git clone https://github.com/henrystoldt/fvCFD.git`
-2. Start Julia from in main directory of this git repository (same location where this file is stored):
+2. Start Julia from in main directory of this git repository (same location where this file is stored):  
 `$ julia`
-3. Execute the example script for the case you'd like to run
+3. Execute the example script for the case you'd like to run:  
 `julia> include("./Examples/shockTube.jl")`
 4. After the simulation completes, view the solution.xx.vtu files that were created using a post-processing tool like [Paraview](https://www.paraview.org/)
 
