@@ -1,112 +1,53 @@
 ---
-title: 'Gala: A Python package for galactic dynamics'
+title: 'FvCFD.jl: A Julia package for high-speed fluid dynamics'
 tags:
-  - Python
-  - astronomy
-  - dynamics
-  - galactic dynamics
-  - milky way
+  - Julia
+  - CFD
+  - Simulation
+  - Finite volume
+  - Compressible
 authors:
-  - name: Adrian M. Price-Whelan^[Custom footnotes for e.g. denoting who the corresponding author is can be included like this.]
-    orcid: 0000-0003-0872-7098
-    affiliation: "1, 2" # (Multiple affiliations must be quoted)
-  - name: Author Without ORCID
+  - name: Henry Stoldt^[Corresponding author: henrystoldt@gmail.com]
+    affiliation: 1 # (Multiple affiliations must be quoted)
+  - name: Ben Dalman
+    affiliation: 1
+  - name: Craig Johansen
     affiliation: 2
-  - name: Author with no affiliation
-    affiliation: 3
 affiliations:
- - name: Lyman Spitzer, Jr. Fellow, Princeton University
+ - name: Master's Student, University of Calgary
    index: 1
- - name: Institution Name
+ - name: Associate Professor, University of Calgary
    index: 2
- - name: Independent Researcher
-   index: 3
-date: 13 August 2017
+date: 6 May 2021
 bibliography: paper.bib
-
-# Optional fields if submitting to a AAS journal too, see this blog post:
-# https://blog.joss.theoj.org/2018/12/a-new-collaboration-with-aas-publishing
-aas-doi: 10.3847/xxxxx <- update this with the DOI from AAS once you know it.
-aas-journal: Astrophysical Journal <- The name of the AAS journal.
 ---
 
 # Summary
 
-The forces on stars, galaxies, and dark matter under external gravitational
-fields lead to the dynamical evolution of structures in the universe. The orbits
-of these bodies are therefore key to understanding the formation, history, and
-future state of galaxies. The field of "galactic dynamics," which aims to model
-the gravitating components of galaxies to study their structure and evolution,
-is now well-established, commonly taught, and frequently used in astronomy.
-Aside from toy problems and demonstrations, the majority of problems require
-efficient numerical tools, many of which require the same base code (e.g., for
-performing numerical orbit integration).
+Computational fluid dynamics (CFD) solvers are used in many engineering disciplines to estimate how fluids will flow around or interact with objects or each other.
+Compared to experimental studies, they are very flexible in that they can quickly adapt to changing conditions or changing designs while also being relatively inexpensive.
+CFD simulations can be conducted at various levels of accuracy, with the cost of increased accuracy usually coming in the form of additional computational cost.
+When combined with a suitable wall friction correction, solutions to the compressible Euler equations offer a useful compromise between accuracy and computational cost for many high-speed aerospace applications.
+This is especially the case in the context of design optimizations, where many simulations must be performed and computational cost becomes very important.
 
 # Statement of need
+`FvCFD.jl` is a compact CFD solver suited for the simulation of high-speed compressible flows while neglecting heat conduction and viscosity (solving the compressible Euler equations).
+While there are more scalable tools for industrial and production use, this solver is better suited for learning about CFD and experimenting with numerical methods.
+In this vein, `FvCFD.jl` is compatible with 3D unstructured OpenFOAM meshes and many common post-processing tools (.vtk output), so it can be substituted for one of the many OpenFOAM solvers in simulation workflows when moving to/from a large-scale applications.
 
-`Gala` is an Astropy-affiliated Python package for galactic dynamics. Python
-enables wrapping low-level languages (e.g., C) for speed without losing
-flexibility or ease-of-use in the user-interface. The API for `Gala` was
-designed to provide a class-based and user-friendly interface to fast (C or
-Cython-optimized) implementations of common operations such as gravitational
-potential and force evaluation, orbit integration, dynamical transformations,
-and chaos indicators for nonlinear dynamics. `Gala` also relies heavily on and
-interfaces well with the implementations of physical units and astronomical
-coordinate systems in the `Astropy` package [@astropy] (`astropy.units` and
-`astropy.coordinates`).
+The code's main advantage are that it is very compact (<2000 lines) and could easily be fully read by individual students/developers in a matter of days, yet it is fully functional CFD solver.
+This compactness is partially a result of using the Julia programming language, which is particularly good at extracting high performance from simple and general code `[@Bezanson:2017]`.
+This is in contrast to many existing open-source CFD solvers (e.g., OpenFOAM, SU2) which due to their comprehensive feature set and corresponding degree of code generalization, have very large and complex code bases.
+In addition to educational applications, `FvCFD.jl` also provides a convenient starting point for low-overhead numerical methods research, particularly for new spatial and temporal discretizations.
+Finally, since the code is written entirely in Julia, there are ample opportunities for future integration with other Julia packages such as `DifferentialEquations.jl` `[@rackauckas:2017]` or `ForwardDiff.jl` `[@Revels:2016]`.
+As a compressible flow solver, `FvCFD.jl` is also introducing a new capability to the open-source Julia ecosystem, which has thus far been focused on incompressible flow, through the excellent `Oceananigans.jl` package `[Ramadhan:2020]`.
 
-`Gala` was designed to be used by both astronomical researchers and by
-students in courses on gravitational dynamics or astronomy. It has already been
-used in a number of scientific publications [@Pearson:2017] and has also been
-used in graduate courses on Galactic dynamics to, e.g., provide interactive
-visualizations of textbook material [@Binney:2008]. The combination of speed,
-design, and support for Astropy functionality in `Gala` will enable exciting
-scientific explorations of forthcoming data releases from the *Gaia* mission
-[@gaia] by students and experts alike.
+`FvCFD.jl` simulations are straightforward to run, requiring a mesh, boundary conditions, information about the fluid, and time stepping parameters.
+In terms of numerical schemes, `FvCFD.jl` implements the JST \& MUSCL + Roe convective schemes, the Green-Gauss \& weighted Least-Squares gradient schemes, explicit Runge-Kutta time stepping of orders 1-4 for unsteady cases, and first-order local time stepping for steady state cases.
+The solver's explicit nature is another factor that permits the code to be relatively simple and compact.
 
-# Mathematics
-
-Single dollars ($) are required for inline mathematics e.g. $f(x) = e^{\pi/x}$
-
-Double dollars make self-standing equations:
-
-$$\Theta(x) = \left\{\begin{array}{l}
-0\textrm{ if } x < 0\cr
-1\textrm{ else}
-\end{array}\right.$$
-
-You can also use plain \LaTeX for equations
-\begin{equation}\label{eq:fourier}
-\hat f(\omega) = \int_{-\infty}^{\infty} f(x) e^{i\omega x} dx
-\end{equation}
-and refer to \autoref{eq:fourier} from text.
-
-# Citations
-
-Citations to entries in paper.bib should be in
-[rMarkdown](http://rmarkdown.rstudio.com/authoring_bibliographies_and_citations.html)
-format.
-
-If you want to cite a software repository URL (e.g. something on GitHub without a preferred
-citation) then you can do it with the example BibTeX entry below for @fidgit.
-
-For a quick reference, the following citation commands can be used:
-- `@author:2001`  ->  "Author et al. (2001)"
-- `[@author:2001]` -> "(Author et al., 2001)"
-- `[@author1:2001; @author2:2001]` -> "(Author1 et al., 2001; Author2 et al., 2002)"
-
-# Figures
-
-Figures can be included like this:
-![Caption for example figure.\label{fig:example}](figure.png)
-and referenced from text using \autoref{fig:example}.
-
-Figure sizes can be customized by adding an optional second parameter:
-![Caption for example figure.](figure.png){ width=20% }
-
-# Acknowledgements
-
-We acknowledge contributions from Brigitta Sipocz, Syrtis Major, and Semyeong
-Oh, and support from Kathryn Johnston during the genesis of this project.
+Going forward, the solver's explicit nature combined with Julia's parallelization features have the potential to close the performance gap with existing solvers in large-scale simulations and make this a highly scalable code.
+Ongoing projects include the implementation of adaptive meshing and implicit time-stepping.
+All questions and contributions are welcome.
 
 # References
