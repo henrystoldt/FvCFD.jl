@@ -1,19 +1,19 @@
 ######################### Internal/Private functions #######################
-function idealGasRho(T, P, R=287.05)
+function idealGasRho(T, P, R)
     @fastmath return P/(R*T)
 end
 
-function idealGasP(rho, T, R=287.05)
+function idealGasP(rho, T, R)
     # PV = mRT
     # P = rho R T
     @fastmath return rho*R*T
 end
 
-function calPerfectEnergy(T, Cp=1005, R=287.05)
+function calPerfectEnergy(T, Cp, R)
     @fastmath return T*(Cp-R)
 end
 
-function calPerfectT(e, Cp=1005, R=287.05)
+function calPerfectT(e, Cp, R)
     @fastmath return e/(Cp-R)
 end
 
@@ -21,7 +21,7 @@ end
 #=
     Calculate primitives from cellState
 =#
-function decodePrimitives3D!(primitives, cellState, R=287.05, Cp=1005)
+function decodePrimitives3D!(primitives, cellState, R, Cp)
     ## Velocity ##
     # Ux = xMom/rho
     primitives[3] = cellState[2]/cellState[1]
@@ -53,7 +53,7 @@ end
     Returns:
         cellState: 2D vector of conserved variable values: see dataStructuresDefinitions.md
 =#
-function encodePrimitives3D(cellPrimitives::Array{Float64, 2}, R=287.05, Cp=1005)
+function encodePrimitives3D(cellPrimitives::Array{Float64, 2}, R, Cp)
     nCells = size(cellPrimitives, 1)
 
     cellState = zeros(nCells, 5)

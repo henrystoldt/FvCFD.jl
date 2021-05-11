@@ -1,5 +1,5 @@
 # Calculates eps2 and eps4, the second and fourth-order artificial diffusion coefficients used in the JST method
-function unstructured_JSTEps(mesh::Mesh, sln::SolutionState, k2=0.5, k4=(1/32), c4=1, gamma=1.4, R=287.05)
+function unstructured_JSTEps(mesh::Mesh, sln::SolutionState, gamma, R, k2=0.5, k4=(1/32), c4=1)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
 
     # Calc Pressure Gradient

@@ -224,7 +224,7 @@ end
 
 ######################### TimeStepping #################################
 # Calculate sln.cellPrimitives and sln.cellFluxes from sln.cellState
-function decodeSolution_3D(sln::SolutionState, R=287.05, Cp=1005)
+function decodeSolution_3D(sln::SolutionState, R, Cp)
     nCells = size(sln.cellState, 1)
     for c in 1:nCells
         # Updates cell primitives

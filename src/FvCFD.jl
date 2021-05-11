@@ -49,7 +49,7 @@ end
 
 ######################### Taking and adjusting time step sizes #######################
 # Calculates CFL at each cell. Expects sln.cellState, sln.cellPrimitives and sln.faceFluxes to be up to date
-function CFL!(CFL, mesh::Mesh, sln::SolutionState, dt=1, gamma=1.4, R=287.05)
+function CFL!(CFL, mesh::Mesh, sln::SolutionState, gamma, R, dt=1)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
 
     fill!(CFL, 0.0)
@@ -248,7 +248,7 @@ function solve(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}, boundaryCo
         if timeIntegrationFn == LTSEuler # LTS = Local time stepping
             writeOutputThisIteration, dt, CFL = adjustTimeStep_LTS(targetCFL, dt, status)
         else
-            CFL!(CFLvec, mesh, sln, dt, gamma, R)
+            CFL!(CFLvec, mesh, sln, gamma, R, dt)
             writeOutputThisIteration, dt, CFL = adjustTimeStep(maximum(CFLvec), targetCFL, dt, status)
         end
 
