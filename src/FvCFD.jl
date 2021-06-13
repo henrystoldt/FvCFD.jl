@@ -18,7 +18,7 @@ export solve, initializeUniformSolution3D
 # From boundaryConditions.jl
 export supersonicInletBoundary, subsonicInletBoundary, pressureOutletBoundary, zeroGradientBoundary, wallBoundary, symmetryBoundary, emptyBoundary
 # From dataStructures.jl
-export Mesh, SolutionState
+export Mesh, SolutionState, Fluid
 # From timeDiscretizations.jl
 export forwardEuler, RK2_Mid, ShuOsher, RK4, LTSEuler
 # From mesh.jl
@@ -49,7 +49,7 @@ end
 
 ######################### Taking and adjusting time step sizes #######################
 # Calculates CFL at each cell. Expects sln.cellState, sln.cellPrimitives and sln.faceFluxes to be up to date
-function CFL!(CFL, mesh::Mesh, sln::SolutionState, gamma, R, dt=1)
+function CFL!(CFL, mesh::Mesh, sln::SolutionState, fluid::Fluid, dt=1)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
 
     fill!(CFL, 0.0)
@@ -75,7 +75,7 @@ function CFL!(CFL, mesh::Mesh, sln::SolutionState, gamma, R, dt=1)
             println("Warning: Negative temperature at face $f: $position")
         end
 
-        a = sqrt(gamma * R * faceT)
+        a = sqrt(fluid.gamma * fluid.R * faceT)
         flux += mag(mesh.fAVecs[f])*a*dt
 
         CFL[ownerCell] += flux
@@ -87,14 +87,14 @@ function CFL!(CFL, mesh::Mesh, sln::SolutionState, gamma, R, dt=1)
     CFL ./= (2 .* mesh.cVols)
 end
 
-function populateSolution(cellPrimitives, nCells, nFaces, R, Cp, nDims=3)
+function populateSolution(cellPrimitives, nCells, nFaces, fluid::Fluid, nDims=3)
     # Each dimension adds one momentum equation
     nConservedVars = 2+nDims
     # Each dimension adds a flux for each conserved quantity
     nFluxes = nConservedVars*nDims
 
     # rho, xMom, total energy from P, T, Ux, Uy, Uz
-    cellState = encodePrimitives3D(cellPrimitives, R, Cp)
+    cellState = encodePrimitives3D(cellPrimitives, fluid)
     cellFluxes = zeros(nCells, nFluxes)
     fluxResiduals = zeros(nCells, nConservedVars)
     faceFluxes = zeros(nFaces, nFluxes)
@@ -103,7 +103,7 @@ function populateSolution(cellPrimitives, nCells, nFaces, R, Cp, nDims=3)
     sln = SolutionState(cellState, cellFluxes, cellPrimitives, fluxResiduals, faceFluxes)
 
     # Calculates cell fluxes, primitives from cell state
-    decodeSolution_3D(sln, R, Cp)
+    decodeSolution_3D(sln, fluid)
 
     return sln
 end
@@ -163,6 +163,8 @@ function advanceStatus!(status::SolverStatus, dt, CFL, timeIntegrationFn, silent
     end
 end
 
+defaultAirFluid = Fluid(1005, 287.05, 1.4)
+
 ######################### Main #######################
 #=
     This is where the magic happens!
@@ -173,13 +175,14 @@ end
         meshPath:           (string) path to folder where mesh is stored
         cellPrimitives:     initial cell-center conditions, see dataStructuresDefinitions.md / dataStructures.jl
         boundaryConditions: Array of alternating boundary condition function references and associated boundary condition parameters:
-            Ex: [ emptyBoundary, [], supersonicInletBoundary, [P, T, Ux, Uy, Uz, Cp], zeroGradientBoundary, [], symmetryBoundary, [], zeroGradientBoundary, [], wallBoundary, [] ]
+            Ex: [ emptyBoundary, [], supersonicInletBoundary, [P, T, Ux, Uy, Uz], zeroGradientBoundary, [], symmetryBoundary, [], zeroGradientBoundary, [], wallBoundary, [] ]
             Order of BC's must match the order of boundaries defined in the mesh's 'boundaries' file
         timeIntegrationFn:  The desired time integration function from timeDiscretizations.jl (should update sln.cellState, sln.cellPrimitives, and sln.cellFluxes based on their old values and sln.cellResiduals (obtained from fluxFunction))
         fluxFunction:       The desired function to calculate sln.cellResiduals from sln.cellState, sln.cellPrimitives, and sln.cellFluxes
         initDt:             Initial time step (s)
         endTime:            Simulation End Time (s). Start Time = 0
         outputInterval:     Writes solution/restart files every outputInterval seconds of simulation time
+        fluid:              Fluid definition of type Fluid (see dataStructuresDefinitions.md / dataStructures.jl)
         targetCFL:          Target maximum CFL in the computation domain (time step will be adjusted based on this value)
         gamma/R/Cp:         Fluid properties
         silent:             Controls whether progress is written to console (can slow down simulation slightly for very simple cases)
@@ -196,7 +199,7 @@ end
         .vtk files (is specified)
 =#
 function solve(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}, boundaryConditions, timeIntegrationFn=forwardEuler,
-        fluxFunction=unstructured_JSTFlux; initDt=0.001, endTime=0.14267, outputInterval=0.01, targetCFL=0.2, gamma=1.4, R=287.05, Cp=1005,
+        fluxFunction=unstructured_JSTFlux; initDt=0.001, endTime=0.14267, outputInterval=0.01, targetCFL=0.2, fluid=defaultAirFluid,
         silent=true, restart=false, createRestartFile=true, createVTKOutput=true, restartFile="FvCFDRestart.txt")
 
     if !silent
@@ -226,7 +229,7 @@ function solve(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}, boundaryCo
         end
     end
 
-    sln = populateSolution(cellPrimitives, nCells, nFaces, R, Cp, 3)
+    sln = populateSolution(cellPrimitives, nCells, nFaces, fluid, 3)
 
     dt = initDt
     if timeIntegrationFn==LTSEuler
@@ -248,12 +251,12 @@ function solve(mesh::Mesh, meshPath, cellPrimitives::Matrix{Float64}, boundaryCo
         if timeIntegrationFn == LTSEuler # LTS = Local time stepping
             writeOutputThisIteration, dt, CFL = adjustTimeStep_LTS(targetCFL, dt, status)
         else
-            CFL!(CFLvec, mesh, sln, gamma, R, dt)
+            CFL!(CFLvec, mesh, sln, fluid, dt)
             writeOutputThisIteration, dt, CFL = adjustTimeStep(maximum(CFLvec), targetCFL, dt, status)
         end
 
         ############## Take a timestep #############
-        sln = timeIntegrationFn(mesh, fluxFunction, sln, boundaryConditions, gamma, R, Cp, dt)
+        sln = timeIntegrationFn(mesh, fluxFunction, sln, boundaryConditions, fluid, dt)
         advanceStatus!(status, dt, CFL, timeIntegrationFn, silent)
         
         ############## Write Output #############

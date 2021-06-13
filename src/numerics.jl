@@ -224,11 +224,11 @@ end
 
 ######################### TimeStepping #################################
 # Calculate sln.cellPrimitives and sln.cellFluxes from sln.cellState
-function decodeSolution_3D(sln::SolutionState, R, Cp)
+function decodeSolution_3D(sln::SolutionState, fluid::Fluid)
     nCells = size(sln.cellState, 1)
     for c in 1:nCells
         # Updates cell primitives
-        @views decodePrimitives3D!(sln.cellPrimitives[c,:], sln.cellState[c,:], R, Cp)
+        @views decodePrimitives3D!(sln.cellPrimitives[c,:], sln.cellState[c,:], fluid)
         # Updates mass, xMom, eV2 x,y,z-direction fluxes
         @views calculateFluxes3D!(sln.cellFluxes[c, :], sln.cellPrimitives[c,:], sln.cellState[c,:])
     end

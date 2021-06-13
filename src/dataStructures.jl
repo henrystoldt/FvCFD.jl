@@ -20,3 +20,10 @@ struct Mesh
     fCenters::Vector{Vector{Float64}}
     boundaryFaces::Vector{Vector{Int64}}
 end
+
+
+struct Fluid
+    Cp::Float64
+    R::Float64
+    gamma::Float64
+end

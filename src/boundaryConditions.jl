@@ -2,12 +2,13 @@
 # The job of the BC functions is to calculate/enforce face fluxes at boundary faces.
 # The JST method only calculates fluxes at internal faces, then these conditions are applied to calculate them at the boundaries
 
-# InletConditions: [ Static Pressure, Static Temperture, Ux, Uy, Uz, Cp ]
-function supersonicInletBoundary(mesh::Mesh, sln::SolutionState, boundaryNumber, inletConditions)
-    P, T, Ux, Uy, Uz, Cp = inletConditions
-    rho = idealGasRho(T, P)
+# InletConditions: [ Static Pressure, Static Temperture, Ux, Uy, Uz ]
+function supersonicInletBoundary(mesh::Mesh, sln::SolutionState, boundaryNumber, inletConditions, fluid::Fluid)
+    P, T, Ux, Uy, Uz = inletConditions
+
+    rho = idealGasRho(T, P, fluid.R)
     xMom, yMom, zMom = [Ux, Uy, Uz] .* rho
-    e = calPerfectEnergy(T, Cp)
+    e = calPerfectEnergy(T, fluid)
     eV2 = rho*(e + (mag([Ux, Uy, Uz])^2)/2)
 
     boundaryFluxes = Vector{Float64}(undef, 15)
@@ -18,11 +19,12 @@ function supersonicInletBoundary(mesh::Mesh, sln::SolutionState, boundaryNumber,
     end
 end
 
-# InletConditions: [ totalPressure, totalTemp, nx, ny, nz, gamma, R, Cp ]
+# InletConditions: [ totalPressure, totalTemp, nx, ny, nz ]
 # Where n is the unit vector representing the direction of inlet velocity
 # Using method from FUN3D solver
-function subsonicInletBoundary(mesh, sln::SolutionState, boundaryNumber, inletConditions)
-    Pt, Tt, nx, ny, nz, gamma, R, Cp = inletConditions
+function subsonicInletBoundary(mesh, sln::SolutionState, boundaryNumber, inletConditions, fluid::Fluid)
+    Pt, Tt, nx, ny, nz = inletConditions
+    Cp, R, gamma = (fluid.Cp, fluid.R, fluid.gamma)
 
     boundaryFluxes = Vector{Float64}(undef, 15)
     primitives = Vector{Float64}(undef, 5)
@@ -41,7 +43,7 @@ function subsonicInletBoundary(mesh, sln::SolutionState, boundaryNumber, inletCo
         # Calculate state variables
         state[1] = idealGasRho(primitives[2], primitives[1], R)
         state[2:4] .= primitives[3:5] .* state[1]
-        e = calPerfectEnergy(primitives[2], Cp, R)
+        e = calPerfectEnergy(primitives[2], fluid)
         state[5] = state[1]*(e + (mag(primitives[3:5])^2)/2 )
 
         calculateFluxes3D!(boundaryFluxes, primitives, state)
@@ -49,7 +51,7 @@ function subsonicInletBoundary(mesh, sln::SolutionState, boundaryNumber, inletCo
     end
 end
 
-function pressureOutletBoundary(mesh, sln::SolutionState, boundaryNumber, outletPressure)
+function pressureOutletBoundary(mesh, sln::SolutionState, boundaryNumber, outletPressure, fluid::Fluid)
     nFluxes = size(sln.cellFluxes, 2)
 
     # Directly extrapolate cell center flux to boundary (zero gradient between the cell center and the boundary)
@@ -73,7 +75,7 @@ function pressureOutletBoundary(mesh, sln::SolutionState, boundaryNumber, outlet
     end
 end
 
-function zeroGradientBoundary(mesh::Mesh, sln::SolutionState, boundaryNumber, _)
+function zeroGradientBoundary(mesh::Mesh, sln::SolutionState, boundaryNumber, _, __)
     nFluxes = size(sln.cellFluxes, 2)
 
     # Directly extrapolate cell center flux to boundary (zero gradient between the cell center and the boundary)
@@ -86,7 +88,7 @@ function zeroGradientBoundary(mesh::Mesh, sln::SolutionState, boundaryNumber, _)
     end
 end
 
-function wallBoundary(mesh::Mesh, sln::SolutionState, boundaryNumber, _)
+function wallBoundary(mesh::Mesh, sln::SolutionState, boundaryNumber, _, __)
     currentBoundary = mesh.boundaryFaces[boundaryNumber]
     @inbounds for f in currentBoundary
         ownerCell = max(mesh.faces[f][1], mesh.faces[f][2]) #One of these will be -1 (no cell), the other is the boundary cell we want
@@ -107,16 +109,16 @@ end
 # Symmetry is identical to a wall in Euler simulations
 symmetryBoundary = wallBoundary
 
-function emptyBoundary(mesh::Mesh, sln::SolutionState, boundaryNumber, _)
+function emptyBoundary(mesh::Mesh, sln::SolutionState, boundaryNumber, _, __)
     return
 end
 
-function applyBoundaryConditions(mesh::Mesh, sln::SolutionState, boundaryConditions, nBoundaries)
+function applyBoundaryConditions(mesh::Mesh, sln::SolutionState, boundaryConditions, nBoundaries, fluid::Fluid)
     for boundaryNumber in 1:nBoundaries
         bFunctionIndex = 2*boundaryNumber-1
         boundaryConditionFunction = boundaryConditions[bFunctionIndex]
         boundaryParameters = boundaryConditions[bFunctionIndex+1]
 
-        boundaryConditionFunction(mesh, sln, boundaryNumber, boundaryParameters)
+        boundaryConditionFunction(mesh, sln, boundaryNumber, boundaryParameters, fluid)
     end
 end

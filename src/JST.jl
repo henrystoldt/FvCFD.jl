@@ -1,5 +1,5 @@
 # Calculates eps2 and eps4, the second and fourth-order artificial diffusion coefficients used in the JST method
-function unstructured_JSTEps(mesh::Mesh, sln::SolutionState, gamma, R, k2=0.5, k4=(1/32), c4=1)
+function unstructured_JSTEps(mesh::Mesh, sln::SolutionState, fluid::Fluid, k2=0.5, k4=(1/32), c4=1)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
 
     # Calc Pressure Gradient
@@ -33,7 +33,7 @@ function unstructured_JSTEps(mesh::Mesh, sln::SolutionState, gamma, R, k2=0.5, k
 
     rj = zeros(nCells) # 'Spectral radius' -> maximum possible speed of wave propagation relative to mesh
     @inbounds @fastmath for c in 1:nCells
-        @views rj[c] = mag(sln.cellPrimitives[c,3:5]) +  sqrt(gamma * R * sln.cellPrimitives[c,2]) # Velocity magnitude + speed of sound
+        @views rj[c] = mag(sln.cellPrimitives[c,3:5]) +  sqrt(fluid.gamma * fluid.R * sln.cellPrimitives[c,2]) # Velocity magnitude + speed of sound
         sj[c] /= sjCount[c] # Average the sj's computed at each face for each cell
     end
 
@@ -59,12 +59,12 @@ end
     Applies classical JST method: central differencing + JST artificial diffusion. Each face treated as a 1D problem
     http://aero-comlab.stanford.edu/Papers/jst_2015_updated_07_03_2015.pdf -  see especially pg.5-6
 =#
-function unstructured_JSTFlux(mesh::Mesh, sln::SolutionState, boundaryConditions, gamma, R)
+function unstructured_JSTFlux(mesh::Mesh, sln::SolutionState, boundaryConditions, fluid::Fluid)
     nCells, nFaces, nBoundaries, nBdryFaces = unstructuredMeshInfo(mesh)
     nVars = size(sln.cellState, 2)
 
     #### 1. Apply boundary conditions ####
-    applyBoundaryConditions(mesh, sln, boundaryConditions, nBoundaries)
+    applyBoundaryConditions(mesh, sln, boundaryConditions, nBoundaries, fluid)
 
     #### 2. Centrally differenced fluxes ####
     linInterp_3D(mesh, sln.cellFluxes, sln.faceFluxes)
@@ -72,7 +72,7 @@ function unstructured_JSTFlux(mesh::Mesh, sln::SolutionState, boundaryConditions
     #### 3. JST artificial Diffusion ####
     fDeltas = faceDeltas(mesh, sln)
     fDGrads = greenGaussGrad(mesh, fDeltas, false)
-    eps2, eps4 = unstructured_JSTEps(mesh, sln, 0.5, (1.2/32), 1, gamma, R)
+    eps2, eps4 = unstructured_JSTEps(mesh, sln, fluid)
 
     diffusionFlux = zeros(nVars)
     @inbounds @fastmath for f in 1:nFaces-nBdryFaces

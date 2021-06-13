@@ -85,3 +85,10 @@ In transient simulations, the "residual" represents the time derivative of the c
 # Face 2    rhoU_f2     (rho*U^2 + P)_f2      (eV2*U + P*U)_f2
 # ...
 ```
+
+# Fluid definition
+Fluid properties are defined by a struct with three member variables, all of type Float64:
+
+- Cp = Specific heat capacity of the fluid at constant pressure (~1005 J/(kg K) for room temperature air)
+- R = Specific gas constant (~287.05 J/(kg K)  for room temperature air)
+- gamma = Ratio of specific heat capacities (1.4 for air)
