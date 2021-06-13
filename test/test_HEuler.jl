@@ -63,15 +63,18 @@ end;
     xMom = 1
     eV2 = 3
 
+    fluid = FvCFD.Fluid(1005, 287.05, 1.4)
+
     U = 0.5
     e = 1.5 - 0.125
-    T = e/(1005 - 287.05)
-    P = rho*287.05*T    
+    T = e/(fluid.Cp - fluid.R)
+    P = rho*fluid.R*T
     expectedResult = [ P, T, U, 0, 0 ]
     
     primitives = zeros(5)
     state = [ rho, xMom, 0, 0, eV2] # y-momentum and z-momentum = 0
-    FvCFD.decodePrimitives3D!(primitives, state, 287.05, 1005)
+    
+    FvCFD.decodePrimitives3D!(primitives, state, fluid)
 
     for i in 1:5
         @test almostEqual(expectedResult[i], primitives[i])
@@ -83,16 +86,18 @@ end;
     xMom = 1
     eV2 = 3
 
+    fluid = FvCFD.Fluid(1005, 287.05, 1.4)
+
     U = 0.5
     e = 1.5 - 0.125
-    T = e/(1005 - 287.05)
-    P = rho*287.05*T
+    T = e/(fluid.Cp - fluid.R)
+    P = rho*fluid.R*T
     expectedResult = [ rho, xMom, 0, 0, eV2 ]
 
     primitives = Matrix{Float64}(undef, 1, 5)
     primitives[1,:] = [ P, T, U, 0, 0 ]
 
-    state = FvCFD.encodePrimitives3D(primitives, 287.05, 1005)
+    state = FvCFD.encodePrimitives3D(primitives, fluid)
     for i in 1:5
         @test almostEqual(expectedResult[i], state[1,i])
     end

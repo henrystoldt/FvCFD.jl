@@ -9,19 +9,19 @@ function idealGasP(rho, T, R=287.05)
     @fastmath return rho*R*T
 end
 
-function calPerfectEnergy(T, Cp=1005, R=287.05)
-    @fastmath return T*(Cp-R)
+function calPerfectEnergy(T, fluid::Fluid)
+    @fastmath return T * (fluid.Cp - fluid.R)
 end
 
-function calPerfectT(e, Cp=1005, R=287.05)
-    @fastmath return e/(Cp-R)
+function calPerfectT(e, fluid::Fluid)
+    @fastmath return e / (fluid.Cp - fluid.R)
 end
 
 ######################### Public functions (called by FvCFD.jl) #######################
 #=
     Calculate primitives from cellState
 =#
-function decodePrimitives3D!(primitives, cellState, R=287.05, Cp=1005)
+function decodePrimitives3D!(primitives, cellState, fluid::Fluid)
     ## Velocity ##
     # Ux = xMom/rho
     primitives[3] = cellState[2]/cellState[1]
@@ -35,11 +35,11 @@ function decodePrimitives3D!(primitives, cellState, R=287.05, Cp=1005)
     @views e = (cellState[5]/cellState[1]) - (mag(primitives[3:5])^2)/2
 
     ## Temperature ##
-    primitives[2] = calPerfectT(e, Cp, R)
+    primitives[2] = calPerfectT(e, fluid)
 
     ## Pressure ##
     # P = idealGasP(rho, P, R)
-    primitives[1] = idealGasP(cellState[1], primitives[2], R)
+    primitives[1] = idealGasP(cellState[1], primitives[2], fluid.R)
 end
 
 #=
@@ -53,14 +53,14 @@ end
     Returns:
         cellState: 2D vector of conserved variable values: see dataStructuresDefinitions.md
 =#
-function encodePrimitives3D(cellPrimitives::Array{Float64, 2}, R=287.05, Cp=1005)
+function encodePrimitives3D(cellPrimitives::Array{Float64, 2}, fluid::Fluid)
     nCells = size(cellPrimitives, 1)
 
     cellState = zeros(nCells, 5)
     for c in 1:nCells
-        cellState[c,1] = idealGasRho(cellPrimitives[c,2], cellPrimitives[c,1], R)
+        cellState[c,1] = idealGasRho(cellPrimitives[c,2], cellPrimitives[c,1], fluid.R)
         cellState[c,2:4] .= cellPrimitives[c,3:5] .* cellState[c,1]
-        e = calPerfectEnergy(cellPrimitives[c,2], Cp, R)
+        e = calPerfectEnergy(cellPrimitives[c,2], fluid)
         cellState[c,5] = cellState[c,1]*(e + (mag(cellPrimitives[c,3:5])^2)/2 )
     end
     return cellState
