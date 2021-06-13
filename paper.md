@@ -47,7 +47,7 @@ Sample `FvCFD.jl` results for a supersonic delta wing and Woodward \& Collela's 
 ![Cut through a FvCFD.jl supersonic delta wing simulation. Showing the portion of the flow field in which the pressure is higher than ambient. Wing (shown in green) is sharp-edged with 67.5 degree leading-edge sweep, flying at Mach 2 at a twelve degree angle of attack. Corresponds to wind-tunnel experiments run by Miller \& Wood [@Miller1985].\label{fig:deltaWing}](DeltaWingImage.png)
 
 <!-- TODO: New, labeled forward step figure and performance comparison to rhoCentralFoam (current picture is very old)  -->
-![Comparison of results obtained using FvCFD.jl and OpenFOAM's rhoCentralFoam solver [@Greenshields2010] for the Mach 3 forward step benchmark case.\label{fig:forwardStep}](ForwardStepComparison.png)
+![Comparison of density contour results obtained using OpenFOAM's rhoCentralFoam solver (left) [@Greenshields2010] and FvCFD.jl (right) for the Mach 3 forward step benchmark case.\label{fig:forwardStep}](ForwardStepComparison2.png)
 
 Going forward, the solver's explicit nature combined with Julia's parallelization features have the potential to close the performance gap with existing solvers in large-scale simulations and make this a highly scalable code.
 Ongoing projects include the implementation of adaptive meshing and implicit time-stepping.
